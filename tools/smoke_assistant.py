@@ -25,6 +25,10 @@ CASES = {
                      {'role': 'assistant', 'content': QUESTIONS['budget']},
                      {'role': 'user', 'content': 'سقف بودجه‌ام پانزده میلیون تومان است.'}],
         'status': 'results', 'budget': '15000000'},
+    4: {'messages': [{'role': 'user', 'content': 'هنوز نوع کالا را انتخاب نکرده‌ام؛ برای خرید راهنمایی می‌خواهم.'}],
+        'status': 'needs_input', 'budget': None},
+    5: {'messages': [{'role': 'user', 'content': 'محصولناموجودکیوکسنودوهفت می‌خواهم'}],
+        'status': 'no_evidence', 'budget': None},
 }
 
 
@@ -42,8 +46,11 @@ async def smoke(case_number: int) -> dict:
         evidence.update(status=result['status'], query=result['query'], max_price_toman=result['max_price_toman'])
         assert result['status'] == case['status'], 'unexpected semantic outcome'
         assert result['max_price_toman'] == case['budget'], 'budget extraction did not match independent expectation'
-        if case_number == 1:
+        if case_number in {1, 4}:
             assert result['question'] == QUESTIONS['product_kind'], 'wrong clarification'
+        elif case_number == 5:
+            assert normalize_text(result['query']) == 'محصولناموجودکیوکسنودوهفت', 'unrelated query substituted'
+            assert result['products']['items'] == [], 'invented source evidence'
         else:
             assert 'گوشی' in normalize_text(result['query']), 'product kind lost in interpretation'
             products = result['products']['items']

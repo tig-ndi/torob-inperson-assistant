@@ -4,6 +4,8 @@ import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type
 
 type Props = {
   budget: string | null;
+  contextQuery: string | null;
+  onContext: (query: string | null, version?: number) => void;
   cancelVersion: number;
   onStart: () => number | null;
   onBudget: (budget: string | null, version: number) => void;
@@ -20,7 +22,7 @@ const failures: Record<string, string> = {
   invalid_output: 'برداشت دستیار قابل استفاده نبود؛ اطلاعات حدسی نمایش داده نشد.',
 };
 
-export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults }: Props) {
+export function Assistant({ budget, contextQuery, onContext, cancelVersion, onStart, onBudget, onResults }: Props) {
   const [status, setStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [remaining, setRemaining] = useState(0);
   const [unavailableReason, setUnavailableReason] = useState('');
@@ -73,11 +75,12 @@ export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults 
     event.preventDefault();
     const text = input.trim();
     if (!text || pending || status !== 'ready') return;
-    if (history.length > 4 || history.reduce((size, m) => size + m.content.length, text.length) > 3000) {
-      setError('برای ادامه، گفت‌وگوی تازه‌ای شروع کنید و نیازتان را کوتاه بنویسید.');
-      return;
+    // Retain complete recent pairs; the explicit topic survives this rolling window.
+    let recent = history.slice(-4);
+    while (recent.length && recent.reduce((size, m) => size + m.content.length, text.length) > 3000) {
+      recent = recent.slice(2);
     }
-    const messages: AssistantMessage[] = [...history, { role: 'user', content: text }];
+    const messages: AssistantMessage[] = [...recent, { role: 'user', content: text }];
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
@@ -90,7 +93,7 @@ export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults 
     try {
       const response = await fetch('/api/assistant/turn', { method: 'POST', signal: controller.signal, cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, messages, max_price_toman: budget }) });
+        body: JSON.stringify({ request_id: requestId, messages, max_price_toman: budget, context_query: contextQuery }) });
       const body: unknown = await response.json();
       if (!response.ok) {
         const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string' ? body.code : '';
@@ -101,12 +104,13 @@ export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults 
       setInput('');
       if (result.status === 'needs_input' && result.question) {
         onBudget(result.max_price_toman, version);
+        if (result.query) onContext(result.query, version);
         setHistory([...messages, { role: 'assistant', content: result.question }]);
       } else if (result.products && result.query) {
-        setHistory([]);
-        setNotice(result.status === 'no_evidence'
+        const summary = result.status === 'no_evidence'
           ? `برای «${result.query}» با بودجهٔ انتخابی نتیجه‌ای ثبت نشده؛ عبارت یا بودجه را تغییر دهید.`
-          : `نتایج کاتالوگ برای «${result.query}» در ادامه آمده‌اند. برای بررسی تناسب با کاربردتان، مشخصات کالاها را مقایسه کنید.`);
+          : `نتایج کاتالوگ برای «${result.query}» در ادامه آمده‌اند. برای بررسی تناسب با کاربردتان، مشخصات کالاها را مقایسه کنید.`;
+        setHistory([...messages, { role: 'assistant', content: summary }]);
         onResults(result.products, result.query, result.max_price_toman, version);
       }
     } catch (failure: unknown) {
@@ -128,6 +132,7 @@ export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults 
   return <section className="assistant-panel" aria-labelledby="assistant-title">
     <h2 id="assistant-title">برای انتخاب کالا کمک می‌خواهید؟</h2>
     <p className="caption">نیازتان را بنویسید؛ اگر اطلاعات کافی نباشد سؤال می‌پرسیم. نتیجه‌ها از کاتالوگ ثبت‌شده می‌آیند و موجودی زنده نیستند.</p>
+    {contextQuery && <p className="assistant-notice">موضوع فعلی: «{contextQuery}». می‌توانید بودجه را تغییر دهید یا کالای دیگری بخواهید.</p>}
     {history.length > 0 && <ol className="assistant-history" aria-label="گفت‌وگوی انتخاب کالا" aria-live="polite">
       {history.map((message, index) => <li key={index} className={`message-${message.role}`}>
         <strong>{message.role === 'user' ? 'شما: ' : 'دستیار: '}</strong>{message.content}
@@ -141,12 +146,12 @@ export function Assistant({ budget, cancelVersion, onStart, onBudget, onResults 
       <div className="assistant-actions">
         <button type="submit" disabled={pending || status !== 'ready' || !input.trim()}>بررسی نیاز</button>
         {pending && <button type="button" className="secondary" onClick={cancel}>لغو درخواست</button>}
-        {history.length > 0 && !pending && <button type="button" className="secondary" onClick={() => {
-          setHistory([]); setError(''); setNotice('');
+        {(history.length > 0 || contextQuery !== null) && !pending && <button type="button" className="secondary" onClick={() => {
+          setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null);
         }}>گفت‌وگوی تازه</button>}
       </div>
     </form>
-    <p id="assistant-help" className="caption">فقط هنگام زدن «بررسی نیاز» درخواست ارسال می‌شود. بودجه را می‌توانید در کادر بالا هم تغییر دهید؛ اطلاعات تماس و شخصی ننویسید.</p>
+    <p id="assistant-help" className="caption">موضوع فعلی و چند پیام اخیر تا بازبودن این صفحه حفظ می‌شوند. فقط هنگام زدن «بررسی نیاز» درخواست ارسال می‌شود. بودجه را می‌توانید در کادر بالا هم تغییر دهید؛ اطلاعات تماس و شخصی ننویسید.</p>
     {status === 'checking' && <p role="status">در حال بررسی دسترسی دستیار…</p>}
     {status === 'ready' && <p className="caption">درخواست باقی‌مانده در سقف تنظیم‌شده: {numbers.format(remaining)}</p>}
     {status === 'unavailable' && <p className="caption">{unavailableReason === 'attempt_limit'

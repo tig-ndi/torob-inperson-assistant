@@ -59,6 +59,8 @@ class IntentTests(unittest.TestCase):
         cases = [('کفش برای دویدن تا ۳٫۵ میلیون تومان می‌خواهم.', '3500000'),
                  ('حداکثر ده میلیون تومان.', '10000000'), ('سقف بودجه‌ام پانزده میلیون تومان است.', '15000000'),
                  ('بودجه من: بیست و پنج میلیون تومان است', '25000000'), ('تا صفر تومان', '0')]
+        cases += [('بودجه را هشت میلیون کن', '8000000'), ('بودجه رو به ۱۲٫۵ میلیون تغییر بده', '12500000'),
+                  ('بودجه‌ام ۷۳۳۵۱۸۹۴۰۷۴۷۲۹۸۹۴۴ باشد', '733518940747298944')]
         for text, amount in cases:
             with self.subTest(text=text):
                 self.assertEqual(explicit_budget(text), amount)
@@ -75,6 +77,25 @@ class IntentTests(unittest.TestCase):
         self.assertIn('گوشی سامسونگ a15', choices)
         self.assertFalse(any('میلیون' in query for query in choices))
         self.assertLessEqual(len(choices), 6)
+
+    def test_context_is_bounded_and_latest_product_replaces_previous_topic(self):
+        history = [{'role': 'user', 'content': 'گوشی سامسونگ'}, {'role': 'assistant', 'content': 'نتایج ثبت‌شده'}]
+        for latest, expected in [('بودجه را هشت میلیون کن', ['گوشی']), ('ارزان‌ترش را می‌خواهم', ['گوشی']),
+                                 ('حالا کفش کتانی می‌خواهم', ['کفش کتانی', 'کفش', 'کتانی'])]:
+            request = AssistantRequest.model_validate(body(messages=[*history, {'role': 'user', 'content': latest}], context_query='گوشی'))
+            self.assertEqual(query_choices(request), expected)
+        # A newly named product also replaces earlier messages without an explicit context.
+        request = AssistantRequest.model_validate(body(messages=[*history, {'role': 'user', 'content': 'کفش'}]))
+        self.assertEqual(query_choices(request), ['کفش'])
+        for query in ['', ' '.join(['گوشی'] * 13), 'x' * 121]:
+            with self.assertRaises(ValueError):
+                AssistantRequest.model_validate(body(context_query=query))
+
+    def test_ambiguous_budget_edits_cannot_reuse_or_invent_an_amount(self):
+        for text in ['ارزان‌ترش را می‌خواهم', 'بودجه را کمتر کن', 'بودجه را ده میلیون ریال کن', 'بودجه را ۱۲,۳۴ کن']:
+            request = AssistantRequest.model_validate(body(text, context_query='گوشی', max_price_toman='10000000'))
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                proposed_budget(IntentPlan(**proposal()), request)
 
     def test_protocol_forbids_extra_tools_facts_roles_and_invalid_actions(self):
         for plan in [proposal(product_id='invented'), proposal(price='0'), proposal(tool='shell'),
@@ -171,6 +192,44 @@ class AssistantApiTests(unittest.TestCase):
         response = self.post(body('گوشی برای استفاده روزمره می‌خواهم، حداکثر ده میلیون تومان.'))
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()['code'], 'invalid_output')
+
+    def test_budget_followup_keeps_topic_and_filters_source_before_returning_results(self):
+        response = self.post(body('بودجه را هشت میلیون کن', context_query='گوشی', max_price_toman='15000000'))
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual((result['query'], result['max_price_toman'], result['status']), ('گوشی', '8000000', 'results'))
+        expected = self.service.catalogue.search('گوشی', 12, 0, 8000000)
+        self.assertEqual(result['products'], expected)
+        wire = json.loads(self.calls[0].content)
+        context = json.loads(wire['messages'][1]['content'])
+        self.assertEqual(context['context_query'], 'گوشی')
+        self.assertEqual(context['query_choices'], ['گوشی'])
+
+    def test_relative_price_change_asks_amount_even_when_model_wants_to_search(self):
+        for plan in [proposal(), proposal(action='clarify', question='budget')]:
+            self.response = completion(plan)
+            result = self.post(body('ارزان‌ترش را می‌خواهم', context_query='گوشی', max_price_toman='15000000')).json()
+            self.assertEqual(result['status'], 'needs_input')
+            self.assertIsNone(result['products'])
+            self.assertEqual(result['max_price_toman'], '15000000')
+            self.assertIn('چند تومان', result['question'])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_product_change_preserves_budget_but_rejects_old_topic_from_model(self):
+        request = body('حالا کفش کتانی می‌خواهم', context_query='گوشی', max_price_toman='10000000')
+        self.response = completion(proposal())
+        self.assertEqual(self.post(request).status_code, 502)
+        request['request_id'] = str(uuid4())
+        self.response = completion(proposal(query='کفش کتانی'))
+        result = self.post(request).json()
+        self.assertEqual((result['query'], result['max_price_toman']), ('کفش کتانی', '10000000'))
+        self.assertEqual(result['products'], self.service.catalogue.search('کفش کتانی', 12, 0, 10000000))
+
+    def test_missing_kind_question_never_establishes_a_topic_from_lexical_filler(self):
+        self.response = completion(proposal(action='clarify', query='راهنمایی', question='product_kind'))
+        result = self.post(body('برای خرید راهنمایی می‌خواهم')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertIsNone(result['query'])
 
     def test_unknown_model_fields_refusal_truncation_and_bad_json_never_become_empty_success(self):
         cases = [completion(proposal(product_id='invented')),

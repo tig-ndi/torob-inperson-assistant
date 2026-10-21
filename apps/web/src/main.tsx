@@ -636,6 +636,7 @@ function App() {
   const activeOffers = useRef<AbortController | null>(null);
   const interactionVersion = useRef(0);
   const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
+  const [assistantContextQuery, setAssistantContextQuery] = useState<string | null>(null);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -704,6 +705,7 @@ function App() {
     setValidation('');
     interactionVersion.current++;
     setAssistantCancelVersion(version => version + 1);
+    setAssistantContextQuery(null);
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
@@ -712,6 +714,7 @@ function App() {
       const page = await searchProducts(trimmed, offset, budget, controller.signal);
       if (!controller.signal.aborted) {
         setState({ kind: 'success', query: trimmed, offset, budget, page });
+        setAssistantContextQuery(trimmed);
       }
     } catch (error: unknown) {
       if (!controller.signal.aborted) {
@@ -901,6 +904,10 @@ function App() {
         </section>
 
         <Assistant budget={budgetInput ? normalizeBudget(budgetInput) : null} cancelVersion={assistantCancelVersion}
+          contextQuery={assistantContextQuery} onContext={(query, version) => {
+            if (version !== undefined && version !== interactionVersion.current) return;
+            setAssistantContextQuery(query);
+          }}
           onStart={() => {
             const budget = budgetInput ? normalizeBudget(budgetInput) : null;
             const check = budget === null ? { valid: true } : validateBudget(budget);
@@ -917,6 +924,7 @@ function App() {
           onResults={(page, query, budget, version) => {
             if (version !== interactionVersion.current) return;
             setInput(query);
+            setAssistantContextQuery(query);
             setActiveBudget(budget);
             setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
             setValidation('');

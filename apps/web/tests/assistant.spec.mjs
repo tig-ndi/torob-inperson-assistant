@@ -114,6 +114,7 @@ test('synthetic delayed assistant cannot replace newer manual search; cancellati
   release();
   await expect(page.getByRole('button', { name: 'لغو درخواست', exact: true })).toHaveCount(0);
   await expect(page.locator('.product-card')).toContainText('کفش دستی');
+  await expect(page.locator('.assistant-notice')).toContainText('موضوع فعلی: «کفش»');
 });
 
 test('disabled assistant does not prevent direct catalogue search', async ({ page }) => {
@@ -124,4 +125,99 @@ test('disabled assistant does not prevent direct catalogue search', async ({ pag
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.product-card')).toHaveCount(1);
+});
+
+test('result followups retain topic and budget, replace product, roll history and reset explicitly', async ({ page }) => {
+  await statusRoute(page);
+  const requests = [];
+  await page.route('**/api/assistant/turn', route => {
+    const request = route.request().postDataJSON();
+    requests.push(request);
+    const changedProduct = requests.length >= 3 && requests.length < 6;
+    return route.fulfill({ json: { ...searchResult(request), query: changedProduct ? 'کفش کتانی' : 'گوشی',
+      max_price_toman: requests.length === 1 ? '10000000' : '8000000' } });
+  });
+  await page.goto('/');
+  const need = page.getByLabel('نیاز و کاربرد موردنظر');
+  const topic = page.locator('.assistant-notice').filter({ hasText: 'موضوع فعلی:' });
+  for (const [index, text] of ['گوشی تا ده میلیون تومان', 'بودجه را هشت میلیون کن', 'حالا کفش کتانی می‌خواهم',
+    'همان را می‌خواهم', 'بودجه همان هشت میلیون باشد'].entries()) {
+    await need.fill(text);
+    await submit(page);
+    await expect(need).toHaveValue('');
+    expect(requests).toHaveLength(index + 1);
+    expect(requests[index].messages.length).toBeLessThanOrEqual(5);
+    expect(requests[index].messages.map(m => m.role)).toEqual(index === 0 ? ['user']
+      : index === 1 ? ['user', 'assistant', 'user'] : ['user', 'assistant', 'user', 'assistant', 'user']);
+  }
+  expect(requests[1].context_query).toBe('گوشی');
+  expect(requests[1].max_price_toman).toBe('10000000');
+  expect(requests[2].context_query).toBe('گوشی');
+  expect(requests[2].max_price_toman).toBe('8000000');
+  expect(requests[3].context_query).toBe('کفش کتانی');
+  expect(requests[4].messages.some(m => m.content === 'گوشی تا ده میلیون تومان')).toBe(false);
+  await expect(topic).toContainText('کفش کتانی');
+  for (const width of [360, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.screenshot({ path: path.resolve('../../.local/qa/assistant-context-mobile.png') });
+  await page.getByRole('button', { name: 'گفت‌وگوی تازه', exact: true }).click();
+  await expect(topic).toHaveCount(0);
+  await expect(page.locator('.assistant-history')).toHaveCount(0);
+  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('8,000,000');
+  await need.fill('گوشی');
+  await submit(page);
+  await expect(need).toHaveValue('');
+  expect(requests[5].context_query).toBeNull();
+  expect(requests[5].messages).toHaveLength(1);
+  expect(requests[5].max_price_toman).toBe('8000000');
+});
+
+test('manual search provides context; an empty result and clarification retain it', async ({ page }) => {
+  await statusRoute(page);
+  await page.route('**/api/products?**', route => route.fulfill({ json: products }));
+  const requests = [];
+  await page.route('**/api/assistant/turn', route => {
+    const request = route.request().postDataJSON();
+    requests.push(request);
+    return route.fulfill({ json: requests.length === 1
+      ? { ...searchResult(request), status: 'needs_input', query: 'گوشی', products: null, question: 'سقف بودجه‌تان چند تومان است؟' }
+      : { ...searchResult(request), status: 'no_evidence', max_price_toman: '0', products: { ...products, items: [] } } });
+  });
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.locator('.product-card')).toHaveCount(1);
+  const need = page.getByLabel('نیاز و کاربرد موردنظر');
+  await need.fill('ارزان‌ترش را می‌خواهم');
+  await submit(page);
+  await expect(need).toHaveValue('');
+  expect(requests[0].context_query).toBe('گوشی');
+  await need.fill('بودجه را صفر کن');
+  await submit(page);
+  await expect(page.locator('.assistant-history')).toContainText('نتیجه‌ای ثبت نشده');
+  await expect(page.locator('.assistant-notice')).toContainText('موضوع فعلی: «گوشی»');
+  expect(requests[1].context_query).toBe('گوشی');
+  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('0');
+});
+
+test('long followups keep complete recent pairs within the API character bound', async ({ page }) => {
+  await statusRoute(page);
+  const requests = [];
+  await page.route('**/api/assistant/turn', route => {
+    const request = route.request().postDataJSON();
+    requests.push(request);
+    return route.fulfill({ json: searchResult(request) });
+  });
+  await page.goto('/');
+  const need = page.getByLabel('نیاز و کاربرد موردنظر');
+  for (let i = 0; i < 3; i++) {
+    await need.fill('گوشی ' + 'الف'.repeat(995));
+    await submit(page);
+    await expect(need).toHaveValue('');
+  }
+  expect(requests[2].context_query).toBe('گوشی');
+  expect(requests[2].messages.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
+  expect(requests[2].messages.reduce((size, m) => size + m.content.length, 0)).toBeLessThanOrEqual(3000);
 });
