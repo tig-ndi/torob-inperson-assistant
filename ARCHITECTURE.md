@@ -1,6 +1,6 @@
 # معماری اولیه
 
-این انتخاب پیشنهاد اجرایی base است؛ تصمیم مسابقه یا stack از قبل موجود نیست. P1 باید نسخه‌ها و قابلیت اجرا را قبل از قفل‌کردن وابستگی‌ها تأیید کند.
+stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite ساخته و محلی بررسی شد. React/TypeScript/Vite هنوز مربوط به P1b است. تصمیم‌های اجرایی جدید در D09/D10 از DECISIONS ثبت شده‌اند.
 
 ## انتخاب
 
@@ -19,7 +19,9 @@
 
 موجود: `tools/` برای import، `tests/` برای قرارداد داده، `.local/` برای خروجی تولیدشده، `docs/` برای منابع و قرارداد داده.
 
-در P1 ایجاد شوند: `apps/api/` برای endpoint و domain، `apps/web/` برای UI. پوشهٔ خالی و package مصرف‌نشده از قبل نسازید. در P1 محل فعلی DB را از config صریح بگیرید؛ به نسخهٔ تازه‌تر بدون ثبت تغییر نروید.
+ساخته‌شده در P1a: `apps/api/` برای repository، مدل پاسخ و endpoint؛ `tests/test_api.py` و `tools/smoke_api.py` برای بررسی مستقل. در P1b ایجاد شود: `apps/web/` برای UI. مسیر DB از TOROB_DATABASE یا پیش‌فرض ریشهٔ پروژه/.local/catalogue.sqlite3 است؛ env خودکار بارگذاری نمی‌شود. snapshot runtime فقط‌خواندنی است. package مصرف‌نشده نسازید.
+
+قرارداد فعلی endpoint و صفحه‌بندی/بودجه در docs/API.md است. پاسخ‌ها از مدل strict عبور می‌کنند؛ خطای nested data به 503 مشخص تبدیل می‌شود. هیچ middleware با CORS باز اضافه نشده؛ P1b از proxy توسعه برای /api استفاده کند. هنگام اجرای سرور access log را خاموش نگه دارید تا query و موقعیت احتمالی ثبت نشوند.
 
 جریان: CSV → import اعتبارسنجی‌شده → SQLite/FTS → repository توابع پارامتری → domain محاسبات → API پاسخ محدود → UI. مدل فقط به ابزارهای domain دسترسی دارد، نه SQL آزاد، فایل، shell یا URL دلخواه.
 
