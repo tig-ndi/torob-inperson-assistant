@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from apps.api.hours import HoursReason, HoursStatus
+from apps.api.credit import CreditReason, CreditStatus, OptionReason
 
 
 class Model(BaseModel):
@@ -77,6 +78,23 @@ class OpeningHours(Model):
     previous_day_overnight_shifts: list[Shift]
 
 
+class CreditOption(Model):
+    option_index: int
+    provider_name: str | None
+    channel: str | None
+    min_price_toman: str | None
+    max_price_toman: str | None
+    category_names: list[str] | None
+    status: CreditStatus
+    reason: OptionReason
+
+
+class InPersonCredit(Model):
+    status: CreditStatus
+    reason: CreditReason
+    options: list[CreditOption]
+
+
 class Offer(Model):
     offer_id: str
     product_id: str
@@ -90,6 +108,7 @@ class Offer(Model):
     inventory_status: Literal["unconfirmed"]
     direct_distance_meters: int | None = None
     opening_hours: OpeningHours
+    in_person_credit: InPersonCredit
     shop: Shop
 
 

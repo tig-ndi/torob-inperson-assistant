@@ -270,3 +270,58 @@ class CatalogueApiTests(unittest.TestCase):
         self.assertEqual(after["items"], [])
         self.assertIn("09:59:59", before["hours_evaluated_at"])
         self.assertIn("10:00:00", after["hours_evaluated_at"])
+
+    def test_credit_filter_precedes_pagination_preserves_multiple_offers_and_uses_the_offer_category(self):
+        from test_credit import option
+        from test_hours import CLOSED, declared, shift
+
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE products SET category_name='گوشی' WHERE product_id='product_two'")
+            connection.execute("UPDATE shops SET payment_options=? WHERE shop_id='shop_one'", (json.dumps([option(channel="unknown")]),))
+            connection.execute("UPDATE shops SET payment_options=?,weekly_hours=? WHERE shop_id='shop_near'",
+                               (json.dumps([option(category_names=["گوشی"], min_price_toman=200000, max_price_toman=250000)]),
+                                json.dumps({"wed": declared(shift()), "tue": CLOSED})))
+            connection.execute("UPDATE shops SET payment_options=? WHERE shop_id='shop_far'",
+                               (json.dumps([option(category_names=["کفش"])]),))
+            connection.commit()
+        now = datetime.fromisoformat("2026-10-21T10:00:00+03:30")
+        with TestClient(create_app(self.database, clock=lambda: now)) as client:
+            url = "/api/products/product_two/offers"
+            full = client.get(url).json()["items"]
+            by_id = {o["offer_id"]: o for o in full}
+            self.assertEqual(by_id["other_product"]["in_person_credit"]["status"], "unknown")
+            self.assertEqual(by_id["offer_no_coord"]["in_person_credit"]["status"], "unknown")
+            self.assertEqual(by_id["offer_far"]["in_person_credit"]["status"], "does_not_match")
+            params = {"in_person_credit_only": "true", "limit": 1}
+            first = client.get(url, params=params)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.json()["items"][0]["offer_id"], "offer_near_1")
+            self.assertTrue(first.json()["has_more"])
+            second = client.get(url, params={**params, "offset": 1}).json()
+            self.assertEqual(second["items"][0]["offer_id"], "offer_near_2")
+            self.assertFalse(second["has_more"])
+            combined = client.get(url, params={**params, "max_price_toman": "210000", "user_lat": 35.7,
+                                              "user_lon": 51.4, "max_distance_km": 5, "open_now_only": "true"}).json()
+            self.assertEqual([o["offer_id"] for o in combined["items"]], ["offer_near_1"])
+            self.assertFalse(combined["has_more"])
+            self.assertEqual(combined["items"][0]["in_person_credit"]["options"][0]["min_price_toman"], "200000")
+            self.assertEqual(client.get(url, params={"in_person_credit_only": "invalid"}).status_code, 422)
+
+    def test_unknown_price_and_invalid_payment_data_are_visible_without_becoming_eligible(self):
+        from test_credit import option
+
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE shops SET payment_options=? WHERE shop_id='shop_one'", (json.dumps([option()]),))
+            connection.commit()
+        full = self.client.get("/api/products/product_one/offers").json()["items"]
+        self.assertEqual(full[-1]["in_person_credit"]["options"][0]["reason"], "price_unknown")
+        filtered = self.client.get("/api/products/product_one/offers", params={"in_person_credit_only": "true"}).json()
+        self.assertEqual([o["offer_id"] for o in filtered["items"]], ["offer_a", "offer_b"])
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE shops SET payment_options='{}' WHERE shop_id='shop_one'")
+            connection.commit()
+        response = self.client.get("/api/products/product_one/offers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["in_person_credit"]["reason"], "invalid_data")
+        self.assertEqual(self.client.get("/api/products/product_one/offers",
+                                        params={"in_person_credit_only": "true"}).json()["items"], [])

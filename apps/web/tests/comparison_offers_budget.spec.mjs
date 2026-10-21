@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { HOURS_CHECKED_AT, syntheticHours } from './fixtures/hours.mjs';
+import { unknownCredit } from './fixtures/credit.mjs';
 import path from 'node:path';
 
 test('real UI: budget filter with Persian digits, active badge and offers modal with real dataset', async ({ page }) => {
@@ -221,7 +222,7 @@ test('synthetic fixture: preserve multiple offers of same shop, format dates in 
 
   await page.route('**/api/products/prod_synthetic_test/offers?**', route => {
     return route.fulfill({ json: { ...syntheticOffers, hours_evaluated_at: HOURS_CHECKED_AT,
-      items: syntheticOffers.items.map(offer => ({ ...offer, opening_hours: syntheticHours() })) } });
+      items: syntheticOffers.items.map(offer => ({ ...offer, opening_hours: syntheticHours(), in_person_credit: unknownCredit() })) } });
   });
 
   await page.goto('/');

@@ -864,7 +864,7 @@ h3 {
   margin: 0;
 }
 
-.hours-filter-box {
+.hours-filter-box, .credit-filter-box {
   padding: 14px;
   margin-block: 16px;
   border: 1px solid var(--border);
@@ -904,6 +904,24 @@ h3 {
 .hours-unknown .hours-status { color: #674d28; }
 .hours-ranges { margin-block: 8px; }
 .hours-ranges ul { margin-block: 4px; padding-inline-start: 20px; }
+
+.credit-conditions {
+  margin-block: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  background: #fafaf9;
+  overflow-wrap: anywhere;
+}
+.credit-status { margin: 0; font-size: 13px; color: #674d28; }
+.credit-matches_declared_terms .credit-status { color: #245b46; }
+.credit-does_not_match .credit-status { color: #92313b; }
+.credit-conditions summary { cursor: pointer; padding-block: 6px; font-weight: 700; }
+.credit-options { margin-block: 8px 0; padding-inline-start: 18px; }
+.credit-options li + li { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.credit-options p { margin-block: 5px; }
+.credit-option-result { font-weight: 700; }
 
 /* Location & Radius Filter in Offers Modal */
 .location-filter-box {

@@ -12,6 +12,7 @@ import sqlite3
 
 from tools.prepare_data import normalize_text
 from apps.api.hours import evaluate_hours, tehran_time
+from apps.api.credit import evaluate_credit
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -150,16 +151,23 @@ class Catalogue:
     def offers(self, product_id: str, limit: int, offset: int, max_price: int | None,
                user_lat: float | None = None, user_lon: float | None = None,
                max_distance_km: float | None = None, open_now_only: bool = False,
-               evaluated_at: datetime | None = None) -> dict | None:
+               evaluated_at: datetime | None = None, in_person_credit_only: bool = False) -> dict | None:
         checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
 
         @lru_cache(maxsize=1024)
         def hours(raw: str | None):
             return evaluate_hours(raw, checked_at)
 
+        @lru_cache(maxsize=1024)
+        def credit(raw: str | None, price: int | None, category: str | None):
+            return evaluate_credit(raw, price, category)
+
         with self.connect() as connection:
             connection.create_function("declared_open_now", 1,
                                        lambda raw: int(hours(raw).status == "declared_open"), deterministic=True)
+            connection.create_function("matches_in_person_credit", 3,
+                                       lambda raw, price, category: int(credit(raw, price, category).status == "matches_declared_terms"),
+                                       deterministic=True)
             provenance = self.provenance(connection)
             if connection.execute("SELECT 1 FROM products WHERE product_id=?", (product_id,)).fetchone() is None:
                 return None
@@ -167,7 +175,8 @@ class Catalogue:
             has_location = user_lat is not None and user_lon is not None
             max_dist_m = max_distance_km * 1000.0 if max_distance_km is not None else None
 
-            query = "SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon,s.weekly_hours"
+            query = ("SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon,s.weekly_hours,"
+                     "s.payment_options,p.category_name AS product_category_name")
             params: list = []
             if has_location:
                 query += ",haversine_m(?, ?, s.lat, s.lon) AS dist_m"
@@ -176,13 +185,17 @@ class Catalogue:
                 query += ",NULL AS dist_m"
 
             query += (
-                " FROM offers o JOIN shops s ON s.shop_id=o.shop_id WHERE o.product_id=? "
+                " FROM offers o JOIN shops s ON s.shop_id=o.shop_id "
+                "JOIN products p ON p.product_id=o.product_id WHERE o.product_id=? "
                 "AND (? IS NULL OR o.price_toman<=?) "
             )
             params.extend([product_id, max_price, max_price])
 
             if open_now_only:
                 query += "AND declared_open_now(s.weekly_hours)=1 "
+
+            if in_person_credit_only:
+                query += "AND matches_in_person_credit(s.payment_options,o.price_toman,p.category_name)=1 "
 
             if max_dist_m is not None:
                 # Radius condition is applied BEFORE LIMIT / OFFSET.
@@ -210,6 +223,7 @@ class Catalogue:
                     "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
                     "inventory_status": "unconfirmed",
                     "opening_hours": hours(row["weekly_hours"]).as_dict(),
+                    "in_person_credit": credit(row["payment_options"], price, row["product_category_name"]).as_dict(),
                     "direct_distance_meters": direct_distance_meters,
                     "shop": {"name": row["shop_name"], "address": row["address"],
                              "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}})

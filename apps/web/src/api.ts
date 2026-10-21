@@ -48,6 +48,38 @@ export type OpeningHours = {
   previous_day_overnight_shifts: OpeningShift[];
 };
 
+export const CREDIT_STATUS_TEXT = {
+  matches_declared_terms: 'منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری',
+  does_not_match: 'شرایط ثبت‌شده با این آفر تطابق ندارند',
+  unknown: 'وضعیت خرید اعتباری حضوری نامشخص',
+} as const;
+export const CREDIT_REASON_TEXT = {
+  matched: 'با قیود ثبت‌شده تطابق دارد',
+  channel_unknown: 'حضوری بودن این روش در منبع مشخص نشده است',
+  unsupported_channel: 'کانال ثبت‌شده برای خرید حضوری قابل ارزیابی نیست',
+  price_unknown: 'قیمت آفر نامشخص است؛ تطابق مبلغ قابل بررسی نیست',
+  product_category_unknown: 'دستهٔ محصول برای بررسی این شرط نامشخص است',
+  category_mismatch: 'دستهٔ محصول با دسته‌های اعلام‌شده تطابق ندارد',
+  below_minimum: 'قیمت آفر کمتر از کف مبلغ ثبت‌شده است',
+  above_maximum: 'قیمت آفر بیشتر از سقف مبلغ ثبت‌شده است',
+  invalid_conditions: 'اطلاعات این روش ناقص یا ناسازگار است',
+} as const;
+export type CreditOption = {
+  option_index: number;
+  provider_name: string | null;
+  channel: string | null;
+  min_price_toman: string | null;
+  max_price_toman: string | null;
+  category_names: string[] | null;
+  status: keyof typeof CREDIT_STATUS_TEXT;
+  reason: keyof typeof CREDIT_REASON_TEXT;
+};
+export type InPersonCredit = {
+  status: keyof typeof CREDIT_STATUS_TEXT;
+  reason: 'matching_option' | 'all_recorded_options_mismatch' | 'incomplete_conditions' | 'not_recorded' | 'invalid_data';
+  options: CreditOption[];
+};
+
 export type Offer = {
   offer_id: string;
   product_id: string;
@@ -61,6 +93,7 @@ export type Offer = {
   inventory_status: 'unconfirmed';
   direct_distance_meters: number | null;
   opening_hours: OpeningHours;
+  in_person_credit: InPersonCredit;
   shop: Shop;
 };
 
@@ -194,6 +227,33 @@ function parseOpeningHours(value: unknown): OpeningHours {
     previous_day_overnight_shifts: parseShifts(hours.previous_day_overnight_shifts) };
 }
 
+function parseCredit(value: unknown): InPersonCredit {
+  const credit = record(value);
+  function status(value: unknown): keyof typeof CREDIT_STATUS_TEXT {
+    if (typeof value !== 'string' || !Object.hasOwn(CREDIT_STATUS_TEXT, value)) throw new Error('وضعیت شرایط اعتباری معتبر نیست.');
+    return value as keyof typeof CREDIT_STATUS_TEXT;
+  }
+  const reason = credit.reason;
+  if (reason !== 'matching_option' && reason !== 'all_recorded_options_mismatch' &&
+      reason !== 'incomplete_conditions' && reason !== 'not_recorded' && reason !== 'invalid_data') {
+    throw new Error('علت وضعیت اعتباری معتبر نیست.');
+  }
+  if (!Array.isArray(credit.options)) throw new Error('فهرست شرایط اعتباری معتبر نیست.');
+  const options = credit.options.map((value: unknown, index: number): CreditOption => {
+    const o = record(value);
+    if (count(o.option_index) !== index || typeof o.reason !== 'string' || !Object.hasOwn(CREDIT_REASON_TEXT, o.reason) ||
+        !Object.hasOwn(o, 'min_price_toman') || !Object.hasOwn(o, 'max_price_toman') ||
+        (o.category_names !== null && (!Array.isArray(o.category_names) || o.category_names.some((c: unknown) => typeof c !== 'string')))) {
+      throw new Error('شرایط روش اعتباری معتبر نیست.');
+    }
+    return { option_index: index, provider_name: nullableText(o.provider_name), channel: nullableText(o.channel),
+      min_price_toman: money(o.min_price_toman), max_price_toman: money(o.max_price_toman),
+      category_names: o.category_names as string[] | null, status: status(o.status),
+      reason: o.reason as keyof typeof CREDIT_REASON_TEXT };
+  });
+  return { status: status(credit.status), reason, options };
+}
+
 export function parseOfferPage(value: unknown): OfferPage {
   const page = record(value);
   const source = record(page.provenance);
@@ -237,6 +297,7 @@ export function parseOfferPage(value: unknown): OfferPage {
       inventory_status: 'unconfirmed',
       direct_distance_meters,
       opening_hours: parseOpeningHours(o.opening_hours),
+      in_person_credit: parseCredit(o.in_person_credit),
       shop: {
         name: nullableText(s.name),
         address: nullableText(s.address),
@@ -317,6 +378,7 @@ export async function fetchProductOffers(
   userLon: number | null,
   maxDistanceKm: number | null,
   openNowOnly: boolean,
+  inPersonCreditOnly: boolean,
   signal: AbortSignal
 ): Promise<OfferPage> {
   const params = new URLSearchParams({
@@ -334,6 +396,7 @@ export async function fetchProductOffers(
     params.set('max_distance_km', String(maxDistanceKm));
   }
   if (openNowOnly) params.set('open_now_only', 'true');
+  if (inPersonCreditOnly) params.set('in_person_credit_only', 'true');
   let response: Response;
   try {
     response = await fetch(`/api/products/${encodeURIComponent(productId)}/offers?${params}`, { signal, cache: 'no-store' });

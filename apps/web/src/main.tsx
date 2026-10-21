@@ -19,6 +19,7 @@ import {
 } from './api';
 import type { OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
+import { InPersonCreditDetails } from './InPersonCredit';
 import './style.css';
 
 type SearchState =
@@ -224,11 +225,13 @@ function OffersModal({
   userLon,
   maxDistanceKm,
   openNowOnly,
+  inPersonCreditOnly,
   state,
   onClose,
   onPageChange,
   onLocationChange,
   onHoursFilterChange,
+  onCreditFilterChange,
   onRefreshHours,
   onRetry,
 }: {
@@ -238,11 +241,13 @@ function OffersModal({
   userLon: number | null;
   maxDistanceKm: number | null;
   openNowOnly: boolean;
+  inPersonCreditOnly: boolean;
   state: OffersState;
   onClose: () => void;
   onPageChange: (offset: number) => void;
   onLocationChange: (lat: number | null, lon: number | null, radius: number | null) => void;
   onHoursFilterChange: (openOnly: boolean) => void;
+  onCreditFilterChange: (creditOnly: boolean) => void;
   onRefreshHours: () => void;
   onRetry: () => void;
 }) {
@@ -369,6 +374,14 @@ function OffersModal({
             onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
         </div>
 
+        <div className="credit-filter-box">
+          <label className="hours-filter-label">
+            <input type="checkbox" checked={inPersonCreditOnly} onChange={e => onCreditFilterChange(e.target.checked)} />
+            فقط آفرهای منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری
+          </label>
+          <p className="caption">کانال نامشخص، قیمت نامعلوم و شرایط ناقص کنار گذاشته می‌شوند. این فیلتر تأیید اعتبار یا امکان قطعی خرید نیست.</p>
+        </div>
+
         {/* Location & Radius Filter Section */}
         <div className="location-filter-box">
           <div className="location-filter-header">
@@ -473,7 +486,9 @@ function OffersModal({
               <div className="state-panel">
                 <h3>هیچ آفری با شرایط انتخابی یافت نشد</h3>
                 <p>
-                  {openNowOnly
+                  {inPersonCreditOnly
+                    ? 'آفری با همهٔ فیلترهای فعال و شرایط ثبت‌شدهٔ خرید اعتباری حضوری یافت نشد. می‌توانید فیلتر اعتباری را بردارید؛ اطلاعات نامشخص هم کنار گذاشته شده‌اند.'
+                    : openNowOnly
                     ? 'آفری با همهٔ فیلترهای فعال و ساعتِ اعلام‌شدهٔ باز یافت نشد؛ ساعت‌های نامشخص هم کنار گذاشته شده‌اند. می‌توانید فیلتر ساعت را بردارید.'
                     : maxDistanceKm !== null
                     ? 'هیچ فروشگاهی در شعاع تعیین‌شده ثبت نشده است (یا فاقد مختصات جغرافیایی بوده است).'
@@ -558,6 +573,7 @@ function OffersModal({
                         </div>
 
                         <OpeningHoursDetails hours={offer.opening_hours} />
+                        <InPersonCreditDetails credit={offer.in_person_credit} />
                         <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
                       </article>
                     );
@@ -612,6 +628,7 @@ function App() {
   const [userLon, setUserLon] = useState<number | null>(null);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
   const [openNowOnly, setOpenNowOnly] = useState(false);
+  const [inPersonCreditOnly, setInPersonCreditOnly] = useState(false);
 
   const budgetInputRef = useRef<HTMLInputElement | null>(null);
   const activeSearch = useRef<AbortController | null>(null);
@@ -759,14 +776,15 @@ function App() {
     lat: number | null = userLat,
     lon: number | null = userLon,
     radiusKm: number | null = maxDistanceKm,
-    openOnly: boolean = openNowOnly
+    openOnly: boolean = openNowOnly,
+    creditOnly: boolean = inPersonCreditOnly
   ) {
     activeOffers.current?.abort();
     const controller = new AbortController();
     activeOffers.current = controller;
     setOffersState({ kind: 'loading', offset });
     try {
-      const page = await fetchProductOffers(productId, offset, budget, lat, lon, radiusKm, openOnly, controller.signal);
+      const page = await fetchProductOffers(productId, offset, budget, lat, lon, radiusKm, openOnly, creditOnly, controller.signal);
       if (!controller.signal.aborted) {
         setOffersState({ kind: 'success', offset, page });
       }
@@ -1059,6 +1077,7 @@ function App() {
           userLon={userLon}
           maxDistanceKm={maxDistanceKm}
           openNowOnly={openNowOnly}
+          inPersonCreditOnly={inPersonCreditOnly}
           state={offersState}
           onClose={() => setActiveOffersProduct(null)}
           onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm)}
@@ -1073,6 +1092,10 @@ function App() {
             void loadOffers(activeOffersProduct.product_id, 0, activeBudget, userLat, userLon, maxDistanceKm, openOnly);
           }}
           onRefreshHours={() => void loadOffers(activeOffersProduct.product_id, 0, activeBudget, userLat, userLon, maxDistanceKm)}
+          onCreditFilterChange={creditOnly => {
+            setInPersonCreditOnly(creditOnly);
+            void loadOffers(activeOffersProduct.product_id, 0, activeBudget, userLat, userLon, maxDistanceKm, openNowOnly, creditOnly);
+          }}
           onRetry={() => {
             const currentOffset = 'offset' in offersState ? offersState.offset : 0;
             void loadOffers(activeOffersProduct.product_id, currentOffset, activeBudget, userLat, userLon, maxDistanceKm);

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { syntheticHours } from './fixtures/hours.mjs';
+import { unknownCredit } from './fixtures/credit.mjs';
 
 const product = {
   product_id: 'hours_synthetic_product', persian_title: 'کالای آزمایشی ساعات',
@@ -13,6 +14,7 @@ function offer(id, status, shopId = id) {
     price_quality: 'not_assessed', last_price_changed_at: null, seller_title: null, description: null,
     warranty: null, inventory_status: 'unconfirmed', direct_distance_meters: 0,
     opening_hours: syntheticHours(status),
+    in_person_credit: unknownCredit(),
     shop: { name: 'فروشگاه آزمایشی', address: null, location_label: null, lat: 35.7, lon: 51.4 } };
 }
 const allOffers = [offer('open_1', 'declared_open', 'same_shop'),

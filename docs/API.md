@@ -1,6 +1,6 @@
-# قرارداد API کاتالوگ تاریخی — P1 و ساعات P2
+# قرارداد API کاتالوگ تاریخی — P1 و شرایط مراجعهٔ P2
 
-نسخهٔ محلی 0.1.0؛ فقط‌خواندنی، با مدل پاسخ strict. UI جست‌وجو/مقایسه/آفر/بودجه/محدوده و ساعات ساخته شده‌اند؛ این API موجودی زنده، بازبودن تأییدشده، پرداخت یا تماس فروشنده ندارد.
+نسخهٔ محلی 0.1.0؛ فقط‌خواندنی، با مدل پاسخ strict. UI جست‌وجو/مقایسه/آفر/بودجه/محدوده و ساعات/شرایط ثبت‌شدهٔ خرید اعتباری ساخته شده‌اند؛ این API موجودی زنده، بازبودن تأییدشده، پرداخت یا تماس فروشنده ندارد.
 
 ## اجرا و تنظیمات
 
@@ -43,7 +43,19 @@ unknown با closed فرق دارد؛ هر دو فقط با فعال‌کردن 
 
 همهٔ قیمت‌های JSON رشتهٔ دهدهی‌اند؛ null همان null است. UI قیمت را برای محاسبه به Number تبدیل نکند و از BigInt/رشته استفاده کند. price_quality برابر missing، above_js_safe_integer (بیش از ۲^۵۳−۱) یا not_assessed است؛ این مدل تشخیص قیمت بازار نیست. تاریخ خام منبع حفظ شده؛ عنوان نمایشی «آخرین تغییر قیمت ثبت‌شده» با timezone تهران باشد، نه تأیید موجودی.
 
-هر پاسخ موفق provenance دارد: snapshot_id (SHA-256 متن metadata.profile)، dataset، generated_at_utc، currency=toman و inventory_status=unconfirmed. خود آفر نیز unconfirmed است. generated_at زمان ساخت snapshot است، نه تأیید فروشنده. متن/URL منبع نامطمئن‌اند؛ HTML فروشنده اجرا نشود. ساعات منبع اکنون ارزیابی می‌شوند؛ شرایط اعتباری هنوز باقی است.
+هر پاسخ موفق provenance دارد: snapshot_id (SHA-256 متن metadata.profile)، dataset، generated_at_utc، currency=toman و inventory_status=unconfirmed. خود آفر نیز unconfirmed است. generated_at زمان ساخت snapshot است، نه تأیید فروشنده. متن/URL منبع نامطمئن‌اند؛ HTML فروشنده اجرا نشود. ساعات و قیود اعتباری منبع ارزیابی می‌شوند؛ هیچ‌کدام تأیید زنده نیستند.
+
+## شرایط خرید اعتباری حضوری — گام دوم P2
+
+در مسیر offers، in_person_credit_only=true اختیاری است (پیش‌فرض false). فقط matches_declared_terms را پیش از LIMIT/OFFSET، همراه ساعت/بودجه/شعاع نگه می‌دارد. بدون این فیلتر همهٔ وضعیت‌ها باقی‌اند. ترتیب و offer_idهای چندگانه حفظ و has_more از نتیجهٔ فیلترشده است. پارامتر نامعتبر 422 است.
+
+هر آفر in_person_credit با status، reason و options دارد. status یکی از matches_declared_terms / does_not_match / unknown است. reason کل یکی از matching_option، all_recorded_options_mismatch، incomplete_conditions، not_recorded یا invalid_data است. options تمام روش‌ها را با option_index صفرمبنا، provider_name، channel، min_price_toman/max_price_toman (رشتهٔ دهدهی یا null)، category_names (لیست رشته یا null برای اطلاعات خراب)، status و reason همان روش نگه می‌دارد. روش‌های هم‌نام ادغام نمی‌شوند.
+
+reason روش: matched، channel_unknown، unsupported_channel، price_unknown، product_category_unknown، category_mismatch، below_minimum، above_maximum یا invalid_conditions. همهٔ کلیدها و قیود پیش از ارزیابی اعتبارسنجی می‌شوند؛ مبلغ منفی/اعشار/boolean/رشته در JSON منبع، بازهٔ وارونه، نام خالی و دستهٔ نامعتبر unknown می‌سازند. نمونهٔ خراب به نتیجهٔ معتبر خالی تبدیل نمی‌شود؛ وضعیت unknown با علت دارد.
+
+تطابق فقط با channel=in_person، قیمت معلوم، قیود صحیح و دستهٔ مجاز همان محصول است. مرز مبلغ شامل است و مقایسه با integer دقیق انجام می‌شود. null در فیلد موجود یعنی قید مبلغ ثبت نشده، نه صفر یا اعتبار نامحدود واقعی؛ [] یعنی محدودیت دسته در منبع ثبت نشده، نه پذیرش قطعی هر کالا. key غایب unknown است. دستهٔ غیرخالی باید پس از نرمال‌سازی دقیقاً با category_name محصول برابر باشد؛ دستهٔ فعالیت فروشگاه/والد حدسی استفاده نمی‌شود. unknown channel حضوری فرض نمی‌شود.
+
+وجود یک روش منطبق کافی است؛ بدون آن، وجود unknown وضعیت کل را unknown می‌کند؛ فقط عدم تطابق تمام روش‌ها does_not_match است. فهرست منبع خالی/غایب not_recorded است و نبود خدمت را اثبات نمی‌کند. UI فقط قیود ثبت‌شده را نمایش می‌دهد؛ تأیید اعتبار شخص، موجودی، پرداخت یا پذیرش فروشنده و هیچ اتصال واقعی provider در این قرارداد نیست.
 
 ## خطا و بازیابی
 

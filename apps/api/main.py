@@ -67,6 +67,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         user_lon: float | None = Query(None, ge=-180, le=180, allow_inf_nan=False),
         max_distance_km: float | None = Query(None, gt=0, le=1000, allow_inf_nan=False),
         open_now_only: bool = False,
+        in_person_credit_only: bool = False,
     ):
         # Hours depend on request time. A refresh must not reuse a cached page.
         response.headers["Cache-Control"] = "no-store"
@@ -80,8 +81,9 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             user_lat,
             user_lon,
             max_distance_km,
-            open_now_only,
-            clock() if clock is not None else datetime.now(timezone.utc),
+            open_now_only=open_now_only,
+            evaluated_at=clock() if clock is not None else datetime.now(timezone.utc),
+            in_person_credit_only=in_person_credit_only,
         )
         if result is None:
             raise HTTPException(404, "محصول در این snapshot ثبت نشده است.")
