@@ -1,0 +1,4 @@
+interface:
+  display_name: "Competition Agent Engineer"
+  short_description: "Build and verify agents against competition criteria"
+  default_prompt: "Use $competition-agent-engineer to turn this challenge brief into a tested, judge-ready agent within the remaining time."

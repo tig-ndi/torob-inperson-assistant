@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "dataset": "starcoach-v16-cap300-csv",
+  "generated_at_utc": "2026-10-21T14:12:49.203686+00:00",
+  "sqlite_version": "3.50.4",
+  "sources": {
+    "shops": {
+      "sha256": "1a292d6180e2a28cd0bbec57b1bb575a440e5afcc3ec3f5af5b1e13172aebaa1",
+      "bytes": 9202900
+    },
+    "products": {
+      "sha256": "e4a9749529d1e032c1dc2c4e275a8793a1edd702a194cb8de9abafc0649cc9c9",
+      "bytes": 196150238
+    },
+    "offers": {
+      "sha256": "664d256ed04b37cfb268d89eb605afda4a3b76179324b39d2dbaef21439f09b9",
+      "bytes": 79945479
+    }
+  },
+  "tables": {
+    "shops": {
+      "rows": 6476,
+      "nulls": {
+        "instagram": 6454,
+        "supports_fast_delivery": 4875,
+        "website_url": 6386
+      },
+      "empty_strings": {
+        "address": 1,
+        "location_label": 1
+      },
+      "empty_json": {
+        "payment_options": 6210,
+        "weekly_hours": 2003,
+        "category_names": 1797
+      },
+      "json_object_keys": {
+        "category_names": {},
+        "contacts": {
+          "channel": 6476,
+          "display_number": 6476
+        },
+        "payment_options": {
+          "category_names": 385,
+          "channel": 385,
+          "max_price_toman": 385,
+          "min_price_toman": 385,
+          "provider_name": 385
+        },
+        "weekly_hours": {
+          "fri": 4473,
+          "mon": 4473,
+          "sat": 4473,
+          "sun": 4473,
+          "thu": 4473,
+          "tue": 4473,
+          "wed": 4473
+        }
+      }
+    },
+    "products": {
+      "rows": 225903,
+      "nulls": {
+        "model": 221847,
+        "brand_name": 168269
+      },
+      "empty_strings": {
+        "persian_title": 2
+      },
+      "empty_json": {
+        "specs": 81304,
+        "image_urls": 1219
+      },
+      "json_object_keys": {
+        "image_urls": {},
+        "specs": {
+          "key": 1227511,
+          "section": 1227511,
+          "value": 1227511
+        }
+      }
+    },
+    "offers": {
+      "rows": 331506,
+      "nulls": {
+        "warranty": 272563,
+        "price_toman": 15083,
+        "last_price_changed_at": 769
+      },
+      "empty_strings": {
+        "description": 293129
+      },
+      "empty_json": {},
+      "json_object_keys": {
+        "warranty": {
+          "description": 58943,
+          "period_months": 58943,
+          "provider": 58943
+        }
+      }
+    }
+  },
+  "semantics": {
+    "currency": "toman",
+    "inventory_confirmed": false,
+    "contacts": "synthetic per user-supplied organizer text; never dial",
+    "coverage": "selective Tehran sample; max 300 distinct products per shop"
+  },
+  "relations": {
+    "foreign_key_errors": 0,
+    "shops_without_offers": 2684,
+    "products_without_offers": 0,
+    "max_distinct_products_per_shop": 300,
+    "repeated_shop_product_pairs": 9557
+  },
+  "prices": {
+    "min_toman": 1,
+    "max_toman": 733518940747298944,
+    "zero_count": 0,
+    "above_javascript_safe_integer": 11
+  },
+  "price_timestamp_range": [
+    "2020-12-03T08:51:32.129814+00:00",
+    "2026-10-13T00:02:35.297834+00:00"
+  ],
+  "coordinates_missing_or_partial": 0,
+  "integrity_check": "ok",
+  "fts_rows": 225903
+}
