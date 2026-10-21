@@ -2,10 +2,11 @@
 
 import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Callable
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import ResponseValidationError
 from fastapi.responses import JSONResponse
 
@@ -28,7 +29,7 @@ def parse_budget(value: str | None) -> int | None:
     return price
 
 
-def create_app(database: Path | None = None) -> FastAPI:
+def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | None = None) -> FastAPI:
     catalogue = Catalogue(database if database is not None else Path(
         os.environ.get("TOROB_DATABASE", str(ROOT / ".local/catalogue.sqlite3"))))
     application = FastAPI(title="Torob local historical catalogue", version="0.1.0")
@@ -58,13 +59,17 @@ def create_app(database: Path | None = None) -> FastAPI:
     @application.get("/api/products/{product_id}/offers", response_model=OfferPage)
     def offers(
         product_id: str,
+        response: Response,
         limit: Limit = 20,
         offset: Offset = 0,
         max_price_toman: Budget = None,
         user_lat: float | None = Query(None, ge=-90, le=90, allow_inf_nan=False),
         user_lon: float | None = Query(None, ge=-180, le=180, allow_inf_nan=False),
         max_distance_km: float | None = Query(None, gt=0, le=1000, allow_inf_nan=False),
+        open_now_only: bool = False,
     ):
+        # Hours depend on request time. A refresh must not reuse a cached page.
+        response.headers["Cache-Control"] = "no-store"
         validate_id(product_id)
         validate_coordinates(user_lat, user_lon, max_distance_km)
         result = catalogue.offers(
@@ -75,6 +80,8 @@ def create_app(database: Path | None = None) -> FastAPI:
             user_lat,
             user_lon,
             max_distance_km,
+            open_now_only,
+            clock() if clock is not None else datetime.now(timezone.utc),
         )
         if result is None:
             raise HTTPException(404, "محصول در این snapshot ثبت نشده است.")

@@ -1,10 +1,10 @@
-# معماری اولیه
+# معماری جاری
 
-stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite ساخته و محلی بررسی شد. گام نخست React/TypeScript/Vite در P1b اکنون ساخته شده است. تصمیم‌های اجرایی جدید در D09/D10 از DECISIONS ثبت شده‌اند.
+P1 محلی ساخته و با بازخورد دستی کاربر پذیرفته شده است. گام نخست P2 شامل ساعات مراجعه و فیلتر اعلام‌شدهٔ اکنون باز است. خرید اعتباری، adapter مدل، پیگیری و دیپلوی هنوز باقی‌اند. وضعیت دقیق در TASKS/HANDOFF؛ تصمیم‌های جدید در D14/D15.
 
 ## انتخاب
 
-به‌روزرسانی P1b: apps/web اکنون React/TypeScript strict/Vite برای جست‌وجو/کارت با lockfile دارد. درخواست فقط /api با proxy محلی؛ پاسخ unknown قبل از مصرف اعتبارسنجی می‌شود، پول رشته/BigInt می‌ماند. stateهای مستقل و AbortController پاسخ دیررس را کنترل می‌کنند. مقایسه/آفر UI و budget/radius UI هنوز ساخته نشده‌اند. جزئیات D11 و شواهد HANDOFF مرجع‌اند؛ خطوط پیشنهادی base پایین سابقهٔ برنامه هستند.
+apps/web با React/TypeScript strict/Vite، جست‌وجو، مقایسه، بودجه، آفر، محدوده و ساعات را ارائه می‌دهد؛ پاسخ unknown قبل از مصرف اعتبارسنجی می‌شود، پول رشته/BigInt است و AbortController پاسخ دیررس را کنار می‌گذارد. apps/api/hours.py مستقل از provider ساعت را محاسبه می‌کند. یک زمان آگاه از timezone در ابتدای هر درخواست آفر گرفته می‌شود؛ همان زمان مبنای SQL UDF و دادهٔ پاسخ است. فیلتر ساعت/بودجه/شعاع همگی پیش از LIMIT/OFFSET هستند. ساعت تست از create_app(clock=...) تزریق می‌شود؛ پارامتر عمومی برای دست‌کاری ساعت وجود ندارد. tzdata در lock برای Windows قفل است.
 
 - رابط: React + TypeScript با Vite، فارسی و RTL. SPA برای مسیر خرید تعاملی کافی است؛ در این مرحله نیاز اثبات‌شده‌ای به SSR نداریم.
 - API: Python + FastAPI؛ اعتبارسنجی درخواست و قراردادهای پاسخ صریح. ابزار آماده‌سازی داده همین حالا Python استاندارد است.
@@ -21,20 +21,20 @@ stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite س
 
 موجود: `tools/` برای import، `tests/` برای قرارداد داده، `.local/` برای خروجی تولیدشده، `docs/` برای منابع و قرارداد داده.
 
-ساخته‌شده در P1a: `apps/api/` برای repository، مدل پاسخ و endpoint؛ `tests/test_api.py` و `tools/smoke_api.py` برای بررسی مستقل. در P1b ساخته شده: `apps/web/` برای UI جست‌وجو/کارت؛ مقایسه/آفر باقی است. مسیر DB از TOROB_DATABASE یا پیش‌فرض ریشهٔ پروژه/.local/catalogue.sqlite3 است؛ env خودکار بارگذاری نمی‌شود. snapshot runtime فقط‌خواندنی است. package مصرف‌نشده نسازید.
+ساخته‌شده در P1a: `apps/api/` برای repository، مدل پاسخ و endpoint؛ `tests/test_api.py` و `tools/smoke_api.py` برای بررسی مستقل. در P1b ساخته شده: `apps/web/` برای جریان جست‌وجو/مقایسه/آفر/بودجه/محدوده؛ اکنون UI ساعات P2 نیز دارد. مسیر DB از TOROB_DATABASE یا پیش‌فرض ریشهٔ پروژه/.local/catalogue.sqlite3 است؛ env خودکار بارگذاری نمی‌شود. snapshot runtime فقط‌خواندنی است. package مصرف‌نشده نسازید.
 
 قرارداد فعلی endpoint و صفحه‌بندی/بودجه در docs/API.md است. پاسخ‌ها از مدل strict عبور می‌کنند؛ خطای nested data به 503 مشخص تبدیل می‌شود. هیچ middleware با CORS باز اضافه نشده؛ P1b از proxy توسعه برای /api استفاده کند. هنگام اجرای سرور access log را خاموش نگه دارید تا query و موقعیت احتمالی ثبت نشوند.
 
 جریان: CSV → import اعتبارسنجی‌شده → SQLite/FTS → repository توابع پارامتری → domain محاسبات → API پاسخ محدود → UI. مدل فقط به ابزارهای domain دسترسی دارد، نه SQL آزاد، فایل، shell یا URL دلخواه.
 
-## قراردادهای پیشنهادی برای P1
+## قراردادهای اجراشده و بخش‌های باقی‌مانده
 
 - جست‌وجوی محصولات با query نرمال‌شده، pagination محدود و حد طول query؛ FTS syntax را از ورودی کاربر مستقیماً عبور ندهید.
 - جزئیات محصول و آفرها با ID دقیق؛ نبود ID → خطای قابل‌فهم؛ shop category-only → مدرک موجودی نیست.
 - مقایسهٔ فروشنده بر اساس آفر، فاصلهٔ مستقیم برچسب‌خورده و شرایط داده. فاصلهٔ مستقیم زمان رانندگی نیست.
 - خروجی شامل provenance: شناسه‌های منبع، snapshot، `last_price_changed_at` و وضعیت تأیید جدا. قیمت خام به صورت رشتهٔ عددی اعشاری ارسال شود تا مقادیر بزرگ به JS Number تبدیل نشوند؛ null جدا باقی بماند.
 - چند آفر یک محصول/فروشگاه را حفظ کنید. اگر برای UI گروه‌بندی می‌شود، قانون انتخاب و تفاوت ضمانت/عنوان روشن باشد.
-- وضعیت ساعات: unknown / declared-open / declared-closed؛ Asia/Tehran، روز هفته، چند شیفت و شیفت عبوری از نیمه‌شب را با تست پوشش دهید. «اعلام‌شده» با تأیید زنده متفاوت است.
+- وضعیت ساعات: unknown / declared_open / declared_closed؛ Asia/Tehran، روز هفته، چند شیفت و شیفت عبوری از نیمه‌شب را با تست پوشش دهید. «اعلام‌شده» با تأیید زنده متفاوت است.
 - خرید اعتباری: provider + channel + category + min/max مبلغ؛ channel=unknown را حضوری تلقی نکنید. خالی بودن لیست، مدرک عدم ارائهٔ همهٔ سرویس‌ها نیست.
 
 ## ایجنت در P2/P3
@@ -49,4 +49,4 @@ stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite س
 
 secret فقط سرور، هیچ مقدار حساس در frontend یا لاگ. CORS محدود برای توسعه؛ خروجی bounded و پارامتری، حد طول و تعداد، خطای dependency جدا از نتیجهٔ خالی. متن‌ها escape شوند. fetch خارجی در آینده timeout/allowlist و کنترل SSRF لازم دارد؛ base هیچ fetch محصول یا تماس شبکه‌ای نمی‌کند.
 
-مراجع فنی بررسی‌شده: [Vite](https://vite.dev/guide/) و [StaticFiles در FastAPI](https://fastapi.tiangolo.com/tutorial/static-files/). این صفحات امکان stack را تأیید می‌کنند؛ build و HTTP محصول هنوز اجرا نشده‌اند.
+مراجع فنی بررسی‌شده: [Vite](https://vite.dev/guide/) و [StaticFiles در FastAPI](https://fastapi.tiangolo.com/tutorial/static-files/). این صفحات امکان stack را تأیید کردند؛ اکنون build و مسیر محلی مرورگر/API/DB بررسی شده‌اند؛ دیپلوی هنوز اجرا نشده است.

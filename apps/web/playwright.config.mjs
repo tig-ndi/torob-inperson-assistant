@@ -13,10 +13,11 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 20000,
-  use: { baseURL: 'http://127.0.0.1:5173', viewport: { width: 390, height: 844 }, headless: true },
+  use: { baseURL: 'http://127.0.0.1:15173', viewport: { width: 390, height: 844 }, headless: true },
   webServer: [
-    { command: `"${python}" -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --no-access-log`,
-      cwd: root, url: 'http://127.0.0.1:8000/openapi.json', reuseExistingServer: true },
-    { command: 'npm run dev', url: 'http://127.0.0.1:5173', reuseExistingServer: true },
+    { command: `"${python}" -m uvicorn apps.api.main:app --host 127.0.0.1 --port 18000 --no-access-log`,
+      cwd: root, url: 'http://127.0.0.1:18000/openapi.json', reuseExistingServer: false },
+    { command: 'npm run dev -- --port 15173', url: 'http://127.0.0.1:15173',
+      env: { TOROB_API_PORT: '18000' }, reuseExistingServer: false },
   ],
 });

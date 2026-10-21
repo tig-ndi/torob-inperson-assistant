@@ -18,6 +18,7 @@ import {
   validateBudget,
 } from './api';
 import type { OfferPage, Product, ProductPage } from './api';
+import { OpeningHoursDetails } from './OpeningHours';
 import './style.css';
 
 type SearchState =
@@ -222,10 +223,13 @@ function OffersModal({
   userLat,
   userLon,
   maxDistanceKm,
+  openNowOnly,
   state,
   onClose,
   onPageChange,
   onLocationChange,
+  onHoursFilterChange,
+  onRefreshHours,
   onRetry,
 }: {
   product: Product;
@@ -233,10 +237,13 @@ function OffersModal({
   userLat: number | null;
   userLon: number | null;
   maxDistanceKm: number | null;
+  openNowOnly: boolean;
   state: OffersState;
   onClose: () => void;
   onPageChange: (offset: number) => void;
   onLocationChange: (lat: number | null, lon: number | null, radius: number | null) => void;
+  onHoursFilterChange: (openOnly: boolean) => void;
+  onRefreshHours: () => void;
   onRetry: () => void;
 }) {
   const [latInput, setLatInput] = useState(userLat !== null ? String(userLat) : '');
@@ -349,6 +356,19 @@ function OffersModal({
           <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
         </div>
 
+        <div className="hours-filter-box">
+          <label className="hours-filter-label">
+            <input type="checkbox" checked={openNowOnly} onChange={e => onHoursFilterChange(e.target.checked)} />
+            فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند
+          </label>
+          <p className="caption">این فیلتر تأیید زنده نیست؛ فروشگاه‌های با ساعت نامشخص را هم کنار می‌گذارد.</p>
+          {state.kind === 'success' && <p className="caption hours-checked-at">
+            زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
+          </p>}
+          <button type="button" className="secondary small-action-btn" disabled={state.kind === 'loading'}
+            onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
+        </div>
+
         {/* Location & Radius Filter Section */}
         <div className="location-filter-box">
           <div className="location-filter-header">
@@ -453,7 +473,9 @@ function OffersModal({
               <div className="state-panel">
                 <h3>هیچ آفری با شرایط انتخابی یافت نشد</h3>
                 <p>
-                  {maxDistanceKm !== null
+                  {openNowOnly
+                    ? 'آفری با همهٔ فیلترهای فعال و ساعتِ اعلام‌شدهٔ باز یافت نشد؛ ساعت‌های نامشخص هم کنار گذاشته شده‌اند. می‌توانید فیلتر ساعت را بردارید.'
+                    : maxDistanceKm !== null
                     ? 'هیچ فروشگاهی در شعاع تعیین‌شده ثبت نشده است (یا فاقد مختصات جغرافیایی بوده است).'
                     : budget
                     ? 'هیچ فروشگاهی با قیمت کمتر یا مساوی سقف بودجهٔ تعیین‌شده ثبت نشده است.'
@@ -535,6 +557,7 @@ function OffersModal({
                           </p>
                         </div>
 
+                        <OpeningHoursDetails hours={offer.opening_hours} />
                         <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
                       </article>
                     );
@@ -588,6 +611,7 @@ function App() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
+  const [openNowOnly, setOpenNowOnly] = useState(false);
 
   const budgetInputRef = useRef<HTMLInputElement | null>(null);
   const activeSearch = useRef<AbortController | null>(null);
@@ -734,14 +758,15 @@ function App() {
     budget: string | null,
     lat: number | null = userLat,
     lon: number | null = userLon,
-    radiusKm: number | null = maxDistanceKm
+    radiusKm: number | null = maxDistanceKm,
+    openOnly: boolean = openNowOnly
   ) {
     activeOffers.current?.abort();
     const controller = new AbortController();
     activeOffers.current = controller;
     setOffersState({ kind: 'loading', offset });
     try {
-      const page = await fetchProductOffers(productId, offset, budget, lat, lon, radiusKm, controller.signal);
+      const page = await fetchProductOffers(productId, offset, budget, lat, lon, radiusKm, openOnly, controller.signal);
       if (!controller.signal.aborted) {
         setOffersState({ kind: 'success', offset, page });
       }
@@ -1033,6 +1058,7 @@ function App() {
           userLat={userLat}
           userLon={userLon}
           maxDistanceKm={maxDistanceKm}
+          openNowOnly={openNowOnly}
           state={offersState}
           onClose={() => setActiveOffersProduct(null)}
           onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm)}
@@ -1042,6 +1068,11 @@ function App() {
             setMaxDistanceKm(newRadius);
             loadOffers(activeOffersProduct.product_id, 0, activeBudget, newLat, newLon, newRadius);
           }}
+          onHoursFilterChange={openOnly => {
+            setOpenNowOnly(openOnly);
+            void loadOffers(activeOffersProduct.product_id, 0, activeBudget, userLat, userLon, maxDistanceKm, openOnly);
+          }}
+          onRefreshHours={() => void loadOffers(activeOffersProduct.product_id, 0, activeBudget, userLat, userLon, maxDistanceKm)}
           onRetry={() => {
             const currentOffset = 'offset' in offersState ? offersState.offset : 0;
             void loadOffers(activeOffersProduct.product_id, currentOffset, activeBudget, userLat, userLon, maxDistanceKm);

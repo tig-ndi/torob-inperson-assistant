@@ -28,6 +28,26 @@ export type Shop = {
   lon: number | null;
 };
 
+export const HOURS_REASON_TEXT = {
+  within_declared_shift: 'داخل بازهٔ اعلام‌شده',
+  outside_declared_shifts: 'خارج از بازه‌های اعلام‌شده',
+  declared_closed_day: 'برای امروز شیفتی اعلام نشده و روز بسته ثبت شده است',
+  missing_schedule: 'ساعت کاری امروز ثبت نشده است',
+  unsupported_schedule: 'برنامهٔ ثبت‌شده قابل تفسیر نیست',
+  invalid_schedule: 'اطلاعات ساعات ثبت‌شده ناسازگار یا نامعتبر است',
+  no_valid_shifts: 'بازهٔ معتبر برای امروز ثبت نشده است',
+  previous_day_unknown: 'ساعت روز قبل نامشخص است؛ ادامهٔ شیفت قابل تعیین نیست',
+} as const;
+
+export type OpeningShift = { start_time: string; end_time: string; ends_next_day: boolean };
+export type OpeningHours = {
+  status: 'declared_open' | 'declared_closed' | 'unknown';
+  reason: keyof typeof HOURS_REASON_TEXT;
+  local_day: string;
+  today_shifts: OpeningShift[];
+  previous_day_overnight_shifts: OpeningShift[];
+};
+
 export type Offer = {
   offer_id: string;
   product_id: string;
@@ -40,6 +60,7 @@ export type Offer = {
   warranty: unknown;
   inventory_status: 'unconfirmed';
   direct_distance_meters: number | null;
+  opening_hours: OpeningHours;
   shop: Shop;
 };
 
@@ -53,6 +74,7 @@ export type OfferPage = {
   has_more: boolean;
   limit: number;
   offset: number;
+  hours_evaluated_at: string;
 };
 
 export type ProductDetail = {
@@ -146,12 +168,42 @@ export function parseProductDetail(value: unknown): ProductDetail {
   return { product: parseProduct(detail.product) };
 }
 
+function parseShifts(value: unknown): OpeningShift[] {
+  if (!Array.isArray(value)) throw new Error('بازه‌های ساعت کاتالوگ معتبر نیستند.');
+  return value.map((item: unknown) => {
+    const shift = record(item);
+    const clock = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+    if (typeof shift.start_time !== 'string' || !clock.test(shift.start_time) ||
+        typeof shift.end_time !== 'string' || !clock.test(shift.end_time) ||
+        typeof shift.ends_next_day !== 'boolean') throw new Error('بازهٔ ساعت کاتالوگ معتبر نیست.');
+    return { start_time: shift.start_time, end_time: shift.end_time, ends_next_day: shift.ends_next_day };
+  });
+}
+
+function parseOpeningHours(value: unknown): OpeningHours {
+  const hours = record(value);
+  const status = hours.status;
+  const reason = hours.reason;
+  if ((status !== 'declared_open' && status !== 'declared_closed' && status !== 'unknown') ||
+      typeof reason !== 'string' || !Object.hasOwn(HOURS_REASON_TEXT, reason) ||
+      typeof hours.local_day !== 'string' || !['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(hours.local_day)) {
+    throw new Error('وضعیت ساعات کاتالوگ معتبر نیست.');
+  }
+  return { status, reason: reason as keyof typeof HOURS_REASON_TEXT, local_day: hours.local_day,
+    today_shifts: parseShifts(hours.today_shifts),
+    previous_day_overnight_shifts: parseShifts(hours.previous_day_overnight_shifts) };
+}
+
 export function parseOfferPage(value: unknown): OfferPage {
   const page = record(value);
   const source = record(page.provenance);
   if (source.currency !== 'toman' || source.inventory_status !== 'unconfirmed' ||
       !Array.isArray(page.items) || typeof page.has_more !== 'boolean') {
     throw new Error('قرارداد پاسخ کاتالوگ معتبر نیست.');
+  }
+  if (typeof page.hours_evaluated_at !== 'string' || !/T.*(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(page.hours_evaluated_at) ||
+      !Number.isFinite(Date.parse(page.hours_evaluated_at))) {
+    throw new Error('زمان بررسی ساعات کاتالوگ معتبر نیست.');
   }
   const items = page.items.map((item: unknown): Offer => {
     const o = record(item);
@@ -184,6 +236,7 @@ export function parseOfferPage(value: unknown): OfferPage {
       warranty: o.warranty ?? null,
       inventory_status: 'unconfirmed',
       direct_distance_meters,
+      opening_hours: parseOpeningHours(o.opening_hours),
       shop: {
         name: nullableText(s.name),
         address: nullableText(s.address),
@@ -198,6 +251,7 @@ export function parseOfferPage(value: unknown): OfferPage {
     has_more: page.has_more,
     limit: typeof page.limit === 'number' ? page.limit : 20,
     offset: typeof page.offset === 'number' ? page.offset : 0,
+    hours_evaluated_at: page.hours_evaluated_at,
   };
 }
 
@@ -262,6 +316,7 @@ export async function fetchProductOffers(
   userLat: number | null,
   userLon: number | null,
   maxDistanceKm: number | null,
+  openNowOnly: boolean,
   signal: AbortSignal
 ): Promise<OfferPage> {
   const params = new URLSearchParams({
@@ -278,9 +333,10 @@ export async function fetchProductOffers(
   if (maxDistanceKm !== null) {
     params.set('max_distance_km', String(maxDistanceKm));
   }
+  if (openNowOnly) params.set('open_now_only', 'true');
   let response: Response;
   try {
-    response = await fetch(`/api/products/${encodeURIComponent(productId)}/offers?${params}`, { signal });
+    response = await fetch(`/api/products/${encodeURIComponent(productId)}/offers?${params}`, { signal, cache: 'no-store' });
   } catch (error: unknown) {
     if (signal.aborted) throw error;
     throw new Error('ارتباط با کاتالوگ برقرار نشد. اتصال را بررسی و دوباره تلاش کنید.');
@@ -439,7 +495,7 @@ export function validateBudget(budgetStr: string): { valid: boolean; error?: str
   return { valid: true };
 }
 
-export function formatTehranDateTime(isoString: string | null): string {
+export function formatTehranDateTime(isoString: string | null, includeSeconds = false): string {
   if (!isoString) return 'تاریخ ثبت نشده';
   try {
     const date = new Date(isoString);
@@ -451,6 +507,7 @@ export function formatTehranDateTime(isoString: string | null): string {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      second: includeSeconds ? '2-digit' : undefined,
     }).format(date);
   } catch {
     return isoString;

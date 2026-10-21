@@ -13,7 +13,7 @@ git diff --stat
 git diff --cached --stat
 ```
 
-فهرست staged را نگاه کن: `.local`، CSV، ZIP، DB، node_modules و `.env` واقعی نباید در آن باشند. `.agents/skills` فایل‌های متنی بررسی‌شدهٔ پروژه است و باید همراه قواعد و کد version شود.
+فهرست staged را نگاه کن: `.local`، CSV، ZIP، DB، node_modules و `.env` واقعی نباید در آن باشند. MASTER_PROMPT.md، NEXT_AGENT_PROMPT.md و .agents/skills/competition-agent-engineer طبق درخواست کاربر فقط محلی و ignored هستند؛ force-add نشوند. .github/workflows بخش فنی CI است و در مخزن می‌ماند.
 
 هر کامیت یک بخش منسجم و بررسی‌شده باشد؛ نه ریز و پرتعداد، نه بزرگ و نامرتبط. قالب الزامی عنوان و بدنهٔ bulletدار با فاصله:
 

@@ -1,6 +1,8 @@
 """Bounded retrieval from the historical snapshot. No network or seller contact."""
 
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -9,6 +11,7 @@ import re
 import sqlite3
 
 from tools.prepare_data import normalize_text
+from apps.api.hours import evaluate_hours, tehran_time
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -146,8 +149,17 @@ class Catalogue:
 
     def offers(self, product_id: str, limit: int, offset: int, max_price: int | None,
                user_lat: float | None = None, user_lon: float | None = None,
-               max_distance_km: float | None = None) -> dict | None:
+               max_distance_km: float | None = None, open_now_only: bool = False,
+               evaluated_at: datetime | None = None) -> dict | None:
+        checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
+
+        @lru_cache(maxsize=1024)
+        def hours(raw: str | None):
+            return evaluate_hours(raw, checked_at)
+
         with self.connect() as connection:
+            connection.create_function("declared_open_now", 1,
+                                       lambda raw: int(hours(raw).status == "declared_open"), deterministic=True)
             provenance = self.provenance(connection)
             if connection.execute("SELECT 1 FROM products WHERE product_id=?", (product_id,)).fetchone() is None:
                 return None
@@ -155,7 +167,7 @@ class Catalogue:
             has_location = user_lat is not None and user_lon is not None
             max_dist_m = max_distance_km * 1000.0 if max_distance_km is not None else None
 
-            query = "SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon"
+            query = "SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon,s.weekly_hours"
             params: list = []
             if has_location:
                 query += ",haversine_m(?, ?, s.lat, s.lon) AS dist_m"
@@ -168,6 +180,9 @@ class Catalogue:
                 "AND (? IS NULL OR o.price_toman<=?) "
             )
             params.extend([product_id, max_price, max_price])
+
+            if open_now_only:
+                query += "AND declared_open_now(s.weekly_hours)=1 "
 
             if max_dist_m is not None:
                 # Radius condition is applied BEFORE LIMIT / OFFSET.
@@ -194,8 +209,9 @@ class Catalogue:
                     "seller_title": row["seller_title"], "description": row["description"],
                     "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
                     "inventory_status": "unconfirmed",
+                    "opening_hours": hours(row["weekly_hours"]).as_dict(),
                     "direct_distance_meters": direct_distance_meters,
                     "shop": {"name": row["shop_name"], "address": row["address"],
                              "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}})
             return {"items": items, "has_more": len(rows) > limit, "limit": limit, "offset": offset,
-                    "provenance": provenance}
+                    "provenance": provenance, "hours_evaluated_at": checked_at.isoformat()}

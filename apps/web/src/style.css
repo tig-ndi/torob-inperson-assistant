@@ -864,6 +864,47 @@ h3 {
   margin: 0;
 }
 
+.hours-filter-box {
+  padding: 14px;
+  margin-block: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.hours-filter-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hours-filter-label input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.opening-hours {
+  margin-block: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 12px;
+}
+
+.hours-status { margin: 0; font-size: 13px; }
+.hours-declared_open .hours-status { color: #245b46; }
+.hours-declared_closed .hours-status { color: #92313b; }
+.hours-unknown .hours-status { color: #674d28; }
+.hours-ranges { margin-block: 8px; }
+.hours-ranges ul { margin-block: 4px; padding-inline-start: 20px; }
+
 /* Location & Radius Filter in Offers Modal */
 .location-filter-box {
   background: #f8fafc;

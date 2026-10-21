@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { HOURS_CHECKED_AT, syntheticHours } from './fixtures/hours.mjs';
 import path from 'node:path';
 
 test('real UI: budget filter with Persian digits, active badge and offers modal with real dataset', async ({ page }) => {
@@ -219,7 +220,8 @@ test('synthetic fixture: preserve multiple offers of same shop, format dates in 
   });
 
   await page.route('**/api/products/prod_synthetic_test/offers?**', route => {
-    return route.fulfill({ json: syntheticOffers });
+    return route.fulfill({ json: { ...syntheticOffers, hours_evaluated_at: HOURS_CHECKED_AT,
+      items: syntheticOffers.items.map(offer => ({ ...offer, opening_hours: syntheticHours() })) } });
   });
 
   await page.goto('/');
@@ -354,7 +356,7 @@ test('synthetic fixture: radius without coordinates is rejected before network r
   await expect(modal.getByRole('alert')).toContainText('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر');
 });
 
-test('real UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
+test('local UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
   await page.goto('/');
 
   const budgetInput = page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true });

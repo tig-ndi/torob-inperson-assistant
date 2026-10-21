@@ -2,6 +2,7 @@
 
 from contextlib import closing
 import csv
+from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -219,3 +220,53 @@ class CatalogueApiTests(unittest.TestCase):
                        {"user_lat": 35.7, "user_lon": "inf"}):
             with self.subTest(params=params):
                 self.assertEqual(self.client.get("/api/products/product_one/offers", params=params).status_code, 422)
+
+    def test_open_now_filter_precedes_pagination_and_combines_with_existing_filters(self):
+        from test_hours import CLOSED, declared, shift
+
+        weekly_open = json.dumps({"wed": declared(shift()), "tue": CLOSED})
+        weekly_closed = json.dumps({"wed": CLOSED, "tue": CLOSED})
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE shops SET weekly_hours=? WHERE shop_id IN ('shop_one','shop_far')", (weekly_closed,))
+            connection.execute("UPDATE shops SET weekly_hours=? WHERE shop_id='shop_near'", (weekly_open,))
+            connection.commit()
+        instant = datetime.fromisoformat("2026-10-21T10:00:00+03:30")
+        with TestClient(create_app(self.database, clock=lambda: instant)) as client:
+            url = "/api/products/product_two/offers"
+            full = client.get(url).json()
+            self.assertEqual(len(full["items"]), 5)
+            by_id = {offer["offer_id"]: offer for offer in full["items"]}
+            self.assertEqual(by_id["offer_no_coord"]["opening_hours"]["status"], "unknown")
+            self.assertEqual(by_id["other_product"]["opening_hours"]["status"], "declared_closed")
+            params = {"open_now_only": "true", "limit": 1}
+            first = client.get(url, params=params)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.headers["cache-control"], "no-store")
+            self.assertEqual(first.json()["items"][0]["offer_id"], "offer_near_1")
+            self.assertTrue(first.json()["has_more"])
+            second = client.get(url, params={**params, "offset": 1}).json()
+            self.assertEqual(second["items"][0]["offer_id"], "offer_near_2")
+            self.assertFalse(second["has_more"])
+            combined = client.get(url, params={**params, "user_lat": 35.7, "user_lon": 51.4,
+                                              "max_distance_km": 5, "max_price_toman": "210000"}).json()
+            self.assertEqual([o["offer_id"] for o in combined["items"]], ["offer_near_1"])
+            self.assertFalse(combined["has_more"])
+            self.assertEqual(combined["hours_evaluated_at"], instant.isoformat())
+            self.assertEqual(client.get(url, params={"open_now_only": "invalid"}).status_code, 422)
+
+    def test_one_injected_instant_is_shared_by_filter_results_and_page_metadata(self):
+        from test_hours import CLOSED, declared, shift
+
+        weekly = json.dumps({"wed": declared(shift("09:00", "10:00")), "tue": CLOSED})
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE shops SET weekly_hours=? WHERE shop_id='shop_one'", (weekly,))
+            connection.commit()
+        clocks = iter([datetime.fromisoformat("2026-10-21T09:59:59+03:30"),
+                       datetime.fromisoformat("2026-10-21T10:00:00+03:30")])
+        with TestClient(create_app(self.database, clock=lambda: next(clocks))) as client:
+            before = client.get("/api/products/product_one/offers", params={"open_now_only": "true"}).json()
+            after = client.get("/api/products/product_one/offers", params={"open_now_only": "true"}).json()
+        self.assertEqual(len(before["items"]), 3)  # Same shop, all offer IDs retained.
+        self.assertEqual(after["items"], [])
+        self.assertIn("09:59:59", before["hours_evaluated_at"])
+        self.assertIn("10:00:00", after["hours_evaluated_at"])

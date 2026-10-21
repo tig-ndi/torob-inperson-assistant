@@ -3,6 +3,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from apps.api.hours import HoursReason, HoursStatus
 
 
 class Model(BaseModel):
@@ -62,6 +63,20 @@ class Shop(Model):
     lon: float | None = Field(ge=-180, le=180, allow_inf_nan=False)
 
 
+class Shift(Model):
+    start_time: str
+    end_time: str
+    ends_next_day: bool
+
+
+class OpeningHours(Model):
+    status: HoursStatus
+    reason: HoursReason
+    local_day: Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    today_shifts: list[Shift]
+    previous_day_overnight_shifts: list[Shift]
+
+
 class Offer(Model):
     offer_id: str
     product_id: str
@@ -74,6 +89,7 @@ class Offer(Model):
     warranty: JsonValue
     inventory_status: Literal["unconfirmed"]
     direct_distance_meters: int | None = None
+    opening_hours: OpeningHours
     shop: Shop
 
 
@@ -83,3 +99,4 @@ class OfferPage(Model):
     limit: int
     offset: int
     provenance: Provenance
+    hours_evaluated_at: str
