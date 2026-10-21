@@ -73,6 +73,7 @@ class Offer(Model):
     description: str | None
     warranty: JsonValue
     inventory_status: Literal["unconfirmed"]
+    direct_distance_meters: int | None = None
     shop: Shop
 
 

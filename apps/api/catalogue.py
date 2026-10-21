@@ -3,11 +3,41 @@
 from contextlib import contextmanager
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
 
 from tools.prepare_data import normalize_text
+
+
+def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate great-circle distance between two coordinates in meters using the Haversine formula."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = (math.sin(delta_phi / 2.0) ** 2 +
+         math.cos(phi1) * math.cos(phi2) * (math.sin(delta_lambda / 2.0) ** 2))
+    a = min(1.0, max(0.0, a))
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return 6371000.0 * c
+
+
+def safe_haversine_m(lat1, lon1, lat2, lon2):
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return None
+    try:
+        lat1 = float(lat1)
+        lon1 = float(lon1)
+        lat2 = float(lat2)
+        lon2 = float(lon2)
+        if not (math.isfinite(lat1) and math.isfinite(lon1) and math.isfinite(lat2) and math.isfinite(lon2)):
+            return None
+        return haversine_distance_m(lat1, lon1, lat2, lon2)
+    except (TypeError, ValueError):
+        return None
 
 
 class CatalogueUnavailable(Exception):
@@ -45,6 +75,7 @@ class Catalogue:
             connection = sqlite3.connect(self.database.as_uri() + "?mode=ro", uri=True,
                                          timeout=2)
             connection.row_factory = sqlite3.Row
+            connection.create_function("haversine_m", 4, safe_haversine_m, deterministic=True)
             connection.execute("PRAGMA query_only=ON")
             # Bound expensive/hostile queries independently of output pagination.
             ticks = 0
@@ -113,30 +144,58 @@ class Catalogue:
             return {"product": self.product(connection, row),
                     "provenance": provenance}
 
-    def offers(self, product_id: str, limit: int, offset: int, max_price: int | None) -> dict | None:
+    def offers(self, product_id: str, limit: int, offset: int, max_price: int | None,
+               user_lat: float | None = None, user_lon: float | None = None,
+               max_distance_km: float | None = None) -> dict | None:
         with self.connect() as connection:
             provenance = self.provenance(connection)
             if connection.execute("SELECT 1 FROM products WHERE product_id=?", (product_id,)).fetchone() is None:
                 return None
-            rows = connection.execute(
-                "SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon "
-                "FROM offers o JOIN shops s ON s.shop_id=o.shop_id WHERE o.product_id=? "
+
+            has_location = user_lat is not None and user_lon is not None
+            max_dist_m = max_distance_km * 1000.0 if max_distance_km is not None else None
+
+            query = "SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon"
+            params: list = []
+            if has_location:
+                query += ",haversine_m(?, ?, s.lat, s.lon) AS dist_m"
+                params.extend([user_lat, user_lon])
+            else:
+                query += ",NULL AS dist_m"
+
+            query += (
+                " FROM offers o JOIN shops s ON s.shop_id=o.shop_id WHERE o.product_id=? "
                 "AND (? IS NULL OR o.price_toman<=?) "
-                "ORDER BY o.price_toman IS NULL,o.price_toman,o.offer_id LIMIT ? OFFSET ?",
-                (product_id, max_price, max_price, limit + 1, offset)).fetchall()
+            )
+            params.extend([product_id, max_price, max_price])
+
+            if max_dist_m is not None:
+                # Radius condition is applied BEFORE LIMIT / OFFSET.
+                # Uses unrounded float distance comparison; null coordinates produce NULL which fails the predicate.
+                query += "AND haversine_m(?, ?, s.lat, s.lon) IS NOT NULL AND haversine_m(?, ?, s.lat, s.lon) <= ? "
+                params.extend([user_lat, user_lon, user_lat, user_lon, max_dist_m])
+
+            query += "ORDER BY o.price_toman IS NULL,o.price_toman,o.offer_id LIMIT ? OFFSET ?"
+            params.extend([limit + 1, offset])
+
+            rows = connection.execute(query, params).fetchall()
             items = []
             for row in rows[:limit]:
                 price = row["price_toman"]
                 # This is a precision-risk flag, not a claim of market-price validity.
                 quality = "missing" if price is None else (
                     "above_js_safe_integer" if price > 9007199254740991 else "not_assessed")
-                items.append({"offer_id": row["offer_id"], "product_id": row["product_id"],
-                              "shop_id": row["shop_id"], "price_toman": str(price) if price is not None else None,
-                              "price_quality": quality, "last_price_changed_at": row["last_price_changed_at"],
-                              "seller_title": row["seller_title"], "description": row["description"],
-                              "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
-                              "inventory_status": "unconfirmed",
-                              "shop": {"name": row["shop_name"], "address": row["address"],
-                                       "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}})
+                dist_m = row["dist_m"]
+                direct_distance_meters = round(dist_m) if dist_m is not None else None
+                items.append({
+                    "offer_id": row["offer_id"], "product_id": row["product_id"],
+                    "shop_id": row["shop_id"], "price_toman": str(price) if price is not None else None,
+                    "price_quality": quality, "last_price_changed_at": row["last_price_changed_at"],
+                    "seller_title": row["seller_title"], "description": row["description"],
+                    "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
+                    "inventory_status": "unconfirmed",
+                    "direct_distance_meters": direct_distance_meters,
+                    "shop": {"name": row["shop_name"], "address": row["address"],
+                             "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}})
             return {"items": items, "has_more": len(rows) > limit, "limit": limit, "offset": offset,
                     "provenance": provenance}

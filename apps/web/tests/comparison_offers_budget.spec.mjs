@@ -267,3 +267,89 @@ test('synthetic fixture: validate invalid budget input without network request',
   await expect(page.getByRole('alert')).toContainText('بودجه باید فقط شامل ارقام عددی باشد');
   expect(requestMade).toBe(false);
 });
+
+test('real UI: manual coordinates, radius filter and direct distance calculation with real dataset', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  // Open offers of first product
+  await page.locator('.product-card .secondary-btn').first().click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+
+  // Initially before location: distance indicates location required
+  await expect(modal.getByText('نیازمند تعیین موقعیت کاربر').first()).toBeVisible();
+
+  // Enter manual coordinates (central Tehran) and radius 5km
+  await modal.getByLabel('عرض جغرافیایی (lat)', { exact: true }).fill('35.700');
+  await modal.getByLabel('طول جغرافیایی (lon)', { exact: true }).fill('51.400');
+  await modal.getByLabel('شعاع جست‌وجو', { exact: true }).selectOption('5');
+  await modal.getByRole('button', { name: 'اعمال فیلتر محدوده', exact: true }).click();
+
+  // Active location badge visible
+  await expect(modal.locator('.active-location-badge')).toContainText('شعاع: تا ۵ کیلومتر');
+
+  // Verify direct distance is computed and shown
+  await expect(modal.getByText('فاصلهٔ مستقیم هوایی:', { exact: false }).first()).toBeVisible();
+
+  // Verify unique shop count is displayed
+  await expect(modal.getByText('فروشگاه یکتا', { exact: false })).toBeVisible();
+
+  // Responsive check
+  for (const width of [360, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    expect(noOverflow).toBe(true);
+  }
+
+  // Clear location
+  await modal.getByRole('button', { name: 'حذف موقعیت', exact: true }).click();
+  await expect(modal.locator('.active-location-badge')).toHaveCount(0);
+  await expect(modal.getByText('نیازمند تعیین موقعیت کاربر').first()).toBeVisible();
+
+  expect(errors).toEqual([]);
+});
+
+test('synthetic fixture: browser geolocation explicit click and error handling', async ({ page }) => {
+  // Override geolocation to simulate permission denied
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (success, error) => {
+      error({ code: 1, message: 'User denied Geolocation' });
+    };
+  });
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  // Open offers
+  await page.locator('.product-card .secondary-btn').first().click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+
+  // Click on "دریافت موقعیت از مرورگر"
+  await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
+
+  // Expect polite error message
+  await expect(modal.getByRole('alert')).toContainText('اجازهٔ دسترسی به موقعیت مکانی داده نشد');
+});
+
+test('synthetic fixture: radius without coordinates is rejected before network request', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  await page.locator('.product-card .secondary-btn').first().click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+
+  // Choose radius without entering lat/lon
+  await modal.getByLabel('شعاع جست‌وجو', { exact: true }).selectOption('5');
+  await modal.getByRole('button', { name: 'اعمال فیلتر محدوده', exact: true }).click();
+
+  await expect(modal.getByRole('alert')).toContainText('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر');
+});

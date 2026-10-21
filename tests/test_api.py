@@ -25,6 +25,9 @@ class CatalogueApiTests(unittest.TestCase):
         rows = {
             "shops": [
                 {"shop_id": "shop_one", "name": "آزمایشی", "lat": "35.7", "lon": "51.4"},
+                {"shop_id": "shop_near", "name": "نزدیک", "lat": "35.71", "lon": "51.41"},
+                {"shop_id": "shop_far", "name": "دور", "lat": "35.85", "lon": "51.55"},
+                {"shop_id": "shop_null_coord", "name": "بدون لوکیشن"},
                 {"shop_id": "shop_category_only", "category_names": '["گوشی"]'},
             ],
             "products": [
@@ -39,6 +42,10 @@ class CatalogueApiTests(unittest.TestCase):
                 {"offer_id": "offer_b", "product_id": "product_one", "shop_id": "shop_one", "price_toman": "733518940747298944",
                  "warranty": '{"description":"گارانتی دوم"}'},
                 {"offer_id": "offer_null", "product_id": "product_one", "shop_id": "shop_one"},
+                {"offer_id": "offer_near_1", "product_id": "product_two", "shop_id": "shop_near", "price_toman": "200000"},
+                {"offer_id": "offer_near_2", "product_id": "product_two", "shop_id": "shop_near", "price_toman": "250000"},
+                {"offer_id": "offer_far", "product_id": "product_two", "shop_id": "shop_far", "price_toman": "180000"},
+                {"offer_id": "offer_no_coord", "product_id": "product_two", "shop_id": "shop_null_coord", "price_toman": "190000"},
                 {"offer_id": "other_product", "product_id": "product_two", "shop_id": "shop_one", "price_toman": "2"},
             ],
         }
@@ -142,3 +149,73 @@ class CatalogueApiTests(unittest.TestCase):
                 connection.execute("DELETE FROM products")
         self.client.get("/api/products", params={"q": "گوشی"})
         self.assertEqual(before, self.database.read_bytes())
+
+    def test_haversine_distance_calculation_and_radius_filter(self):
+        # Coordinates without radius: all offers returned, distance calculated, null coords has None distance
+        resp = self.client.get("/api/products/product_two/offers", params={"user_lat": 35.7, "user_lon": 51.4})
+        self.assertEqual(resp.status_code, 200)
+        items = resp.json()["items"]
+        self.assertEqual(len(items), 5)
+        dist_map = {o["offer_id"]: o["direct_distance_meters"] for o in items}
+        self.assertEqual(dist_map["other_product"], 0)
+        self.assertEqual(dist_map["offer_near_1"], 1432)
+        self.assertEqual(dist_map["offer_near_2"], 1432)  # Multi-offer for same shop
+        self.assertEqual(dist_map["offer_far"], 21478)
+        self.assertIsNone(dist_map["offer_no_coord"])
+
+        # Radius 5km: near offers included, far and null coords excluded; multi-offer preserved
+        resp_5km = self.client.get("/api/products/product_two/offers",
+                                   params={"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 5})
+        self.assertEqual(resp_5km.status_code, 200)
+        items_5km = resp_5km.json()["items"]
+        self.assertEqual([o["offer_id"] for o in items_5km], ["other_product", "offer_near_1", "offer_near_2"])
+
+        # Boundary edge case: shop_near is 1432.386 meters away.
+        # radius 1.432 km -> 1432.0 m (shop_near is excluded)
+        resp_under = self.client.get("/api/products/product_two/offers",
+                                     params={"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 1.432})
+        self.assertEqual([o["offer_id"] for o in resp_under.json()["items"]], ["other_product"])
+
+        # radius 1.433 km -> 1433.0 m (shop_near is included)
+        resp_over = self.client.get("/api/products/product_two/offers",
+                                    params={"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 1.433})
+        self.assertEqual([o["offer_id"] for o in resp_over.json()["items"]],
+                         ["other_product", "offer_near_1", "offer_near_2"])
+
+        # Combined budget and radius filter with pagination
+        # max_price_toman 210000 + max_distance_km 5 -> other_product (2) and offer_near_1 (200000)
+        resp_combo = self.client.get("/api/products/product_two/offers",
+                                     params={"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 5,
+                                             "max_price_toman": 210000, "limit": 1})
+        self.assertEqual(resp_combo.status_code, 200)
+        body = resp_combo.json()
+        self.assertTrue(body["has_more"])
+        self.assertEqual(body["items"][0]["offer_id"], "other_product")
+
+        resp_page2 = self.client.get("/api/products/product_two/offers",
+                                     params={"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 5,
+                                             "max_price_toman": 210000, "limit": 1, "offset": 1})
+        self.assertFalse(resp_page2.json()["has_more"])
+        self.assertEqual(resp_page2.json()["items"][0]["offer_id"], "offer_near_1")
+
+    def test_coordinates_and_radius_validation_edge_cases(self):
+        # lat without lon
+        self.assertEqual(self.client.get("/api/products/product_one/offers",
+                                         params={"user_lat": 35.7}).status_code, 422)
+        # lon without lat
+        self.assertEqual(self.client.get("/api/products/product_one/offers",
+                                         params={"user_lon": 51.4}).status_code, 422)
+        # radius without coordinates
+        self.assertEqual(self.client.get("/api/products/product_one/offers",
+                                         params={"max_distance_km": 5}).status_code, 422)
+        # out of geographic bounds
+        for params in ({"user_lat": 91.0, "user_lon": 51.4},
+                       {"user_lat": -91.0, "user_lon": 51.4},
+                       {"user_lat": 35.7, "user_lon": 181.0},
+                       {"user_lat": 35.7, "user_lon": -181.0},
+                       {"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": 0},
+                       {"user_lat": 35.7, "user_lon": 51.4, "max_distance_km": -1},
+                       {"user_lat": "nan", "user_lon": 51.4},
+                       {"user_lat": 35.7, "user_lon": "inf"}):
+            with self.subTest(params=params):
+                self.assertEqual(self.client.get("/api/products/product_one/offers", params=params).status_code, 422)

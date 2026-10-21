@@ -6,10 +6,12 @@ import {
   PAGE_SIZE,
   extractAllSpecKeys,
   fetchProductOffers,
+  formatDistance,
   formatTehranDateTime,
   formatWarranty,
   getProductSpecValue,
   normalizeBudget,
+  parseCoordinate,
   searchProducts,
   validateBudget,
 } from './api';
@@ -215,18 +217,114 @@ function ComparisonModal({
 function OffersModal({
   product,
   budget,
+  userLat,
+  userLon,
+  maxDistanceKm,
   state,
   onClose,
   onPageChange,
+  onLocationChange,
   onRetry,
 }: {
   product: Product;
   budget: string | null;
+  userLat: number | null;
+  userLon: number | null;
+  maxDistanceKm: number | null;
   state: OffersState;
   onClose: () => void;
   onPageChange: (offset: number) => void;
+  onLocationChange: (lat: number | null, lon: number | null, radius: number | null) => void;
   onRetry: () => void;
 }) {
+  const [latInput, setLatInput] = useState(userLat !== null ? String(userLat) : '');
+  const [lonInput, setLonInput] = useState(userLon !== null ? String(userLon) : '');
+  const [radiusInput, setRadiusInput] = useState(maxDistanceKm !== null ? String(maxDistanceKm) : '');
+  const [locationError, setLocationError] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
+
+  function handleLocateMe() {
+    setLocationError('');
+    if (!('geolocation' in navigator)) {
+      setLocationError('مرورگر شما از دریافت خودکار موقعیت مکانی پشتیبانی نمی‌کند؛ لطفاً مختصات را دستی وارد کنید.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        setIsLocating(false);
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setLatInput(lat.toFixed(5));
+        setLonInput(lon.toFixed(5));
+        const rad = radiusInput ? Number(radiusInput) : null;
+        onLocationChange(lat, lon, rad);
+      },
+      error => {
+        setIsLocating(false);
+        if (error.code === 1) {
+          setLocationError('اجازهٔ دسترسی به موقعیت مکانی داده نشد؛ می‌توانید مختصات را دستی وارد کنید.');
+        } else {
+          setLocationError('دریافت موقعیت مکانی با خطا مواجه شد؛ لطفاً مختصات را دستی وارد کنید.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000 }
+    );
+  }
+
+  function handleApplyLocation(e: FormEvent) {
+    e.preventDefault();
+    setLocationError('');
+    const lat = parseCoordinate(latInput);
+    const lon = parseCoordinate(lonInput);
+    const rad = radiusInput ? Number(radiusInput) : null;
+
+    if (lat === null && lon === null && rad === null) {
+      onLocationChange(null, null, null);
+      return;
+    }
+
+    if ((lat === null) !== (lon === null)) {
+      setLocationError('مختصات عرض (lat) و طول (lon) جغرافیایی باید هر دو با هم وارد شوند.');
+      return;
+    }
+
+    if (rad !== null && (lat === null || lon === null)) {
+      setLocationError('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر (عرض و طول جغرافیایی) است.');
+      return;
+    }
+
+    if (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+      setLocationError('عرض جغرافیایی باید عددی بین ۹۰- و ۹۰ باشد.');
+      return;
+    }
+
+    if (lon !== null && (!Number.isFinite(lon) || lon < -180 || lon > 180)) {
+      setLocationError('طول جغرافیایی باید عددی بین ۱۸۰- و ۱۸۰ باشد.');
+      return;
+    }
+
+    if (rad !== null && (!Number.isFinite(rad) || rad <= 0 || rad > 1000)) {
+      setLocationError('شعاع فاصله باید عددی مثبت و حداکثر ۱۰۰۰ کیلومتر باشد.');
+      return;
+    }
+
+    onLocationChange(lat, lon, rad);
+  }
+
+  function handleClearLocation() {
+    setLatInput('');
+    setLonInput('');
+    setRadiusInput('');
+    setLocationError('');
+    onLocationChange(null, null, null);
+  }
+
+  const hasLocationFilter = userLat !== null && userLon !== null;
+  const uniqueShopCount = state.kind === 'success'
+    ? new Set(state.page.items.map(o => o.shop_id)).size
+    : 0;
+
   return (
     <section className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="offers-modal-title">
       <div className="modal-content offers-modal">
@@ -247,6 +345,89 @@ function OffersModal({
             )}
           </div>
           <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
+        </div>
+
+        {/* Location & Radius Filter Section */}
+        <div className="location-filter-box">
+          <div className="location-filter-header">
+            <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
+            <p className="caption">
+              محاسبهٔ فاصله بر مبنای تقریب کروی هاورسین است و زمان مسیر یا مسافت رانندگی نیست.
+            </p>
+          </div>
+
+          <form onSubmit={handleApplyLocation} className="location-form">
+            <div className="location-inputs-row">
+              <div className="loc-field">
+                <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>
+                <input
+                  id="user-lat"
+                  value={latInput}
+                  onChange={e => setLatInput(e.target.value)}
+                  placeholder="مثلاً ۳۵.۷۰۰"
+                />
+              </div>
+
+              <div className="loc-field">
+                <label htmlFor="user-lon">طول جغرافیایی (lon)</label>
+                <input
+                  id="user-lon"
+                  value={lonInput}
+                  onChange={e => setLonInput(e.target.value)}
+                  placeholder="مثلاً ۵۱.۴۰۰"
+                />
+              </div>
+
+              <div className="loc-field">
+                <label htmlFor="radius-select">شعاع جست‌وجو</label>
+                <select
+                  id="radius-select"
+                  value={radiusInput}
+                  onChange={e => setRadiusInput(e.target.value)}
+                >
+                  <option value="">بدون محدودیت شعاع</option>
+                  <option value="2">۲ کیلومتر</option>
+                  <option value="5">۵ کیلومتر</option>
+                  <option value="10">۱۰ کیلومتر</option>
+                  <option value="20">۲۰ کیلومتر</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="location-actions-row">
+              <button type="submit" className="small-action-btn">اعمال فیلتر محدوده</button>
+              <button
+                type="button"
+                className="secondary small-action-btn"
+                onClick={handleLocateMe}
+                disabled={isLocating}
+              >
+                {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
+              </button>
+              {hasLocationFilter && (
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={handleClearLocation}
+                >
+                  حذف موقعیت
+                </button>
+              )}
+            </div>
+
+            {locationError && (
+              <p className="error-text" role="alert">{locationError}</p>
+            )}
+
+            {hasLocationFilter && (
+              <div className="active-location-badge">
+                <span>
+                  موقعیت فعال: {userLat.toFixed(3)}, {userLon.toFixed(3)}
+                  {maxDistanceKm !== null ? ` · شعاع: تا ${numbers.format(maxDistanceKm)} کیلومتر` : ' · بدون سقف شعاع'}
+                </span>
+              </div>
+            )}
+          </form>
         </div>
 
         {state.kind === 'loading' && (
@@ -270,7 +451,9 @@ function OffersModal({
               <div className="state-panel">
                 <h3>هیچ آفری با شرایط انتخابی یافت نشد</h3>
                 <p>
-                  {budget
+                  {maxDistanceKm !== null
+                    ? 'هیچ فروشگاهی در شعاع تعیین‌شده ثبت نشده است (یا فاقد مختصات جغرافیایی بوده است).'
+                    : budget
                     ? 'هیچ فروشگاهی با قیمت کمتر یا مساوی سقف بودجهٔ تعیین‌شده ثبت نشده است.'
                     : 'هیچ آفری برای این کالا در کاتالوگ ثبت نشده است.'}
                 </p>
@@ -279,7 +462,7 @@ function OffersModal({
               <>
                 <div className="offers-meta">
                   <span className="caption">
-                    صفحهٔ {numbers.format(Math.floor(state.offset / OFFERS_PAGE_SIZE) + 1)} · نمایش {numbers.format(state.page.items.length)} آفر
+                    صفحهٔ {numbers.format(Math.floor(state.offset / OFFERS_PAGE_SIZE) + 1)} · نمایش {numbers.format(state.page.items.length)} آفر از {numbers.format(uniqueShopCount)} فروشگاه یکتا
                   </span>
                   {state.page.has_more && (
                     <span className="caption warning-caption">
@@ -292,6 +475,7 @@ function OffersModal({
                   {state.page.items.map(offer => {
                     const price = offer.price_toman;
                     const isVeryLarge = offer.price_quality === 'above_js_safe_integer';
+                    const hasShopCoords = offer.shop.lat !== null && offer.shop.lon !== null;
                     return (
                       <article key={offer.offer_id} className="offer-card">
                         <div className="offer-header">
@@ -331,6 +515,18 @@ function OffersModal({
                             <span>گارانتی:</span>
                             <span>{formatWarranty(offer.warranty)}</span>
                           </p>
+
+                          <p className="detail-row">
+                            <span>فاصلهٔ مستقیم هوایی:</span>
+                            {offer.direct_distance_meters !== null ? (
+                              <strong>{formatDistance(offer.direct_distance_meters)}</strong>
+                            ) : !hasShopCoords ? (
+                              <span className="warning">موقعیت ثبت نشده (فاصله نامشخص)</span>
+                            ) : (
+                              <span className="muted-text">نیازمند تعیین موقعیت کاربر</span>
+                            )}
+                          </p>
+
                           <p className="detail-row provenance-row">
                             <span>شناسهٔ آفر:</span>
                             <code>{offer.offer_id}</code>
@@ -387,6 +583,9 @@ function App() {
   // Offers modal state
   const [activeOffersProduct, setActiveOffersProduct] = useState<Product | null>(null);
   const [offersState, setOffersState] = useState<OffersState>({ kind: 'idle' });
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLon, setUserLon] = useState<number | null>(null);
+  const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
 
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
@@ -481,16 +680,23 @@ function App() {
 
   function openOffers(product: Product, offset = 0) {
     setActiveOffersProduct(product);
-    loadOffers(product.product_id, offset, activeBudget);
+    loadOffers(product.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm);
   }
 
-  async function loadOffers(productId: string, offset: number, budget: string | null) {
+  async function loadOffers(
+    productId: string,
+    offset: number,
+    budget: string | null,
+    lat: number | null = userLat,
+    lon: number | null = userLon,
+    radiusKm: number | null = maxDistanceKm
+  ) {
     activeOffers.current?.abort();
     const controller = new AbortController();
     activeOffers.current = controller;
     setOffersState({ kind: 'loading', offset });
     try {
-      const page = await fetchProductOffers(productId, offset, budget, controller.signal);
+      const page = await fetchProductOffers(productId, offset, budget, lat, lon, radiusKm, controller.signal);
       if (!controller.signal.aborted) {
         setOffersState({ kind: 'success', offset, page });
       }
@@ -760,12 +966,21 @@ function App() {
         <OffersModal
           product={activeOffersProduct}
           budget={activeBudget}
+          userLat={userLat}
+          userLon={userLon}
+          maxDistanceKm={maxDistanceKm}
           state={offersState}
           onClose={() => setActiveOffersProduct(null)}
-          onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget)}
+          onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm)}
+          onLocationChange={(newLat, newLon, newRadius) => {
+            setUserLat(newLat);
+            setUserLon(newLon);
+            setMaxDistanceKm(newRadius);
+            loadOffers(activeOffersProduct.product_id, 0, activeBudget, newLat, newLon, newRadius);
+          }}
           onRetry={() => {
             const currentOffset = 'offset' in offersState ? offersState.offset : 0;
-            void loadOffers(activeOffersProduct.product_id, currentOffset, activeBudget);
+            void loadOffers(activeOffersProduct.product_id, currentOffset, activeBudget, userLat, userLon, maxDistanceKm);
           }}
         />
       )}

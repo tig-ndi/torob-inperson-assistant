@@ -39,6 +39,7 @@ export type Offer = {
   description: string | null;
   warranty: unknown;
   inventory_status: 'unconfirmed';
+  direct_distance_meters: number | null;
   shop: Shop;
 };
 
@@ -166,6 +167,10 @@ export function parseOfferPage(value: unknown): OfferPage {
     }
     const lat = typeof s.lat === 'number' && Number.isFinite(s.lat) ? s.lat : null;
     const lon = typeof s.lon === 'number' && Number.isFinite(s.lon) ? s.lon : null;
+    const direct_distance_meters =
+      typeof o.direct_distance_meters === 'number' && Number.isFinite(o.direct_distance_meters)
+        ? Math.round(o.direct_distance_meters)
+        : null;
 
     return {
       offer_id: o.offer_id,
@@ -178,6 +183,7 @@ export function parseOfferPage(value: unknown): OfferPage {
       description: nullableText(o.description),
       warranty: o.warranty ?? null,
       inventory_status: 'unconfirmed',
+      direct_distance_meters,
       shop: {
         name: nullableText(s.name),
         address: nullableText(s.address),
@@ -253,6 +259,9 @@ export async function fetchProductOffers(
   productId: string,
   offset: number,
   maxPrice: string | null,
+  userLat: number | null,
+  userLon: number | null,
+  maxDistanceKm: number | null,
   signal: AbortSignal
 ): Promise<OfferPage> {
   const params = new URLSearchParams({
@@ -261,6 +270,13 @@ export async function fetchProductOffers(
   });
   if (maxPrice) {
     params.set('max_price_toman', maxPrice);
+  }
+  if (userLat !== null && userLon !== null) {
+    params.set('user_lat', String(userLat));
+    params.set('user_lon', String(userLon));
+  }
+  if (maxDistanceKm !== null) {
+    params.set('max_distance_km', String(maxDistanceKm));
   }
   let response: Response;
   try {
@@ -271,6 +287,7 @@ export async function fetchProductOffers(
   }
   if (!response.ok) {
     if (response.status === 404) throw new Error('محصول مورد نظر در کاتالوگ یافت نشد.');
+    if (response.status === 422) throw new Error('پارامترهای موقعیت یا شعاع فاصله نامعتبر است.');
     throw new Error('کاتالوگ در دسترس نیست. کمی بعد دوباره تلاش کنید.');
   }
   let body: unknown;
@@ -280,6 +297,27 @@ export async function fetchProductOffers(
     throw new Error('پاسخ کاتالوگ قابل خواندن نیست. دوباره تلاش کنید.');
   }
   return parseOfferPage(body);
+}
+
+export function parseCoordinate(input: string): number | null {
+  const normalized = input
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632))
+    .trim();
+  if (!normalized) return null;
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+export function formatDistance(meters: number | null): string {
+  if (meters === null || meters === undefined) return 'فاصله نامشخص';
+  const faNum = new Intl.NumberFormat('fa-IR');
+  if (meters < 1000) {
+    return `${faNum.format(meters)} متر`;
+  }
+  const km = (meters / 1000).toFixed(1);
+  return `${faNum.format(Number(km))} کیلومتر`;
 }
 
 export function normalizeBudget(input: string): string {

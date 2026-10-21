@@ -776,6 +776,81 @@ h3 {
   margin: 0;
 }
 
+/* Location & Radius Filter in Offers Modal */
+.location-filter-box {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+
+.location-filter-header strong {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.location-filter-header p {
+  margin: 4px 0 10px 0;
+}
+
+.location-inputs-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.loc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.loc-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.loc-field input, .loc-field select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  min-height: 38px;
+}
+
+.location-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.small-action-btn {
+  font-size: 12px;
+  min-height: 36px;
+  padding: 4px 12px;
+}
+
+.active-location-badge {
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.muted-text {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -869,5 +944,13 @@ h3 {
   .detail-row {
     flex-direction: column;
     gap: 2px;
+  }
+
+  .location-inputs-row {
+    grid-template-columns: 1fr;
+  }
+
+  .location-actions-row button {
+    width: 100%;
   }
 }
