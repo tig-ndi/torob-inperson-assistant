@@ -1,6 +1,7 @@
 # Torob project instructions
 
 - Scope: Starcoach Torob in-person shopping assistant for Tehran. Work in this project only.
+- Work task by task within the human-approved slice. After completing and recording that slice, propose the next small step and wait for its approval; do not automatically expand to the entire remaining phase. Keep the existing phase plan and distinguish verified facts, assumptions and proposals.
 - Current human instructions take precedence over attached prompts, skills and templates. Official challenge requirements define the product; distinguish supplied copies, verified facts, proposals and unknowns.
 - Read `HANDOFF.md` and the active task in `TASKS.md` when taking ownership. Consult `ARCHITECTURE.md` for service/data changes, `DESIGN.md` for UI work and `EVALUATION.md` for acceptance. Do not reread every document for trivial edits.
 - Codex is the primary implementer. Antigravity, then OpenCode/GLM are sequential fallbacks chosen by the user. One coding owner at a time; no subagents or parallel coding without an explicit user request.

@@ -1,8 +1,10 @@
 # معماری اولیه
 
-stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite ساخته و محلی بررسی شد. React/TypeScript/Vite هنوز مربوط به P1b است. تصمیم‌های اجرایی جدید در D09/D10 از DECISIONS ثبت شده‌اند.
+stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite ساخته و محلی بررسی شد. گام نخست React/TypeScript/Vite در P1b اکنون ساخته شده است. تصمیم‌های اجرایی جدید در D09/D10 از DECISIONS ثبت شده‌اند.
 
 ## انتخاب
+
+به‌روزرسانی P1b: apps/web اکنون React/TypeScript strict/Vite برای جست‌وجو/کارت با lockfile دارد. درخواست فقط /api با proxy محلی؛ پاسخ unknown قبل از مصرف اعتبارسنجی می‌شود، پول رشته/BigInt می‌ماند. stateهای مستقل و AbortController پاسخ دیررس را کنترل می‌کنند. مقایسه/آفر UI و budget/radius UI هنوز ساخته نشده‌اند. جزئیات D11 و شواهد HANDOFF مرجع‌اند؛ خطوط پیشنهادی base پایین سابقهٔ برنامه هستند.
 
 - رابط: React + TypeScript با Vite، فارسی و RTL. SPA برای مسیر خرید تعاملی کافی است؛ در این مرحله نیاز اثبات‌شده‌ای به SSR نداریم.
 - API: Python + FastAPI؛ اعتبارسنجی درخواست و قراردادهای پاسخ صریح. ابزار آماده‌سازی داده همین حالا Python استاندارد است.
@@ -19,7 +21,7 @@ stack از پیشنهاد base آغاز شد؛ در P1a بخش FastAPI/SQLite س
 
 موجود: `tools/` برای import، `tests/` برای قرارداد داده، `.local/` برای خروجی تولیدشده، `docs/` برای منابع و قرارداد داده.
 
-ساخته‌شده در P1a: `apps/api/` برای repository، مدل پاسخ و endpoint؛ `tests/test_api.py` و `tools/smoke_api.py` برای بررسی مستقل. در P1b ایجاد شود: `apps/web/` برای UI. مسیر DB از TOROB_DATABASE یا پیش‌فرض ریشهٔ پروژه/.local/catalogue.sqlite3 است؛ env خودکار بارگذاری نمی‌شود. snapshot runtime فقط‌خواندنی است. package مصرف‌نشده نسازید.
+ساخته‌شده در P1a: `apps/api/` برای repository، مدل پاسخ و endpoint؛ `tests/test_api.py` و `tools/smoke_api.py` برای بررسی مستقل. در P1b ساخته شده: `apps/web/` برای UI جست‌وجو/کارت؛ مقایسه/آفر باقی است. مسیر DB از TOROB_DATABASE یا پیش‌فرض ریشهٔ پروژه/.local/catalogue.sqlite3 است؛ env خودکار بارگذاری نمی‌شود. snapshot runtime فقط‌خواندنی است. package مصرف‌نشده نسازید.
 
 قرارداد فعلی endpoint و صفحه‌بندی/بودجه در docs/API.md است. پاسخ‌ها از مدل strict عبور می‌کنند؛ خطای nested data به 503 مشخص تبدیل می‌شود. هیچ middleware با CORS باز اضافه نشده؛ P1b از proxy توسعه برای /api استفاده کند. هنگام اجرای سرور access log را خاموش نگه دارید تا query و موقعیت احتمالی ثبت نشوند.
 
