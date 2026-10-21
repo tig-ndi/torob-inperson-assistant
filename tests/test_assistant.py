@@ -311,17 +311,38 @@ class AssistantApiTests(unittest.TestCase):
         direct = self.agent_client.get('/api/products?q=شارژر')
         self.assertEqual(direct.status_code, 200)
 
-    def test_ambiguous_request_with_category_cleared_forces_clarification(self):
-        # Ambiguous accessory ("شارژر می‌خواهم") with category_cleared=True:
-        # Removal of filter must NOT remove clarification requirement for ambiguous requests.
+    def test_ambiguous_accessory_without_context_forces_clarification(self):
+        # 1. «شارژر می‌خواهم» بدون زمینهٔ معتبر (حتی با category_cleared=True) -> needs_input
         self.response = completion(proposal(action='search', query='شارژر'))
-        res1 = self.post(body('شارژر می‌خواهم', context_category='گوشی موبایل', context_query='گوشی', category_cleared=True)).json()
+        res1 = self.post(body('شارژر می‌خواهم', category_cleared=True)).json()
         self.assertEqual(res1['status'], 'needs_input')
         self.assertIn('چه نوع کالایی', res1['question'])
         self.assertIsNone(res1['products'])
         self.assertIsNone(res1['query'])
         self.assertIsNone(res1['category_name'])
-        # Host made only one call; no second repair call
+        self.assertEqual(len(self.calls), 1)
+
+    def test_accessory_with_cleared_category_and_valid_topic_preserves_topic_without_reimposing_category(self):
+        # 2. موضوع معتبر گوشی + درخواست شارژر + category_cleared=True:
+        # زمینه حفظ شود، سؤال ناشی از نبود دستگاه تحمیل نشود و category_name=None بماند.
+        self.response = completion(proposal(action='search', query='شارژر'))
+        res1 = self.post(body('شارژر می‌خواهم', context_query='گوشی', category_cleared=True)).json()
+        self.assertIn(res1['status'], {'results', 'no_evidence'})
+        self.assertIsNone(res1['question'])
+        self.assertIsNone(res1['category_name'])
+        self.assertIsNone(res1['products']['category_name'])
+        self.assertEqual(res1['query'], 'شارژر')
+        self.assertEqual(len(self.calls), 1)
+
+    def test_accessory_with_valid_topic_and_active_filter_applies_grounded_category(self):
+        # 3. همان موضوع و درخواست با فیلتر فعال -> دستهٔ شارژر گوشی اعمال شود.
+        self.response = completion(proposal(action='search', query='شارژر'))
+        res1 = self.post(body('شارژر می‌خواهم', context_query='گوشی', context_category='گوشی موبایل', category_cleared=False)).json()
+        self.assertIn(res1['status'], {'results', 'no_evidence'})
+        self.assertIsNone(res1['question'])
+        self.assertEqual(res1['category_name'], 'شارژر گوشی')
+        self.assertEqual(res1['products']['category_name'], 'شارژر گوشی')
+        self.assertEqual(res1['query'], 'شارژر')
         self.assertEqual(len(self.calls), 1)
 
     def test_clear_request_with_category_cleared_searches_without_reimposing_filter(self):

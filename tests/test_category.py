@@ -176,13 +176,15 @@ class TestCategoryDetector(unittest.TestCase):
         self.assertFalse(is_ambiguous_product_intent("تلویزیون سونی"))
         self.assertFalse(is_ambiguous_product_intent("سونی"))
 
-        # 5. Accessories with active context device are NOT ambiguous
+        # 5. Accessories with active context topic are NOT ambiguous (independent of category_cleared)
         self.assertFalse(is_ambiguous_product_intent("شارژر", context_category=CAT_MOBILE_PHONE))
         self.assertFalse(is_ambiguous_product_intent("کاور", context_query="گوشی سامسونگ"))
+        self.assertFalse(is_ambiguous_product_intent("شارژر", context_category=CAT_MOBILE_PHONE, category_cleared=True))
+        self.assertFalse(is_ambiguous_product_intent("کاور", context_query="گوشی سامسونگ", category_cleared=True))
 
-        # 6. Accessories with cleared category filter ARE ambiguous again
-        self.assertTrue(is_ambiguous_product_intent("شارژر", context_category=CAT_MOBILE_PHONE, category_cleared=True))
-        self.assertTrue(is_ambiguous_product_intent("کاور", context_query="گوشی سامسونگ", category_cleared=True))
+        # 6. Accessories without valid context topic remain ambiguous (even with category_cleared=True)
+        self.assertTrue(is_ambiguous_product_intent("شارژر", category_cleared=True))
+        self.assertTrue(is_ambiguous_product_intent("کاور", context_query="کفش ورزشی"))
 
 
 if __name__ == "__main__":

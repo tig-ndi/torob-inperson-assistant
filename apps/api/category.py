@@ -342,22 +342,21 @@ def is_ambiguous_product_intent(
     if re.search(rf"\b{TARGET_DEVICE_REGEX}\b", cleaned):
         return False
 
-    # 4. Check if valid context provides the target device.
-    if not category_cleared:
-        resolved = resolve_accessory_category(
-            cleaned,
-            context_category=context_category,
-            context_query=context_query,
-        )
-        if resolved is not None:
-            return False
+    # 4. Check if valid context topic provides the target device (independent of category_cleared).
+    resolved = resolve_accessory_category(
+        cleaned,
+        context_category=context_category,
+        context_query=context_query,
+    )
+    if resolved is not None:
+        return False
 
-        # For bare watch, if context is already smartwatch, not ambiguous
-        if has_bare_watch:
-            if context_category == CAT_SMARTWATCH:
-                return False
-            if context_query and re.search(rf"\b{DEVICE_WATCH_REGEX}\b", normalize_text(context_query)):
-                return False
+    # For bare watch, if context is already smartwatch, not ambiguous
+    if has_bare_watch:
+        if context_category == CAT_SMARTWATCH:
+            return False
+        if context_query and re.search(rf"\b{DEVICE_WATCH_REGEX}\b", normalize_text(context_query)):
+            return False
 
     # Has accessory or bare watch, but NO target device in text or context -> AMBIGUOUS!
     return True
