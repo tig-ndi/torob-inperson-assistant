@@ -353,3 +353,78 @@ test('synthetic fixture: radius without coordinates is rejected before network r
 
   await expect(modal.getByRole('alert')).toContainText('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر');
 });
+
+test('real UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
+  await page.goto('/');
+
+  const budgetInput = page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true });
+  const wordsCaption = page.locator('.budget-words-caption');
+
+  // Initially words caption is hidden
+  await expect(wordsCaption).toHaveCount(0);
+
+  // Type 10000000
+  await budgetInput.fill('10000000');
+  await expect(budgetInput).toHaveValue('10,000,000');
+  await expect(wordsCaption).toBeVisible();
+  await expect(wordsCaption).toContainText('ده میلیون تومان');
+
+  // Type 50000000
+  await budgetInput.fill('50000000');
+  await expect(budgetInput).toHaveValue('50,000,000');
+  await expect(wordsCaption).toContainText('پنجاه میلیون تومان');
+
+  // Type 0
+  await budgetInput.fill('0');
+  await expect(budgetInput).toHaveValue('0');
+  await expect(wordsCaption).toContainText('صفر تومان');
+
+  // Clear input
+  await budgetInput.fill('');
+  await expect(wordsCaption).toHaveCount(0);
+
+  // Type Persian digits
+  await budgetInput.fill('۱۰،۰۰۰،۰۰۰');
+  await expect(budgetInput).toHaveValue('۱۰٬۰۰۰٬۰۰۰');
+  await expect(wordsCaption).toContainText('ده میلیون تومان');
+});
+
+test('real UI: floating toast appears in viewport after scroll when selecting 4th product', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  const cards = page.locator('.product-card');
+  await expect(cards.first()).toBeVisible();
+
+  // Select 3 products
+  await cards.nth(0).locator('.compare-btn').click();
+  await cards.nth(1).locator('.compare-btn').click();
+  await cards.nth(2).locator('.compare-btn').click();
+
+  // Scroll down so the top of the page is out of viewport
+  await page.evaluate(() => window.scrollTo(0, 600));
+  const scrollY = await page.evaluate(() => window.scrollY);
+  expect(scrollY).toBeGreaterThan(100);
+
+  // Select 4th product
+  await cards.nth(3).locator('.compare-btn').click();
+
+  // Floating toast notification should be visible immediately in current viewport
+  const toast = page.locator('.toast-notification');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('حداکثر می‌توانید ۳ محصول را برای مقایسه انتخاب کنید');
+
+  // Verify toast bounding box is in viewport
+  const toastBox = await toast.boundingBox();
+  expect(toastBox).not.toBeNull();
+  const viewport = page.viewportSize();
+  if (toastBox && viewport) {
+    expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(viewport.height);
+    expect(toastBox.y).toBeGreaterThanOrEqual(0);
+  }
+
+  // Dismiss via close button
+  await toast.locator('.toast-close-btn').click();
+  await expect(toast).toHaveCount(0);
+});

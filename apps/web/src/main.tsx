@@ -6,11 +6,13 @@ import {
   PAGE_SIZE,
   extractAllSpecKeys,
   fetchProductOffers,
+  formatBudgetInput,
   formatDistance,
   formatTehranDateTime,
   formatWarranty,
   getProductSpecValue,
   normalizeBudget,
+  numberToPersianWords,
   parseCoordinate,
   searchProducts,
   validateBudget,
@@ -587,8 +589,11 @@ function App() {
   const [userLon, setUserLon] = useState<number | null>(null);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
 
+  const budgetInputRef = useRef<HTMLInputElement | null>(null);
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
+
+  const budgetWords = numberToPersianWords(budgetInput);
 
   useEffect(() => {
     return () => {
@@ -596,6 +601,46 @@ function App() {
       activeOffers.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!comparisonWarning) return;
+    const timer = setTimeout(() => {
+      setComparisonWarning('');
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [comparisonWarning]);
+
+  function handleBudgetChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const inputEl = e.target;
+    const raw = inputEl.value;
+    const oldPos = inputEl.selectionStart ?? raw.length;
+    const rawBefore = raw.slice(0, oldPos);
+    const digitsBefore = rawBefore.replace(/[\s,،_٬]/g, '').length;
+
+    const formatted = formatBudgetInput(raw);
+    setBudgetInput(formatted);
+
+    requestAnimationFrame(() => {
+      if (!budgetInputRef.current) return;
+      if (digitsBefore === 0) {
+        budgetInputRef.current.setSelectionRange(0, 0);
+        return;
+      }
+      let targetPos = formatted.length;
+      let counted = 0;
+      for (let i = 0; i < formatted.length; i++) {
+        const char = formatted[i];
+        if (char && !/[\s,،_٬]/.test(char)) {
+          counted++;
+        }
+        if (counted >= digitsBefore) {
+          targetPos = i + 1;
+          break;
+        }
+      }
+      budgetInputRef.current.setSelectionRange(targetPos, targetPos);
+    });
+  }
 
   async function search(query: string, offset = 0, budget: string | null = activeBudget) {
     const trimmed = query.trim();
@@ -750,13 +795,19 @@ function App() {
               <div className="field-group budget-field">
                 <label htmlFor="budget">سقف بودجه (تومان - اختیاری)</label>
                 <input
+                  ref={budgetInputRef}
                   id="budget"
                   value={budgetInput}
-                  maxLength={25}
-                  onChange={e => setBudgetInput(e.target.value)}
+                  maxLength={30}
+                  onChange={handleBudgetChange}
                   placeholder="مثلاً ۱۰٬۰۰۰٬۰۰۰ یا خالی"
                   autoComplete="off"
                 />
+                {budgetWords && (
+                  <p className="budget-words-caption" aria-live="polite">
+                    <span className="words-label">معادل به حروف:</span> <strong>{budgetWords}</strong>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -802,9 +853,22 @@ function App() {
         </section>
 
         {comparisonWarning && (
-          <aside className="notice warning-notice" role="alert">
-            <strong>محدودیت مقایسه:</strong>
-            <span>{comparisonWarning}</span>
+          <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
+            <div className="toast-message">
+              <span className="toast-icon" aria-hidden="true">⚠️</span>
+              <div>
+                <strong>محدودیت مقایسه: </strong>
+                <span>{comparisonWarning}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="toast-close-btn"
+              onClick={() => setComparisonWarning('')}
+              aria-label="بستن پیام"
+            >
+              ✕
+            </button>
           </aside>
         )}
 

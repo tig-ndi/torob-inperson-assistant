@@ -324,7 +324,105 @@ export function normalizeBudget(input: string): string {
   return input
     .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 1776))
     .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632))
-    .replace(/[\s,،_]/g, '');
+    .replace(/[\s,،_٬]/g, '');
+}
+
+const ONES = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
+const TEENS = ['ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده'];
+const TENS = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود'];
+const HUNDREDS = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد'];
+const SCALES = ['', 'هزار', 'میلیون', 'میلیارد', 'تریلیون', 'کوادریلیون', 'کوینتیلیون'];
+
+function chunkToWords(n: number): string {
+  if (n === 0) return '';
+  const parts: string[] = [];
+  const h = Math.floor(n / 100);
+  const rem = n % 100;
+  const hWord = HUNDREDS[h];
+  if (h > 0 && hWord) parts.push(hWord);
+  if (rem >= 10 && rem < 20) {
+    const teenWord = TEENS[rem - 10];
+    if (teenWord) parts.push(teenWord);
+  } else {
+    const t = Math.floor(rem / 10);
+    const o = rem % 10;
+    const tWord = TENS[t];
+    const oWord = ONES[o];
+    if (t > 0 && tWord) parts.push(tWord);
+    if (o > 0 && oWord) parts.push(oWord);
+  }
+  return parts.join(' و ');
+}
+
+export function numberToPersianWords(input: string): string | null {
+  if (!input) return null;
+  const normalized = normalizeBudget(input);
+  if (!normalized || !/^\d+$/.test(normalized)) return null;
+
+  const digits = normalized.replace(/^0+/, '');
+  if (!digits) return 'صفر تومان';
+
+  const chunks: number[] = [];
+  let s = digits;
+  while (s.length > 0) {
+    const end = s.length;
+    const start = Math.max(0, end - 3);
+    chunks.push(parseInt(s.slice(start, end), 10));
+    s = s.slice(0, start);
+  }
+
+  if (chunks.length > SCALES.length) return null;
+
+  const parts: string[] = [];
+  for (let i = chunks.length - 1; i >= 0; i--) {
+    const chunk = chunks[i];
+    if (chunk === undefined || chunk === 0) continue;
+    let word = chunkToWords(chunk);
+    const scale = SCALES[i];
+    if (scale) {
+      word += ' ' + scale;
+    }
+    parts.push(word);
+  }
+  if (parts.length === 0) return 'صفر تومان';
+  return parts.join(' و ') + ' تومان';
+}
+
+export function formatBudgetInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  const isSeparatorsOrDigits = /^[\d۰-۹٠-٩\s,،_٬]+$/.test(trimmed);
+  if (!isSeparatorsOrDigits) {
+    return raw;
+  }
+
+  const isPersian = /[۰-۹٠-٩]/.test(trimmed);
+
+  let digits = trimmed
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632))
+    .replace(/[^\d]/g, '');
+
+  if (!digits) return '';
+
+  if (digits.length > 1 && digits.startsWith('0')) {
+    digits = digits.replace(/^0+/, '') || '0';
+  }
+
+  const parts: string[] = [];
+  for (let i = digits.length; i > 0; i -= 3) {
+    parts.unshift(digits.slice(Math.max(0, i - 3), i));
+  }
+  const formattedEnglish = parts.join(',');
+
+  if (isPersian) {
+    return formattedEnglish
+      .replace(/\d/g, d => String.fromCharCode(Number(d) + 1776))
+      .replace(/,/g, '٬');
+  }
+
+  return formattedEnglish;
 }
 
 export function validateBudget(budgetStr: string): { valid: boolean; error?: string } {
