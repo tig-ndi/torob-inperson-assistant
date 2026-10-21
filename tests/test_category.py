@@ -2,6 +2,9 @@ import unittest
 
 from apps.api.category import (
     detect_category_intent,
+    is_ambiguous_product_intent,
+    is_bare_watch,
+    resolve_accessory_category,
     CAT_MOBILE_PHONE,
     CAT_LAPTOP,
     CAT_HEADPHONE,
@@ -116,6 +119,70 @@ class TestCategoryDetector(unittest.TestCase):
         self.assertEqual(detect_category_intent("لپ تاپ و نوت بوک"), CAT_LAPTOP)
         self.assertEqual(detect_category_intent("هدفون، هدست و هندزفری"), CAT_HEADPHONE)
         self.assertEqual(detect_category_intent("ساعت و مچ بند هوشمند"), CAT_SMARTWATCH)
+
+    def test_bare_watch_detection(self):
+        self.assertTrue(is_bare_watch("ساعت"))
+        self.assertTrue(is_bare_watch("ساعت می‌خوام"))
+        self.assertTrue(is_bare_watch("ساعت مردانه تا ۲ میلیون"))
+        self.assertFalse(is_bare_watch("ساعت هوشمند"))
+        self.assertFalse(is_bare_watch("ساعت مچی عقربه‌ای"))
+        self.assertFalse(is_bare_watch("ساعت دیواری"))
+        self.assertFalse(is_bare_watch("گوشی"))
+        self.assertFalse(is_bare_watch(""))
+
+    def test_resolve_accessory_with_context(self):
+        # Phone context + accessory
+        self.assertEqual(resolve_accessory_category("شارژر", context_category=CAT_MOBILE_PHONE), CAT_PHONE_CHARGER)
+        self.assertEqual(resolve_accessory_category("کاور", context_category=CAT_MOBILE_PHONE), CAT_PHONE_CASE)
+        self.assertEqual(resolve_accessory_category("باتری", context_query="گوشی سامسونگ A54"), CAT_PHONE_BATTERY)
+
+        # Laptop context + accessory
+        self.assertEqual(resolve_accessory_category("شارژر", context_category=CAT_LAPTOP), CAT_LAPTOP_CHARGER)
+        self.assertEqual(resolve_accessory_category("کیف", context_query="لپ تاپ ایسوس"), CAT_LAPTOP_CASE)
+        self.assertEqual(resolve_accessory_category("باتری", context_category=CAT_LAPTOP), CAT_LAPTOP_BATTERY)
+
+        # Non-accessory text does not resolve
+        self.assertIsNone(resolve_accessory_category("بودجه را ۸ میلیون کن", context_category=CAT_MOBILE_PHONE))
+        self.assertIsNone(resolve_accessory_category("کفش ورزشی", context_category=CAT_MOBILE_PHONE))
+
+    def test_is_ambiguous_product_intent(self):
+        # 1. Bare accessories without device or context are ambiguous
+        self.assertTrue(is_ambiguous_product_intent("شارژر"))
+        self.assertTrue(is_ambiguous_product_intent("شارژر می‌خواهم"))
+        self.assertTrue(is_ambiguous_product_intent("دنبال یک باتری خوب هستم"))
+        self.assertTrue(is_ambiguous_product_intent("کاور"))
+        self.assertTrue(is_ambiguous_product_intent("هولدر"))
+        self.assertTrue(is_ambiguous_product_intent("گلس"))
+        self.assertTrue(is_ambiguous_product_intent("ساعت"))
+        self.assertTrue(is_ambiguous_product_intent("ساعت می‌خوام"))
+
+        # 2. Accessories with target device in text are NOT ambiguous
+        self.assertFalse(is_ambiguous_product_intent("شارژر لپ تاپ"))
+        self.assertFalse(is_ambiguous_product_intent("شارژر برای لپ تاپ ایسوس"))
+        self.assertFalse(is_ambiguous_product_intent("کاور گوشی"))
+        self.assertFalse(is_ambiguous_product_intent("باتری آیفون"))
+        self.assertFalse(is_ambiguous_product_intent("شارژر مک بوک"))
+        self.assertFalse(is_ambiguous_product_intent("ساعت هوشمند"))
+
+        # 3. Base devices are NOT ambiguous
+        self.assertFalse(is_ambiguous_product_intent("گوشی"))
+        self.assertFalse(is_ambiguous_product_intent("گوشی با باتری قوی"))
+        self.assertFalse(is_ambiguous_product_intent("لپ تاپ"))
+        self.assertFalse(is_ambiguous_product_intent("هدفون بی سیم"))
+
+        # 4. Out-of-scope / unsupported products are NOT ambiguous
+        self.assertFalse(is_ambiguous_product_intent("کفش ورزشی"))
+        self.assertFalse(is_ambiguous_product_intent("یخچال ساید بای ساید"))
+        self.assertFalse(is_ambiguous_product_intent("تلویزیون سونی"))
+        self.assertFalse(is_ambiguous_product_intent("سونی"))
+
+        # 5. Accessories with active context device are NOT ambiguous
+        self.assertFalse(is_ambiguous_product_intent("شارژر", context_category=CAT_MOBILE_PHONE))
+        self.assertFalse(is_ambiguous_product_intent("کاور", context_query="گوشی سامسونگ"))
+
+        # 6. Accessories with cleared category filter ARE ambiguous again
+        self.assertTrue(is_ambiguous_product_intent("شارژر", context_category=CAT_MOBILE_PHONE, category_cleared=True))
+        self.assertTrue(is_ambiguous_product_intent("کاور", context_query="گوشی سامسونگ", category_cleared=True))
 
 
 if __name__ == "__main__":

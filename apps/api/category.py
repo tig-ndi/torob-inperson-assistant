@@ -79,14 +79,30 @@ ACCESSORY_NOUNS = (
     r"لوازم\s+جانبی|قطعات|قطعه"
 )
 
-DEVICE_PHONE_REGEX = r"(?:گوشی|موبایل)"
-DEVICE_LAPTOP_REGEX = r"(?:لپ\s*تاپ|لپتاپ|نوت\s*بوک|نوتبوک)"
-DEVICE_TABLET_REGEX = r"(?:تبلت)"
-DEVICE_WATCH_REGEX = r"(?:ساعت(?:\s+هوشمند)?|مچ\s*بند(?:\s+هوشمند)?|اسمارت\s*واچ)"
+DEVICE_PHONE_REGEX = r"(?:گوشی|موبایل|آیفون|iphone)"
+DEVICE_LAPTOP_REGEX = r"(?:لپ\s*تاپ|لپتاپ|نوت\s*بوک|نوتبوک|مک\s*بوک|macbook)"
+DEVICE_TABLET_REGEX = r"(?:تبلت|آیپد|ipad)"
+DEVICE_WATCH_REGEX = r"(?:ساعت\s+هوشمند|مچ\s*بند(?:\s+هوشمند)?|اسمارت\s*واچ|اپل\s*واچ|apple\s*watch)"
 DEVICE_TV_REGEX = r"(?:تلویزیون|تی\s*وی)"
 ANY_DEVICE_REGEX = (
     rf"(?:{DEVICE_PHONE_REGEX}|{DEVICE_LAPTOP_REGEX}|{DEVICE_TABLET_REGEX}|"
     rf"{DEVICE_WATCH_REGEX}|{DEVICE_TV_REGEX})"
+)
+
+# Supported ambiguous accessories that require a target device
+AMBIGUOUS_ACCESSORY_REGEX = (
+    r"شارژر|آداپتور|کلگی|کابل\s+شارژ|سیم\s+شارژ|"
+    r"باتری|باطری|"
+    r"کیف|کاور|قاب|گارد|پوسته|کوله|"
+    r"گلس|محافظ\s+صفحه(?:\s+نمایش)?|محافظ\s+لنز|"
+    r"پایه(?:\s+نگهدارنده)?|هولدر|استند|کول\s*پد|"
+    r"تاچ|ال\s*سی\s*دی|تاچ\s+و\s+ال\s*سی\s*دی|"
+    r"لوازم\s+جانبی|قطعات"
+)
+
+TARGET_DEVICE_REGEX = (
+    rf"(?:{ANY_DEVICE_REGEX}|کامپیوتر|مانیتور|"
+    r"آیفون|iphone|مک\s*بوک|macbook|آیپد|ipad|اپل\s*واچ|apple\s*watch)"
 )
 
 
@@ -221,3 +237,128 @@ def detect_category_intent(text: str) -> str | None:
     # Bare "ساعت" without "هوشمند" or "مچ بند" is intentionally ambiguous
     # Single-word accessory ("شارژر", "باتری", "کاور") without device is intentionally ambiguous.
     return None
+
+
+def is_bare_watch(text: str) -> bool:
+    """Return True if text refers to watch/clock ambiguously without qualifiers."""
+    if not text or not isinstance(text, str):
+        return False
+    cleaned = normalize_text(text)
+    if not re.search(r"\bساعت\b", cleaned):
+        return False
+    # If qualified as smartwatch, wristband, wall clock, etc., it is not an ambiguous bare watch
+    if re.search(
+        r"\b(?:هوشمند|مچ\s*بند|مچی|دیواری|رومیزی|شنی|عقربه|ایستاده|شماطه)\b",
+        cleaned,
+    ):
+        return False
+    return True
+
+
+def resolve_accessory_category(
+    text: str,
+    context_category: str | None = None,
+    context_query: str | None = None,
+) -> str | None:
+    """Resolve an accessory query using the target device found in context."""
+    if not text or not isinstance(text, str):
+        return None
+    cleaned = normalize_text(text).strip()
+    if not cleaned or not re.search(rf"\b(?:{AMBIGUOUS_ACCESSORY_REGEX})\b", cleaned):
+        return None
+
+    # Determine context device keyword
+    device_word = None
+    if context_category:
+        norm_cat = normalize_text(context_category)
+        if norm_cat == normalize_text(CAT_MOBILE_PHONE) or "گوشی" in norm_cat:
+            device_word = "گوشی"
+        elif norm_cat == normalize_text(CAT_LAPTOP) or "لپ تاپ" in norm_cat:
+            device_word = "لپ تاپ"
+        elif norm_cat == normalize_text(CAT_TABLET) or "تبلت" in norm_cat:
+            device_word = "تبلت"
+        elif norm_cat == normalize_text(CAT_SMARTWATCH) or "ساعت" in norm_cat:
+            device_word = "ساعت هوشمند"
+        elif norm_cat == normalize_text(CAT_TV) or "تلویزیون" in norm_cat:
+            device_word = "تلویزیون"
+        elif norm_cat == normalize_text(CAT_STETHOSCOPE):
+            device_word = "گوشی پزشکی"
+
+    if not device_word and context_query:
+        norm_query = normalize_text(context_query)
+        if re.search(rf"\b{DEVICE_PHONE_REGEX}\b", norm_query):
+            device_word = "گوشی"
+        elif re.search(rf"\b{DEVICE_LAPTOP_REGEX}\b", norm_query):
+            device_word = "لپ تاپ"
+        elif re.search(rf"\b{DEVICE_TABLET_REGEX}\b", norm_query):
+            device_word = "تبلت"
+        elif re.search(rf"\b{DEVICE_WATCH_REGEX}\b", norm_query):
+            device_word = "ساعت هوشمند"
+        elif re.search(rf"\b{DEVICE_TV_REGEX}\b", norm_query):
+            device_word = "تلویزیون"
+
+    if not device_word:
+        return None
+
+    return detect_category_intent(f"{cleaned} برای {device_word}")
+
+
+def is_ambiguous_product_intent(
+    text: str,
+    context_category: str | None = None,
+    context_query: str | None = None,
+    category_cleared: bool = False,
+) -> bool:
+    """Check if the text expresses an ambiguous product intent lacking a target device.
+
+    Returns True for:
+    - Supported accessories (charger, battery, case, screen protector, holder, etc.)
+      and bare "ساعت" lacking a target device in either message text or active context.
+
+    Returns False for:
+    - Clear products with identified category (e.g. "گوشی", "شارژر لپ تاپ", "کاور گوشی")
+    - Non-accessory products outside snapshot categories (e.g. "کفش ورزشی", "یخچال")
+    - Queries where active context supplies the target device (unless category_cleared=True)
+    """
+    if not text or not isinstance(text, str):
+        return False
+    cleaned = normalize_text(text).strip()
+    if not cleaned:
+        return False
+
+    # 1. If text itself detects a grounded category, it is NOT ambiguous.
+    if detect_category_intent(cleaned) is not None:
+        return False
+
+    # 2. Check if text matches an ambiguous accessory or bare watch.
+    has_accessory = bool(re.search(rf"\b(?:{AMBIGUOUS_ACCESSORY_REGEX})\b", cleaned))
+    has_bare_watch = is_bare_watch(cleaned)
+
+    if not has_accessory and not has_bare_watch:
+        # Not a supported ambiguous item -> do not intercept! (e.g. "کفش ورزشی", "یخچال", "سونی")
+        return False
+
+    # 3. If text mentions a target device or platform, it is NOT ambiguous.
+    if re.search(rf"\b{TARGET_DEVICE_REGEX}\b", cleaned):
+        return False
+
+    # 4. Check if valid context provides the target device.
+    if not category_cleared:
+        resolved = resolve_accessory_category(
+            cleaned,
+            context_category=context_category,
+            context_query=context_query,
+        )
+        if resolved is not None:
+            return False
+
+        # For bare watch, if context is already smartwatch, not ambiguous
+        if has_bare_watch:
+            if context_category == CAT_SMARTWATCH:
+                return False
+            if context_query and re.search(rf"\b{DEVICE_WATCH_REGEX}\b", normalize_text(context_query)):
+                return False
+
+    # Has accessory or bare watch, but NO target device in text or context -> AMBIGUOUS!
+    return True
+

@@ -248,6 +248,69 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(res3['category_name'], 'هدفون، هدست و هندزفری')
         self.assertEqual(res3['products']['category_name'], 'هدفون، هدست و هندزفری')
 
+    def test_ambiguous_accessory_or_watch_forces_clarification_even_when_model_proposes_search(self):
+        # 1. Ambiguous accessory ("شارژر می‌خواهم") without context:
+        # Model intentionally proposes action='search', but host overrides to needs_input
+        self.response = completion(proposal(action='search', query='شارژر'))
+        res1 = self.post(body('شارژر می‌خواهم')).json()
+        self.assertEqual(res1['status'], 'needs_input')
+        self.assertIn('چه نوع کالایی', res1['question'])
+        self.assertIsNone(res1['products'])
+        self.assertIsNone(res1['query'])
+        self.assertIsNone(res1['category_name'])
+        # Host made exactly one call; never a second repair call
+        self.assertEqual(len(self.calls), 1)
+
+        # 2. Bare watch ("ساعت می‌خواهم") without context:
+        # Model intentionally proposes action='search', but host overrides to needs_input
+        self.response = completion(proposal(action='search', query='ساعت'))
+        res2 = self.post(body('ساعت می‌خواهم')).json()
+        self.assertEqual(res2['status'], 'needs_input')
+        self.assertIn('چه نوع کالایی', res2['question'])
+        self.assertIsNone(res2['products'])
+        self.assertIsNone(res2['query'])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_clear_request_and_unsupported_category_do_not_force_clarification(self):
+        # 1. Clear request with device specified ("کاور گوشی"):
+        # Model proposes search; host executes search and applies category
+        self.response = completion(proposal(action='search', query='کاور گوشی'))
+        res1 = self.post(body('کاور گوشی می‌خواهم')).json()
+        self.assertEqual(res1['status'], 'results')
+        self.assertIsNone(res1['question'])
+        self.assertEqual(res1['category_name'], 'کیف و کاور گوشی')
+        self.assertTrue(len(res1['products']['items']) > 0)
+
+        # 2. Out-of-scope / unsupported category ("کفش ورزشی"):
+        # Category is None, but NOT ambiguous; search proceeds cleanly without clarification
+        self.response = completion(proposal(action='search', query='کفش ورزشی'))
+        res2 = self.post(body('کفش ورزشی می‌خواهم')).json()
+        self.assertIn(res2['status'], {'results', 'no_evidence'})
+        self.assertIsNone(res2['question'])
+        self.assertIsNone(res2['category_name'])
+
+    def test_context_device_and_cleared_filter_category_behavior(self):
+        # 1. Context device present ("کاور می‌خواهم" with context_category="گوشی موبایل"):
+        # Target device is known from context; resolves to "کیف و کاور گوشی" without clarification
+        self.response = completion(proposal(action='search', query='کاور'))
+        res1 = self.post(body('کاور می‌خواهم', context_category='گوشی موبایل', context_query='گوشی')).json()
+        self.assertEqual(res1['status'], 'results')
+        self.assertIsNone(res1['question'])
+        self.assertEqual(res1['category_name'], 'کیف و کاور گوشی')
+        self.assertEqual(res1['products']['items'][0]['product_id'], 'product_case')
+
+        # 2. Cleared filter ("بودجه را هشت میلیون کن" with category_cleared=True):
+        # Category remains None; search proceeds without forced clarification
+        self.response = completion(proposal(action='search', query='گوشی'))
+        res2 = self.post(body('بودجه را هشت میلیون کن', context_query='گوشی', category_cleared=True, max_price_toman='15000000')).json()
+        self.assertEqual(res2['status'], 'results')
+        self.assertIsNone(res2['question'])
+        self.assertIsNone(res2['category_name'])
+
+        # 3. Direct catalogue search GET /api/products?q=... is unaffected
+        direct = self.agent_client.get('/api/products?q=شارژر')
+        self.assertEqual(direct.status_code, 200)
+
     def test_missing_kind_question_never_establishes_a_topic_from_lexical_filler(self):
         self.response = completion(proposal(action='clarify', query='راهنمایی', question='product_kind'))
         result = self.post(body('برای خرید راهنمایی می‌خواهم')).json()
