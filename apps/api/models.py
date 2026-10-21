@@ -56,6 +56,24 @@ class ProductDetail(Model):
     provenance: Provenance
 
 
+class AssistantStatus(Model):
+    ready: bool
+    reason: Literal['ready', 'disabled', 'missing_key', 'invalid_config', 'attempt_limit']
+    model: str
+    remaining_calls: int
+    attempt_limit: int
+
+
+class AssistantResult(Model):
+    request_id: str
+    status: Literal['needs_input', 'results', 'no_evidence']
+    query: str | None
+    max_price_toman: str | None
+    question: str | None
+    products: ProductPage | None
+    model: str
+
+
 class Shop(Model):
     name: str | None
     address: str | None

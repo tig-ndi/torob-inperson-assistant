@@ -57,6 +57,20 @@ reason روش: matched، channel_unknown، unsupported_channel، price_unknown،
 
 وجود یک روش منطبق کافی است؛ بدون آن، وجود unknown وضعیت کل را unknown می‌کند؛ فقط عدم تطابق تمام روش‌ها does_not_match است. فهرست منبع خالی/غایب not_recorded است و نبود خدمت را اثبات نمی‌کند. UI فقط قیود ثبت‌شده را نمایش می‌دهد؛ تأیید اعتبار شخص، موجودی، پرداخت یا پذیرش فروشنده و هیچ اتصال واقعی provider در این قرارداد نیست.
 
+## دستیار محدود — گام سوم P2
+
+`GET /api/assistant/status`: ready، reason (ready/disabled/missing_key/invalid_config/attempt_limit)، model، remaining_calls و attempt_limit. این سهمیهٔ تعداد تلاش محلی است، نه موجودی دلاری پنل. کلید و مسیر فایل خروجی ندارد.
+
+`POST /api/assistant/turn`: request_id با UUID کوچک‌نویس، messages با role=user/assistant متناوب (۱–۵ پیام، پایان user، هر محتوا ۱–۱۰۰۰ و مجموع حداکثر ۳۰۰۰ نویسه)، max_price_toman اختیاری رشتهٔ صحیح تا 9223372036854775807. نقش system/tool و کلیدهای اضافی 422 هستند. تاریخچه دادهٔ نامطمئن است و server history ندارد؛ پیام‌ها/بودجه به provider فرستاده می‌شوند، دادهٔ تماس و مختصات کاتالوگ خیر.
+
+طرح مدل فقط action/query/budget_text/question دارد. query از enum حداکثر ۶ عبارت لفظی متن انسان است و host هم عضویت را می‌سنجد؛ ابزار آزاد و فیلد محصول/قیمت/شناسه مجاز نیست. budget_text نقل‌قول انسانی است؛ عبارت صریح یکتای سقف هم مستقیم parse می‌شود. مبلغ با Decimal/integer و تومان، نه حساب مدل، تعیین می‌شود؛ ریال/ابهام نیازمند سؤال است. سؤال‌های فارسی host از product_kind/budget/priority/specific_model ساخته می‌شوند.
+
+پاسخ: request_id، status=needs_input/results/no_evidence، query، max_price_toman، question، products و model. needs_input سؤال و products=null دارد؛ results/no_evidence یک ProductPage واقعی با provenance و question=null دارند. query/بودجهٔ نهایی برای صفحه‌بندی بعدی همان endpoint قطعی products استفاده می‌شوند؛ هیچ فراخوان مدل برای صفحهٔ بعد لازم نیست. هر دو endpoint no-store هستند.
+
+خطاها: 422 ورودی بد؛ 409 duplicate_request؛ 429 attempt_limit/busy؛ 503 disabled/missing_key/invalid_config/usage_unavailable/provider_auth/provider_rate_limit/provider_failed؛ 502 invalid_output/incomplete_output/provider_model_mismatch؛ 504 provider_timeout. خطای DB همان catalogue_unavailable است؛ هرگز no_evidence نیست. قطع client کار را لغو می‌کند؛ attempt رزروشده مصرف‌شده/احتمال هزینه باقی می‌ماند. client retry صریح درخواست جدید است؛ retry خودکار وجود ندارد.
+
+مدل پیش‌فرض gpt-5-mini با low reasoning و حداکثر ۱۲۰۰ completion token، یک call و ۳۰ ثانیه برای مدل، پاسخ شبکه ۶۴KiB؛ query/data هم حدهای قبلی repository را دارند. ledger رزرو تراکنشی، UUID و یک تلاش فعال دارد؛ cap کلی با restart/reset گفتگو تغییر نمی‌کند. اگر مصرف/مدل در پاسخ گزارش نشود، نامعلوم باقی است و صفر/تأییدشده فرض نمی‌شود. مدل متفاوت پذیرفته نمی‌شود. هیچ نرخ رسمی یا سقف دلاری دقیق از cap تعداد قابل نتیجه‌گیری نیست.
+
 ## خطا و بازیابی
 
 - 200 با items خالی: مدرکی مطابق query/filter در این صفحه نیست.

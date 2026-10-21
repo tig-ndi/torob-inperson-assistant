@@ -20,6 +20,7 @@ import {
 import type { OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
+import { Assistant } from './Assistant';
 import './style.css';
 
 type SearchState =
@@ -633,6 +634,8 @@ function App() {
   const budgetInputRef = useRef<HTMLInputElement | null>(null);
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
+  const interactionVersion = useRef(0);
+  const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -699,6 +702,8 @@ function App() {
     }
 
     setValidation('');
+    interactionVersion.current++;
+    setAssistantCancelVersion(version => version + 1);
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
@@ -894,6 +899,34 @@ function App() {
             </div>
           )}
         </section>
+
+        <Assistant budget={budgetInput ? normalizeBudget(budgetInput) : null} cancelVersion={assistantCancelVersion}
+          onStart={() => {
+            const budget = budgetInput ? normalizeBudget(budgetInput) : null;
+            const check = budget === null ? { valid: true } : validateBudget(budget);
+            if (!check.valid) {
+              setValidation('error' in check ? check.error || 'بودجهٔ واردشده نامعتبر است.' : 'بودجهٔ واردشده نامعتبر است.');
+              return null;
+            }
+            setActiveBudget(budget);
+            setValidation('');
+            activeSearch.current?.abort();
+            setState({ kind: 'idle' });
+            return ++interactionVersion.current;
+          }}
+          onResults={(page, query, budget, version) => {
+            if (version !== interactionVersion.current) return;
+            setInput(query);
+            setActiveBudget(budget);
+            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            setValidation('');
+            setState({ kind: 'success', query, offset: 0, budget, page });
+          }}
+          onBudget={(budget, version) => {
+            if (version !== interactionVersion.current) return;
+            setActiveBudget(budget);
+            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+          }} />
 
         {comparisonWarning && (
           <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">

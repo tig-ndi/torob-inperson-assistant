@@ -102,6 +102,41 @@ export type ProductPage = {
   has_more: boolean;
 };
 
+export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
+export type AssistantResult = {
+  status: 'needs_input' | 'results' | 'no_evidence';
+  query: string | null;
+  max_price_toman: string | null;
+  question: string | null;
+  products: ProductPage | null;
+};
+
+export async function fetchAssistantStatus(signal: AbortSignal): Promise<{ ready: boolean; reason: string; remaining_calls: number }> {
+  const response = await fetch('/api/assistant/status', { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error('دستیار در دسترس نیست.');
+  const body: unknown = await response.json();
+  const status = record(body);
+  if (typeof status.ready !== 'boolean' || typeof status.reason !== 'string') throw new Error('وضعیت دستیار معتبر نیست.');
+  return { ready: status.ready, reason: status.reason, remaining_calls: count(status.remaining_calls) };
+}
+
+export function parseAssistantResult(value: unknown, requestId: string): AssistantResult {
+  const result = record(value);
+  if (result.request_id !== requestId || (result.status !== 'needs_input' && result.status !== 'results' && result.status !== 'no_evidence')) {
+    throw new Error('پاسخ دستیار به این درخواست معتبر نیست.');
+  }
+  const query = nullableText(result.query);
+  const question = nullableText(result.question);
+  const budget = money(result.max_price_toman);
+  if (budget !== null && BigInt(budget) > 9223372036854775807n) throw new Error('بودجهٔ دستیار معتبر نیست.');
+  const products = result.products === null ? null : parsePage(result.products);
+  if ((result.status === 'needs_input' && (!question || products !== null)) ||
+      (result.status !== 'needs_input' && (!query || question !== null || products === null)) ||
+      (result.status === 'results' && products?.items.length === 0) ||
+      (result.status === 'no_evidence' && products?.items.length !== 0)) throw new Error('ساختار پاسخ دستیار معتبر نیست.');
+  return { status: result.status, query, max_price_toman: budget, question, products };
+}
+
 export type OfferPage = {
   items: Offer[];
   has_more: boolean;

@@ -1,7 +1,9 @@
 """Run locally: python -m uvicorn apps.api.main:app --no-access-log."""
 
+import asyncio
 import math
 import os
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable
@@ -11,7 +13,10 @@ from fastapi.exceptions import ResponseValidationError
 from fastapi.responses import JSONResponse
 
 from apps.api.catalogue import Catalogue, CatalogueUnavailable, InvalidQuery
-from apps.api.models import OfferPage, ProductDetail, ProductPage
+from apps.api.models import OfferPage, ProductDetail, ProductPage, AssistantResult, AssistantStatus
+from apps.api.assistant import AssistantService
+from apps.api.agent_usage import AgentError
+from apps.api.intent import AssistantRequest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,10 +34,47 @@ def parse_budget(value: str | None) -> int | None:
     return price
 
 
-def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | None = None) -> FastAPI:
+def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | None = None,
+               assistant: AssistantService | None = None) -> FastAPI:
     catalogue = Catalogue(database if database is not None else Path(
         os.environ.get("TOROB_DATABASE", str(ROOT / ".local/catalogue.sqlite3"))))
     application = FastAPI(title="Torob local historical catalogue", version="0.1.0")
+    agent = assistant if assistant is not None else AssistantService.from_root(catalogue, ROOT)
+
+    @application.exception_handler(AgentError)
+    async def agent_error(request: Request, exc: AgentError):
+        return JSONResponse(status_code=exc.status, content={'code': exc.code,
+            'detail': 'دستیار نتوانست این درخواست را کامل کند؛ جست‌وجوی مستقیم همچنان در دسترس است.'})
+
+    @application.get('/api/assistant/status', response_model=AssistantStatus)
+    def assistant_status(response: Response):
+        response.headers['Cache-Control'] = 'no-store'
+        try:
+            return agent.status()
+        except (OSError, sqlite3.Error) as exc:
+            raise AgentError('usage_unavailable') from exc
+
+    @application.post('/api/assistant/turn', response_model=AssistantResult)
+    async def assistant_turn(body: AssistantRequest, request: Request, response: Response):
+        response.headers['Cache-Control'] = 'no-store'
+        # No server-side conversation store: bounded history is request-scoped.
+        task = asyncio.create_task(agent.run(body))
+        try:
+            while not task.done():
+                if await request.is_disconnected():
+                    task.cancel()
+                    raise AgentError('cancelled', 499)
+                await asyncio.wait({task}, timeout=0.1)
+            return await task
+        except (OSError, sqlite3.Error) as exc:
+            raise AgentError('usage_unavailable') from exc
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     @application.exception_handler(CatalogueUnavailable)
     @application.exception_handler(ResponseValidationError)

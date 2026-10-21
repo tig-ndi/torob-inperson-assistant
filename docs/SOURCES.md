@@ -21,4 +21,12 @@
 - [Vite](https://vite.dev/guide/) و [FastAPI StaticFiles](https://fastapi.tiangolo.com/tutorial/static-files/): پشتیبانی از پیشنهاد SPA و سرو API/static؛ هیچ ادعای نصب/build محصول از این منابع نتیجه نمی‌شود.
 - [actions/checkout](https://github.com/actions/checkout) و [actions/setup-python](https://github.com/actions/setup-python): نسخهٔ v7 در نمونهٔ رسمی فعلی برای workflow پایه انتخاب شد. workflow پس از push کاربر باید در GitHub اجرا و نتیجه‌اش بررسی شود.
 
-منابع عمومی فقط برای رفتار ابزار استفاده شدند؛ وزن‌ها، شماره‌های جعلی و قواعد مسابقه از منابع ارسالی آمده‌اند. قیمت API، موجودبودن سرویس یا شرایط میزبان هنوز بررسی/تعیین نشده است.
+منابع عمومی فقط برای رفتار ابزار استفاده شدند؛ وزن‌ها، شماره‌های جعلی و قواعد مسابقه از منابع ارسالی آمده‌اند. تعرفهٔ قطعی API و شرایط میزبان هنوز تعیین نشده‌اند؛ سازگاری زندهٔ محدود BoxAPI و cost گزارش‌شدهٔ چند پاسخ در بخش جدید زیر ثبت است.
+
+## BoxAPI و پروتکل مدل — ۲۰۲۶-۱۰-۲۲
+
+کاربر متن/تصویر مسابقه با اعتبار ۳ دلار، آدرس /ai/v1، chat/completions و embeddings و مدل‌های مجاز شامل gpt-5-mini ارائه کرد؛ خودش اعتبار را فعال و کلید را محلی تنظیم کرد. قیمت دقیق پنل برای او نمایش داده نمی‌شود؛ قوانین مدل/اعتبار از نسخهٔ ارسالی‌اند، نه حدس از فهرست عمومی provider.
+
+[مستند اصلی BoxAPI](https://boxapi.ir/docs/ai/) با آدرس مسابقه هم‌خوان بود؛ [صفحهٔ text-to-text](https://boxapi.ir/docs/ai/text-to-text/) آدرس متفاوت /api/v1 دارد. مبنا /ai/v1 ارسالی و سازگاری عملی آن با پنج درخواست بود؛ endpoint خودکار عوض نشد. فیلد cost و usage از پاسخ‌های واقعی ثبت شدند، نه برآورد قیمت عمومی OpenAI؛ صورتحساب پنل مستقل بررسی نشده است.
+
+[مدل gpt-5-mini در OpenAI](https://developers.openai.com/api/docs/models/gpt-5-mini) و [قرارداد Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) برای schema، finish_reason، completion limit و reasoning بررسی شدند. پشتیبانی gateway فقط با اجرای BoxAPI سنجیده می‌شود؛ تعرفه/ظرفیت رسمی OpenAI به BoxAPI تعمیم داده نشد.

@@ -89,7 +89,7 @@ test('synthetic delayed response cannot replace a newer search; loading is visib
   });
   await page.goto('/');
   await search(page, 'قدیمی');
-  await expect(page.getByRole('status')).toContainText('در حال جست‌وجوی کاتالوگ');
+  await expect(page.getByRole('region', { name: 'نتایج برای «قدیمی»' }).getByRole('status')).toContainText('در حال جست‌وجوی کاتالوگ');
   await search(page, 'جدید');
   await expect(page.getByRole('article')).toContainText('نتیجهٔ جدید');
   await page.waitForTimeout(600); // Deliberately wait past the obsolete response.
