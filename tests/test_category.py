@@ -1,0 +1,122 @@
+import unittest
+
+from apps.api.category import (
+    detect_category_intent,
+    CAT_MOBILE_PHONE,
+    CAT_LAPTOP,
+    CAT_HEADPHONE,
+    CAT_SMARTWATCH,
+    CAT_TABLET,
+    CAT_TV,
+    CAT_STETHOSCOPE,
+    CAT_PHONE_CASE,
+    CAT_PHONE_CHARGER,
+    CAT_PHONE_BATTERY,
+    CAT_PHONE_SCREEN_PROTECTOR,
+    CAT_PHONE_TABLET_HOLDER,
+    CAT_LAPTOP_CASE,
+    CAT_LAPTOP_CHARGER,
+    CAT_LAPTOP_BATTERY,
+    CAT_SMARTWATCH_CHARGER,
+    CAT_TV_STAND,
+    CAT_TV_TABLE,
+)
+
+
+class TestCategoryDetector(unittest.TestCase):
+    def test_base_devices(self):
+        self.assertEqual(detect_category_intent("گوشی"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("موبایل"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("گوشی سامسونگ A54"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("گوشی شیائومی نوت ۱۳"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("لپ تاپ"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپتاپ"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("نوت بوک"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپ تاپ ایسوس ویووبوک"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("هدفون"), CAT_HEADPHONE)
+        self.assertEqual(detect_category_intent("هدست گیمینگ"), CAT_HEADPHONE)
+        self.assertEqual(detect_category_intent("هندزفری بی سیم"), CAT_HEADPHONE)
+        self.assertEqual(detect_category_intent("ایرپاد پرو"), CAT_HEADPHONE)
+        self.assertEqual(detect_category_intent("ساعت هوشمند"), CAT_SMARTWATCH)
+        self.assertEqual(detect_category_intent("مچ بند هوشمند"), CAT_SMARTWATCH)
+        self.assertEqual(detect_category_intent("اسمارت واچ سامسونگ"), CAT_SMARTWATCH)
+        self.assertEqual(detect_category_intent("تبلت"), CAT_TABLET)
+        self.assertEqual(detect_category_intent("تبلت سامسونگ"), CAT_TABLET)
+        self.assertEqual(detect_category_intent("تلویزیون"), CAT_TV)
+        self.assertEqual(detect_category_intent("تلویزیون ۵۵ اینچ"), CAT_TV)
+
+    def test_medical_phone_not_mobile(self):
+        self.assertEqual(detect_category_intent("گوشی پزشکی"), CAT_STETHOSCOPE)
+        self.assertEqual(detect_category_intent("گوشی های پزشکی لیتمن"), CAT_STETHOSCOPE)
+
+    def test_device_with_features_is_device(self):
+        # Device is head noun; features/uses are modifiers
+        self.assertEqual(detect_category_intent("گوشی با باتری قوی"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("گوشی با رم ۸ گیگابایت"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("گوشی سامسونگ با باتری ۵۰۰۰"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("گوشی برای عکاسی"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("لپ تاپ با رم ۱۶"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپ تاپ برای برنامه نویسی"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپ تاپ برای بازی"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپ تاپ با شارژر فابریک"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("لپ تاپ ایسوس برای گیمینگ"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("ساعت هوشمند با قابلیت مکالمه"), CAT_SMARTWATCH)
+        self.assertEqual(detect_category_intent("گوشی برای بازی تا ۱۰ میلیون"), CAT_MOBILE_PHONE)
+
+    def test_accessories_as_head_noun_not_device(self):
+        # Accessory is head noun, NOT device
+        self.assertEqual(detect_category_intent("کاور گوشی"), CAT_PHONE_CASE)
+        self.assertEqual(detect_category_intent("قاب گوشی"), CAT_PHONE_CASE)
+        self.assertEqual(detect_category_intent("گارد گوشی سامسونگ"), CAT_PHONE_CASE)
+        self.assertEqual(detect_category_intent("کیف گوشی"), CAT_PHONE_CASE)
+        self.assertEqual(detect_category_intent("شارژر گوشی"), CAT_PHONE_CHARGER)
+        self.assertEqual(detect_category_intent("شارژر برای گوشی"), CAT_PHONE_CHARGER)
+        self.assertEqual(detect_category_intent("آداپتور موبایل"), CAT_PHONE_CHARGER)
+        self.assertEqual(detect_category_intent("باتری گوشی"), CAT_PHONE_BATTERY)
+        self.assertEqual(detect_category_intent("باطری موبایل"), CAT_PHONE_BATTERY)
+        self.assertEqual(detect_category_intent("گلس گوشی"), CAT_PHONE_SCREEN_PROTECTOR)
+        self.assertEqual(detect_category_intent("محافظ صفحه گوشی"), CAT_PHONE_SCREEN_PROTECTOR)
+        self.assertEqual(detect_category_intent("پایه نگهدارنده گوشی"), CAT_PHONE_TABLET_HOLDER)
+        self.assertEqual(detect_category_intent("هولدر گوشی"), CAT_PHONE_TABLET_HOLDER)
+
+        # Laptop accessories
+        self.assertEqual(detect_category_intent("شارژر لپ تاپ"), CAT_LAPTOP_CHARGER)
+        self.assertEqual(detect_category_intent("شارژر برای لپ تاپ"), CAT_LAPTOP_CHARGER)
+        self.assertEqual(detect_category_intent("کیف لپ تاپ"), CAT_LAPTOP_CASE)
+        self.assertEqual(detect_category_intent("کاور لپ تاپ"), CAT_LAPTOP_CASE)
+        self.assertEqual(detect_category_intent("کوله لپ تاپ"), CAT_LAPTOP_CASE)
+        self.assertEqual(detect_category_intent("باتری لپ تاپ"), CAT_LAPTOP_BATTERY)
+
+        # Smartwatch accessory
+        self.assertEqual(detect_category_intent("شارژر ساعت هوشمند"), CAT_SMARTWATCH_CHARGER)
+
+        # TV accessories
+        self.assertEqual(detect_category_intent("پایه تلویزیون"), CAT_TV_STAND)
+        self.assertEqual(detect_category_intent("میز تلویزیون"), CAT_TV_TABLE)
+
+    def test_unsupported_or_generic_accessory_not_mapped_to_device(self):
+        # Even if not mapped to a specific category, it must NEVER be mapped to the base device!
+        self.assertIsNone(detect_category_intent("پایه عکاسی برای گوشی"))
+        self.assertIsNone(detect_category_intent("سنسور گوشی"))
+        self.assertIsNone(detect_category_intent("لوازم جانبی گوشی"))
+
+    def test_ambiguous_queries(self):
+        # Ambiguous single words without device or category
+        self.assertIsNone(detect_category_intent("شارژر"))
+        self.assertIsNone(detect_category_intent("باتری"))
+        self.assertIsNone(detect_category_intent("کاور"))
+        self.assertIsNone(detect_category_intent("ساعت"))  # without هوشمند could be anything
+        self.assertIsNone(detect_category_intent("گوشی و لپ تاپ"))  # conflicting devices
+        self.assertIsNone(detect_category_intent("کفش ورزشی"))  # out of scope
+        self.assertIsNone(detect_category_intent(""))
+        self.assertIsNone(detect_category_intent("   "))
+
+    def test_exact_categories(self):
+        self.assertEqual(detect_category_intent("گوشی موبایل"), CAT_MOBILE_PHONE)
+        self.assertEqual(detect_category_intent("لپ تاپ و نوت بوک"), CAT_LAPTOP)
+        self.assertEqual(detect_category_intent("هدفون، هدست و هندزفری"), CAT_HEADPHONE)
+        self.assertEqual(detect_category_intent("ساعت و مچ بند هوشمند"), CAT_SMARTWATCH)
+
+
+if __name__ == "__main__":
+    unittest.main()

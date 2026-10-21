@@ -5,11 +5,13 @@ import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type
 type Props = {
   budget: string | null;
   contextQuery: string | null;
-  onContext: (query: string | null, version?: number) => void;
+  contextCategory?: string | null;
+  categoryCleared?: boolean;
+  onContext: (query: string | null, category?: string | null, version?: number) => void;
   cancelVersion: number;
   onStart: () => number | null;
   onBudget: (budget: string | null, version: number) => void;
-  onResults: (page: ProductPage, query: string, budget: string | null, version: number) => void;
+  onResults: (page: ProductPage, query: string, budget: string | null, version: number, category: string | null) => void;
 };
 const numbers = new Intl.NumberFormat('fa-IR');
 const failures: Record<string, string> = {
@@ -22,7 +24,7 @@ const failures: Record<string, string> = {
   invalid_output: 'برداشت دستیار قابل استفاده نبود؛ اطلاعات حدسی نمایش داده نشد.',
 };
 
-export function Assistant({ budget, contextQuery, onContext, cancelVersion, onStart, onBudget, onResults }: Props) {
+export function Assistant({ budget, contextQuery, contextCategory = null, categoryCleared = false, onContext, cancelVersion, onStart, onBudget, onResults }: Props) {
   const [status, setStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [remaining, setRemaining] = useState(0);
   const [unavailableReason, setUnavailableReason] = useState('');
@@ -91,9 +93,20 @@ export function Assistant({ budget, contextQuery, onContext, cancelVersion, onSt
     setError('');
     setNotice('');
     try {
-      const response = await fetch('/api/assistant/turn', { method: 'POST', signal: controller.signal, cache: 'no-store',
+      const response = await fetch('/api/assistant/turn', {
+        method: 'POST',
+        signal: controller.signal,
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, messages, max_price_toman: budget, context_query: contextQuery }) });
+        body: JSON.stringify({
+          request_id: requestId,
+          messages,
+          max_price_toman: budget,
+          context_query: contextQuery,
+          context_category: contextCategory,
+          category_cleared: categoryCleared,
+        }),
+      });
       const body: unknown = await response.json();
       if (!response.ok) {
         const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string' ? body.code : '';
@@ -104,14 +117,14 @@ export function Assistant({ budget, contextQuery, onContext, cancelVersion, onSt
       setInput('');
       if (result.status === 'needs_input' && result.question) {
         onBudget(result.max_price_toman, version);
-        if (result.query) onContext(result.query, version);
+        if (result.query) onContext(result.query, result.category_name ?? contextCategory, version);
         setHistory([...messages, { role: 'assistant', content: result.question }]);
       } else if (result.products && result.query) {
         const summary = result.status === 'no_evidence'
           ? `برای «${result.query}» با بودجهٔ انتخابی نتیجه‌ای ثبت نشده؛ عبارت یا بودجه را تغییر دهید.`
           : `نتایج کاتالوگ برای «${result.query}» در ادامه آمده‌اند. برای بررسی تناسب با کاربردتان، مشخصات کالاها را مقایسه کنید.`;
         setHistory([...messages, { role: 'assistant', content: summary }]);
-        onResults(result.products, result.query, result.max_price_toman, version);
+        onResults(result.products, result.query, result.max_price_toman, version, result.category_name ?? null);
       }
     } catch (failure: unknown) {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'دریافت پاسخ دستیار ناموفق بود.');
@@ -132,7 +145,11 @@ export function Assistant({ budget, contextQuery, onContext, cancelVersion, onSt
   return <section className="assistant-panel" aria-labelledby="assistant-title">
     <h2 id="assistant-title">برای انتخاب کالا کمک می‌خواهید؟</h2>
     <p className="caption">نیازتان را بنویسید؛ اگر اطلاعات کافی نباشد سؤال می‌پرسیم. نتیجه‌ها از کاتالوگ ثبت‌شده می‌آیند و موجودی زنده نیستند.</p>
-    {contextQuery && <p className="assistant-notice">موضوع فعلی: «{contextQuery}». می‌توانید بودجه را تغییر دهید یا کالای دیگری بخواهید.</p>}
+    {contextQuery && (
+      <p className="assistant-notice">
+        موضوع فعلی: «{contextQuery}»{contextCategory ? ` (دسته: ${contextCategory})` : ''}. می‌توانید بودجه را تغییر دهید یا کالای دیگری بخواهید.
+      </p>
+    )}
     {history.length > 0 && <ol className="assistant-history" aria-label="گفت‌وگوی انتخاب کالا" aria-live="polite">
       {history.map((message, index) => <li key={index} className={`message-${message.role}`}>
         <strong>{message.role === 'user' ? 'شما: ' : 'دستیار: '}</strong>{message.content}
@@ -147,7 +164,7 @@ export function Assistant({ budget, contextQuery, onContext, cancelVersion, onSt
         <button type="submit" disabled={pending || status !== 'ready' || !input.trim()}>بررسی نیاز</button>
         {pending && <button type="button" className="secondary" onClick={cancel}>لغو درخواست</button>}
         {(history.length > 0 || contextQuery !== null) && !pending && <button type="button" className="secondary" onClick={() => {
-          setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null);
+          setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null, null);
         }}>گفت‌وگوی تازه</button>}
       </div>
     </form>

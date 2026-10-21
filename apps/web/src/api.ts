@@ -100,12 +100,14 @@ export type Offer = {
 export type ProductPage = {
   items: Product[];
   has_more: boolean;
+  category_name?: string | null;
 };
 
 export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
 export type AssistantResult = {
   status: 'needs_input' | 'results' | 'no_evidence';
   query: string | null;
+  category_name?: string | null;
   max_price_toman: string | null;
   question: string | null;
   products: ProductPage | null;
@@ -126,6 +128,7 @@ export function parseAssistantResult(value: unknown, requestId: string): Assista
     throw new Error('پاسخ دستیار به این درخواست معتبر نیست.');
   }
   const query = nullableText(result.query);
+  const category_name = nullableText(result.category_name);
   const question = nullableText(result.question);
   const budget = money(result.max_price_toman);
   if (budget !== null && BigInt(budget) > 9223372036854775807n) throw new Error('بودجهٔ دستیار معتبر نیست.');
@@ -134,7 +137,7 @@ export function parseAssistantResult(value: unknown, requestId: string): Assista
       (result.status !== 'needs_input' && (!query || question !== null || products === null)) ||
       (result.status === 'results' && products?.items.length === 0) ||
       (result.status === 'no_evidence' && products?.items.length !== 0)) throw new Error('ساختار پاسخ دستیار معتبر نیست.');
-  return { status: result.status, query, max_price_toman: budget, question, products };
+  return { status: result.status, query, category_name, max_price_toman: budget, question, products };
 }
 
 export type OfferPage = {
@@ -224,7 +227,8 @@ export function parsePage(value: unknown): ProductPage {
     throw new Error('قرارداد پاسخ کاتالوگ معتبر نیست.');
   }
   const items = page.items.map(parseProduct);
-  return { items, has_more: page.has_more };
+  const category_name = nullableText(page.category_name);
+  return { items, has_more: page.has_more, category_name };
 }
 
 export function parseProductDetail(value: unknown): ProductDetail {
@@ -358,11 +362,18 @@ export async function searchProducts(
   query: string,
   offset: number,
   maxPrice: string | null,
-  signal: AbortSignal
+  signal: AbortSignal,
+  categoryName?: string | null,
+  categoryCleared?: boolean
 ): Promise<ProductPage> {
   const params = new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) });
   if (maxPrice) {
     params.set('max_price_toman', maxPrice);
+  }
+  if (categoryCleared) {
+    params.set('category_cleared', 'true');
+  } else if (categoryName) {
+    params.set('category_name', categoryName);
   }
   let response: Response;
   try {

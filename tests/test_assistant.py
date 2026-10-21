@@ -198,8 +198,9 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         result = response.json()
         self.assertEqual((result['query'], result['max_price_toman'], result['status']), ('گوشی', '8000000', 'results'))
-        expected = self.service.catalogue.search('گوشی', 12, 0, 8000000)
+        expected = self.service.catalogue.search('گوشی', 12, 0, 8000000, category_name='گوشی موبایل')
         self.assertEqual(result['products'], expected)
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
         wire = json.loads(self.calls[0].content)
         context = json.loads(wire['messages'][1]['content'])
         self.assertEqual(context['context_query'], 'گوشی')
@@ -224,6 +225,28 @@ class AssistantApiTests(unittest.TestCase):
         result = self.post(request).json()
         self.assertEqual((result['query'], result['max_price_toman']), ('کفش کتانی', '10000000'))
         self.assertEqual(result['products'], self.service.catalogue.search('کفش کتانی', 12, 0, 10000000))
+
+    def test_assistant_category_preservation_and_updates(self):
+        # 1. Budget followup preserves context_category
+        self.response = completion(proposal(query='گوشی'))
+        req1 = body('بودجه را هشت میلیون کن', context_query='گوشی', context_category='گوشی موبایل', max_price_toman='15000000')
+        res1 = self.post(req1).json()
+        self.assertEqual(res1['category_name'], 'گوشی موبایل')
+        self.assertEqual(res1['products']['category_name'], 'گوشی موبایل')
+
+        # 2. When category is explicitly cleared and budget changes, category remains None
+        self.response = completion(proposal(query='گوشی'))
+        req2 = body('بودجه را پنج میلیون کن', context_query='گوشی', category_cleared=True, max_price_toman='8000000')
+        res2 = self.post(req2).json()
+        self.assertIsNone(res2['category_name'])
+        self.assertIsNone(res2['products']['category_name'])
+
+        # 3. Product change introduces new category even if previously cleared
+        self.response = completion(proposal(query='هدفون'))
+        req3 = body('هدفون بی سیم می‌خواهم', context_query='گوشی', category_cleared=True)
+        res3 = self.post(req3).json()
+        self.assertEqual(res3['category_name'], 'هدفون، هدست و هندزفری')
+        self.assertEqual(res3['products']['category_name'], 'هدفون، هدست و هندزفری')
 
     def test_missing_kind_question_never_establishes_a_topic_from_lexical_filler(self):
         self.response = completion(proposal(action='clarify', query='راهنمایی', question='product_kind'))

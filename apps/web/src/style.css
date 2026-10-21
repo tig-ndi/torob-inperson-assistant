@@ -227,7 +227,8 @@ h3 {
   min-height: 36px;
 }
 
-.active-filter-badge {
+.active-filter-badge,
+.active-category-badge {
   display: inline-flex;
   align-items: center;
   gap: 10px;

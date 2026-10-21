@@ -32,9 +32,11 @@ class CatalogueApiTests(unittest.TestCase):
                 {"shop_id": "shop_category_only", "category_names": '["گوشی"]'},
             ],
             "products": [
-                {"product_id": "product_one", "persian_title": "گوشي مدل ۱۲", "specs": "[]", "image_urls": "[]"},
-                {"product_id": "product_two", "persian_title": "گوشی دوم", "specs": "[]", "image_urls": "[]"},
-                {"product_id": "no_offer", "persian_title": "گوشی بی آفر"},
+                {"product_id": "product_one", "persian_title": "گوشي مدل ۱۲", "category_name": "گوشی موبایل", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "product_two", "persian_title": "گوشی دوم", "category_name": "گوشی موبایل", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "no_offer", "persian_title": "گوشی بی آفر", "category_name": "گوشی موبایل"},
+                {"product_id": "product_case", "persian_title": "کاور گوشی سیلیکونی", "category_name": "کیف و کاور گوشی", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "product_steth", "persian_title": "گوشی پزشکی لیتمن", "category_name": "گوشی پزشکی", "specs": "[]", "image_urls": "[]"},
             ],
             "offers": [
                 {"offer_id": "offer_a", "product_id": "product_one", "shop_id": "shop_one", "price_toman": "120000",
@@ -48,6 +50,8 @@ class CatalogueApiTests(unittest.TestCase):
                 {"offer_id": "offer_far", "product_id": "product_two", "shop_id": "shop_far", "price_toman": "180000"},
                 {"offer_id": "offer_no_coord", "product_id": "product_two", "shop_id": "shop_null_coord", "price_toman": "190000"},
                 {"offer_id": "other_product", "product_id": "product_two", "shop_id": "shop_one", "price_toman": "2"},
+                {"offer_id": "offer_case", "product_id": "product_case", "shop_id": "shop_one", "price_toman": "50000"},
+                {"offer_id": "offer_steth", "product_id": "product_steth", "shop_id": "shop_one", "price_toman": "5000000"},
             ],
         }
         for table, schema in SCHEMAS.items():
@@ -73,6 +77,45 @@ class CatalogueApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["items"], [])
         self.assertEqual(self.client.get("/api/products/product_one").status_code, 200)
+
+    def test_category_filter_autodetect_explicit_and_cleared(self):
+        # 1. Auto-detected category for base device
+        response = self.client.get("/api/products", params={"q": "گوشی"})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["category_name"], "گوشی موبایل")
+        ids = [p["product_id"] for p in body["items"]]
+        self.assertIn("product_one", ids)
+        self.assertIn("product_two", ids)
+        self.assertNotIn("product_case", ids)
+        self.assertNotIn("product_steth", ids)
+
+        # 2. Explicitly cleared category returns all matches regardless of category
+        response = self.client.get("/api/products", params={"q": "گوشی", "category_cleared": "true"})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIsNone(body["category_name"])
+        ids = [p["product_id"] for p in body["items"]]
+        self.assertIn("product_one", ids)
+        self.assertIn("product_two", ids)
+        self.assertIn("product_case", ids)
+        self.assertIn("product_steth", ids)
+
+        # 3. Explicit category override
+        response = self.client.get("/api/products", params={"q": "گوشی", "category_name": "گوشی پزشکی"})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["category_name"], "گوشی پزشکی")
+        ids = [p["product_id"] for p in body["items"]]
+        self.assertEqual(ids, ["product_steth"])
+
+        # 4. Auto-detected accessory category
+        response = self.client.get("/api/products", params={"q": "کاور گوشی"})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["category_name"], "کیف و کاور گوشی")
+        ids = [p["product_id"] for p in body["items"]]
+        self.assertEqual(ids, ["product_case"])
 
     def test_offers_preserve_ids_null_large_money_timestamp_and_warranty(self):
         response = self.client.get("/api/products/product_one/offers")

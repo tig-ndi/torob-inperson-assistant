@@ -32,6 +32,8 @@ class AssistantRequest(StrictModel):
     messages: list[Message] = Field(min_length=1, max_length=5)
     max_price_toman: str | None = Field(default=None, pattern=r"^[0-9]{1,19}$")
     context_query: str | None = Field(default=None, min_length=1, max_length=120)
+    context_category: str | None = Field(default=None, min_length=1, max_length=120)
+    category_cleared: bool = False
 
     @model_validator(mode="after")
     def bounded_history(self):

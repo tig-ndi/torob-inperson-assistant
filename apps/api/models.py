@@ -48,6 +48,7 @@ class ProductPage(Model):
     has_more: bool
     limit: int
     offset: int
+    category_name: str | None = None
     provenance: Provenance
 
 
@@ -68,6 +69,7 @@ class AssistantResult(Model):
     request_id: str
     status: Literal['needs_input', 'results', 'no_evidence']
     query: str | None
+    category_name: str | None = None
     max_price_toman: str | None
     question: str | None
     products: ProductPage | None

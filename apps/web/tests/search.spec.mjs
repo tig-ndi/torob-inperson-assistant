@@ -96,3 +96,34 @@ test('synthetic delayed response cannot replace a newer search; loading is visib
   await expect(page.getByRole('article')).toContainText('نتیجهٔ جدید');
   await expect(page.getByText('نتیجهٔ قدیمی', { exact: true })).toHaveCount(0);
 });
+
+test('category filter is auto-detected, preserved across pagination and budget, and can be manually cleared', async ({ page }) => {
+  await page.goto('/');
+  await search(page, 'گوشی');
+  const catBadge = page.locator('.active-category-badge').getByText('دسته: گوشی موبایل');
+  await expect(catBadge).toBeVisible();
+
+  // Assistant context notice also reflects category
+  await expect(page.locator('.assistant-notice')).toContainText('(دسته: گوشی موبایل)');
+
+  // Pagination preserves category
+  await page.getByRole('button', { name: 'صفحهٔ بعد', exact: true }).click();
+  await expect(page.getByText('صفحهٔ ۲', { exact: true })).toBeVisible();
+  await expect(catBadge).toBeVisible();
+
+  // Budget change preserves category
+  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۵۰٬۰۰۰٬۰۰۰');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.getByText('سقف بودجهٔ فعال:')).toBeVisible();
+  await expect(catBadge).toBeVisible();
+
+  // Clear category filter
+  await page.getByRole('button', { name: 'حذف فیلتر دسته', exact: true }).click();
+  await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+  await expect(catBadge).toHaveCount(0);
+
+  // Pagination after clearing category stays unfiltered
+  await page.getByRole('button', { name: 'صفحهٔ بعد', exact: true }).click();
+  await expect(page.getByText('صفحهٔ ۲', { exact: true })).toBeVisible();
+  await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+});

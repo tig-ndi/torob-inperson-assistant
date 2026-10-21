@@ -13,6 +13,7 @@ from fastapi.exceptions import ResponseValidationError
 from fastapi.responses import JSONResponse
 
 from apps.api.catalogue import Catalogue, CatalogueUnavailable, InvalidQuery
+from apps.api.category import detect_category_intent
 from apps.api.models import OfferPage, ProductDetail, ProductPage, AssistantResult, AssistantStatus
 from apps.api.assistant import AssistantService
 from apps.api.agent_usage import AgentError
@@ -84,9 +85,15 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
 
     @application.get("/api/products", response_model=ProductPage)
     def search(q: Annotated[str, Query(min_length=1, max_length=120)], limit: Limit = 20,
-               offset: Offset = 0, max_price_toman: Budget = None):
+               offset: Offset = 0, max_price_toman: Budget = None,
+               category_name: Annotated[str | None, Query(max_length=120)] = None,
+               category_cleared: Annotated[bool, Query()] = False):
         try:
-            return catalogue.search(q, limit, offset, parse_budget(max_price_toman))
+            effective_category = None
+            if not category_cleared:
+                effective_category = category_name if category_name else detect_category_intent(q)
+            return catalogue.search(q, limit, offset, parse_budget(max_price_toman),
+                                    category_name=effective_category)
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc
 

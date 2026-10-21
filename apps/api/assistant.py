@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from apps.api.agent_usage import AgentError, UsageLedger, reported_cost
 from apps.api.catalogue import Catalogue
+from apps.api.category import detect_category_intent
 from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, proposed_budget, query_choices
 
 
@@ -183,11 +184,37 @@ class AssistantService:
                 # Lexical filler in an ambiguous request must not become the current topic.
                 plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
             page = None
+            effective_category = None
             if plan.action == 'search':
-                page = await asyncio.to_thread(self.catalogue.search, plan.query, 12, 0, int(budget) if budget is not None else None)
-            result = {'request_id': request.request_id, 'status': 'needs_input' if plan.action == 'clarify' else 'results' if page['items'] else 'no_evidence',
-                      'query': plan.query, 'max_price_toman': budget, 'question': QUESTIONS[plan.question] if plan.question else None,
-                      'products': page, 'model': self.settings.model}
+                latest_msg = request.messages[-1].content if request.messages else ''
+                detected_from_latest = detect_category_intent(latest_msg)
+                if detected_from_latest is not None:
+                    effective_category = detected_from_latest
+                elif request.category_cleared:
+                    effective_category = None
+                elif request.context_category is not None:
+                    effective_category = request.context_category
+                elif plan.query:
+                    effective_category = detect_category_intent(plan.query)
+
+                page = await asyncio.to_thread(
+                    self.catalogue.search,
+                    plan.query,
+                    12,
+                    0,
+                    int(budget) if budget is not None else None,
+                    category_name=effective_category,
+                )
+            result = {
+                'request_id': request.request_id,
+                'status': 'needs_input' if plan.action == 'clarify' else 'results' if page['items'] else 'no_evidence',
+                'query': plan.query,
+                'category_name': effective_category,
+                'max_price_toman': budget,
+                'question': QUESTIONS[plan.question] if plan.question else None,
+                'products': page,
+                'model': self.settings.model,
+            }
             self.ledger.finish(request.request_id, 'completed', usage, cost, reported_model=reported_model)
             return result
         except asyncio.CancelledError:

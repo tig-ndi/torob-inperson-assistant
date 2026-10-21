@@ -125,18 +125,21 @@ class Catalogue:
                                   "max_price_toman": str(summary[2]) if summary[2] is not None else None,
                                   "missing_price_count": summary[3] or 0}}
 
-    def search(self, query: str, limit: int, offset: int, max_price: int | None) -> dict:
+    def search(self, query: str, limit: int, offset: int, max_price: int | None,
+               category_name: str | None = None) -> dict:
         expression = search_expression(query)
         with self.connect() as connection:
             provenance = self.provenance(connection)
             rows = connection.execute(
                 "SELECT p.* FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
+                "AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
                 "AND o.price_toman<=?)) ORDER BY product_search.rank,p.product_id LIMIT ? OFFSET ?",
-                (expression, max_price, max_price, limit + 1, offset)).fetchall()
+                (expression, category_name, category_name, max_price, max_price, limit + 1, offset)).fetchall()
             return {"items": [self.product(connection, row) for row in rows[:limit]],
                     "has_more": len(rows) > limit, "limit": limit, "offset": offset,
+                    "category_name": category_name,
                     "provenance": provenance}
 
     def detail(self, product_id: str) -> dict | None:

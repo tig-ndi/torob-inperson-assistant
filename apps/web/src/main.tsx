@@ -25,9 +25,9 @@ import './style.css';
 
 type SearchState =
   | { kind: 'idle' }
-  | { kind: 'loading'; query: string; offset: number; budget: string | null }
-  | { kind: 'success'; query: string; offset: number; budget: string | null; page: ProductPage }
-  | { kind: 'error'; query: string; offset: number; budget: string | null; message: string };
+  | { kind: 'loading'; query: string; offset: number; budget: string | null; categoryName?: string | null; categoryCleared?: boolean }
+  | { kind: 'success'; query: string; offset: number; budget: string | null; page: ProductPage; categoryName: string | null; categoryCleared: boolean }
+  | { kind: 'error'; query: string; offset: number; budget: string | null; message: string; categoryName?: string | null; categoryCleared?: boolean };
 
 type OffersState =
   | { kind: 'idle' }
@@ -637,6 +637,9 @@ function App() {
   const interactionVersion = useRef(0);
   const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
   const [assistantContextQuery, setAssistantContextQuery] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [categoryCleared, setCategoryCleared] = useState(false);
+  const [assistantContextCategory, setAssistantContextCategory] = useState<string | null>(null);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -687,7 +690,13 @@ function App() {
     });
   }
 
-  async function search(query: string, offset = 0, budget: string | null = activeBudget) {
+  async function search(
+    query: string,
+    offset = 0,
+    budget: string | null = activeBudget,
+    categoryName: string | null = activeCategory,
+    isCategoryCleared: boolean = categoryCleared
+  ) {
     const trimmed = query.trim();
     if (!trimmed || trimmed.length > 120) {
       setValidation('نام کالا را بین ۱ تا ۱۲۰ نویسه وارد کنید.');
@@ -709,12 +718,38 @@ function App() {
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
-    setState({ kind: 'loading', query: trimmed, offset, budget });
+    setState({
+      kind: 'loading',
+      query: trimmed,
+      offset,
+      budget,
+      categoryName,
+      categoryCleared: isCategoryCleared,
+    });
     try {
-      const page = await searchProducts(trimmed, offset, budget, controller.signal);
+      const page = await searchProducts(
+        trimmed,
+        offset,
+        budget,
+        controller.signal,
+        categoryName,
+        isCategoryCleared
+      );
       if (!controller.signal.aborted) {
-        setState({ kind: 'success', query: trimmed, offset, budget, page });
+        const resolvedCategory = isCategoryCleared ? null : (page.category_name ?? categoryName);
+        setActiveCategory(resolvedCategory);
+        setCategoryCleared(isCategoryCleared);
+        setState({
+          kind: 'success',
+          query: trimmed,
+          offset,
+          budget,
+          page,
+          categoryName: resolvedCategory,
+          categoryCleared: isCategoryCleared,
+        });
         setAssistantContextQuery(trimmed);
+        setAssistantContextCategory(resolvedCategory);
       }
     } catch (error: unknown) {
       if (!controller.signal.aborted) {
@@ -723,6 +758,8 @@ function App() {
           query: trimmed,
           offset,
           budget,
+          categoryName,
+          categoryCleared: isCategoryCleared,
           message: error instanceof Error ? error.message : 'پاسخ کاتالوگ قابل خواندن نیست. دوباره تلاش کنید.',
         });
       }
@@ -732,6 +769,8 @@ function App() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = normalizeBudget(budgetInput);
+    setActiveCategory(null);
+    setCategoryCleared(false);
     if (normalized) {
       const check = validateBudget(normalized);
       if (!check.valid) {
@@ -739,10 +778,10 @@ function App() {
         return;
       }
       setActiveBudget(normalized);
-      void search(input, 0, normalized);
+      void search(input, 0, normalized, null, false);
     } else {
       setActiveBudget(null);
-      void search(input, 0, null);
+      void search(input, 0, null, null, false);
     }
   }
 
@@ -750,7 +789,16 @@ function App() {
     setBudgetInput('');
     setActiveBudget(null);
     if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
-      void search(state.query, 0, null);
+      void search(state.query, 0, null, activeCategory, categoryCleared);
+    }
+  }
+
+  function handleClearCategory() {
+    setActiveCategory(null);
+    setCategoryCleared(true);
+    setAssistantContextCategory(null);
+    if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
+      void search(state.query, 0, activeBudget, null, true);
     }
   }
 
@@ -885,7 +933,9 @@ function App() {
                 className="chip"
                 onClick={() => {
                   setInput(query);
-                  void search(query, 0, activeBudget);
+                  setActiveCategory(null);
+                  setCategoryCleared(false);
+                  void search(query, 0, activeBudget, null, false);
                 }}
               >
                 {query}
@@ -893,20 +943,52 @@ function App() {
             ))}
           </div>
 
-          {activeBudget && (
-            <div className="active-filter-badge">
-              <span>سقف بودجهٔ فعال: <strong>{formatMoney(activeBudget)} تومان</strong></span>
-              <button type="button" className="clear-filter-btn" onClick={clearBudget} title="حذف فیلتر بودجه">
-                حذف بودجه ✕
-              </button>
+          {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName)))) && (
+            <div className="active-filters-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
+              {activeBudget && (
+                <div className="active-filter-badge">
+                  <span>سقف بودجهٔ فعال: <strong>{formatMoney(activeBudget)} تومان</strong></span>
+                  <button type="button" className="clear-filter-btn" onClick={clearBudget} title="حذف فیلتر بودجه">
+                    حذف بودجه ✕
+                  </button>
+                </div>
+              )}
+              {state.kind === 'success' && state.categoryName && (
+                <div className="active-category-badge">
+                  <span>دسته: <strong>{state.categoryName}</strong></span>
+                  <button
+                    type="button"
+                    className="clear-filter-btn"
+                    onClick={handleClearCategory}
+                    title="حذف فیلتر دسته"
+                    aria-label="حذف فیلتر دسته"
+                  >
+                    حذف فیلتر دسته ✕
+                  </button>
+                </div>
+              )}
+              {state.kind === 'success' && state.categoryCleared && !state.categoryName && (
+                <div className="active-category-badge" style={{ background: '#f1f5f9', borderColor: '#cbd5e1', color: '#475569' }}>
+                  <span>فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)</span>
+                </div>
+              )}
             </div>
           )}
         </section>
 
-        <Assistant budget={budgetInput ? normalizeBudget(budgetInput) : null} cancelVersion={assistantCancelVersion}
-          contextQuery={assistantContextQuery} onContext={(query, version) => {
+        <Assistant
+          budget={budgetInput ? normalizeBudget(budgetInput) : null}
+          cancelVersion={assistantCancelVersion}
+          contextQuery={assistantContextQuery}
+          contextCategory={assistantContextCategory}
+          categoryCleared={categoryCleared}
+          onContext={(query, category, version) => {
             if (version !== undefined && version !== interactionVersion.current) return;
             setAssistantContextQuery(query);
+            if (category !== undefined) {
+              setAssistantContextCategory(category);
+              setActiveCategory(category);
+            }
           }}
           onStart={() => {
             const budget = budgetInput ? normalizeBudget(budgetInput) : null;
@@ -921,20 +1003,33 @@ function App() {
             setState({ kind: 'idle' });
             return ++interactionVersion.current;
           }}
-          onResults={(page, query, budget, version) => {
+          onResults={(page, query, budget, version, category) => {
             if (version !== interactionVersion.current) return;
             setInput(query);
             setAssistantContextQuery(query);
+            setAssistantContextCategory(category);
+            setActiveCategory(category);
+            const isCleared = category !== null ? false : categoryCleared;
+            setCategoryCleared(isCleared);
             setActiveBudget(budget);
             setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
             setValidation('');
-            setState({ kind: 'success', query, offset: 0, budget, page });
+            setState({
+              kind: 'success',
+              query,
+              offset: 0,
+              budget,
+              page,
+              categoryName: category,
+              categoryCleared: isCleared,
+            });
           }}
           onBudget={(budget, version) => {
             if (version !== interactionVersion.current) return;
             setActiveBudget(budget);
             setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
-          }} />
+          }}
+        />
 
         {comparisonWarning && (
           <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
@@ -1024,7 +1119,7 @@ function App() {
               <button
                 type="button"
                 className="secondary"
-                onClick={() => void search(state.query, state.offset, state.budget)}
+                onClick={() => void search(state.query, state.offset, state.budget, activeCategory, categoryCleared)}
               >
                 تلاش مجدد
               </button>
@@ -1072,7 +1167,9 @@ function App() {
                       void search(
                         state.query,
                         Math.max(0, state.offset - PAGE_SIZE),
-                        state.budget
+                        state.budget,
+                        activeCategory,
+                        categoryCleared
                       )
                     }
                   >
@@ -1086,7 +1183,9 @@ function App() {
                       void search(
                         state.query,
                         state.offset + PAGE_SIZE,
-                        state.budget
+                        state.budget,
+                        activeCategory,
+                        categoryCleared
                       )
                     }
                   >
