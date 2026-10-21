@@ -213,23 +213,35 @@ class AssistantService:
             page = None
             effective_category = None
             if plan.action == 'search':
-                detected_from_latest = detect_category_intent(latest_msg)
-                if detected_from_latest is not None:
-                    effective_category = detected_from_latest
-                elif request.category_cleared:
-                    effective_category = None
-                else:
-                    resolved_accessory = resolve_accessory_category(
-                        latest_msg,
-                        context_category=request.context_category,
-                        context_query=request.context_query,
+                if request.category_cleared:
+                    detected_latest = detect_category_intent(latest_msg)
+                    detected_query = detect_category_intent(plan.query) if plan.query else None
+                    new_category = detected_latest or detected_query
+                    context_cat = request.context_category or (
+                        detect_category_intent(request.context_query) if request.context_query else None
                     )
-                    if resolved_accessory is not None:
-                        effective_category = resolved_accessory
-                    elif request.context_category is not None:
-                        effective_category = request.context_category
-                    elif plan.query:
-                        effective_category = detect_category_intent(plan.query)
+                    # Introduce new category only if user explicitly changed to a different product category.
+                    # For the same product, budget edit, or cleared search, keep effective_category = None.
+                    if new_category is not None and context_cat is not None and new_category != context_cat:
+                        effective_category = new_category
+                    else:
+                        effective_category = None
+                else:
+                    detected_from_latest = detect_category_intent(latest_msg)
+                    if detected_from_latest is not None:
+                        effective_category = detected_from_latest
+                    else:
+                        resolved_accessory = resolve_accessory_category(
+                            latest_msg,
+                            context_category=request.context_category,
+                            context_query=request.context_query,
+                        )
+                        if resolved_accessory is not None:
+                            effective_category = resolved_accessory
+                        elif request.context_category is not None:
+                            effective_category = request.context_category
+                        elif plan.query:
+                            effective_category = detect_category_intent(plan.query)
 
                 page = await asyncio.to_thread(
                     self.catalogue.search,

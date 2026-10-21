@@ -311,6 +311,29 @@ class AssistantApiTests(unittest.TestCase):
         direct = self.agent_client.get('/api/products?q=شارژر')
         self.assertEqual(direct.status_code, 200)
 
+    def test_ambiguous_request_with_category_cleared_forces_clarification(self):
+        # Ambiguous accessory ("شارژر می‌خواهم") with category_cleared=True:
+        # Removal of filter must NOT remove clarification requirement for ambiguous requests.
+        self.response = completion(proposal(action='search', query='شارژر'))
+        res1 = self.post(body('شارژر می‌خواهم', context_category='گوشی موبایل', context_query='گوشی', category_cleared=True)).json()
+        self.assertEqual(res1['status'], 'needs_input')
+        self.assertIn('چه نوع کالایی', res1['question'])
+        self.assertIsNone(res1['products'])
+        self.assertIsNone(res1['query'])
+        self.assertIsNone(res1['category_name'])
+        # Host made only one call; no second repair call
+        self.assertEqual(len(self.calls), 1)
+
+    def test_clear_request_with_category_cleared_searches_without_reimposing_filter(self):
+        # Clear request ("گوشی می‌خواهم") with category_cleared=True:
+        # Filter is NOT re-applied; search executes cleanly with category_name=None without clarification
+        self.response = completion(proposal(action='search', query='گوشی'))
+        res1 = self.post(body('گوشی می‌خواهم', context_query='گوشی', category_cleared=True)).json()
+        self.assertEqual(res1['status'], 'results')
+        self.assertIsNone(res1['question'])
+        self.assertIsNone(res1['category_name'])
+        self.assertIsNone(res1['products']['category_name'])
+
     def test_missing_kind_question_never_establishes_a_topic_from_lexical_filler(self):
         self.response = completion(proposal(action='clarify', query='راهنمایی', question='product_kind'))
         result = self.post(body('برای خرید راهنمایی می‌خواهم')).json()
