@@ -1,0 +1,8 @@
+.ua-start { display: grid; gap: 16px; min-width: 0; }
+.ua-start h2, .ua-start h3, .ua-start p { margin: 0; }
+.ua-start h2 { font-size: 1.35rem; }
+.ua-start h3 { font-size: 1rem; }
+.ua-start p { line-height: 1.9; overflow-wrap: anywhere; }
+.ua-start-options { display: grid; gap: 12px; }
+.ua-start-option { display: grid; gap: 12px; padding-block: 16px; border-block-start: 1px solid var(--ub-line); }
+.ua-start-option .ub-button { justify-self: start; max-width: 100%; }
