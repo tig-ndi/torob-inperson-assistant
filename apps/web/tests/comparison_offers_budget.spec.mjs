@@ -287,6 +287,9 @@ test('real UI: manual coordinates, radius filter and direct distance calculation
   // Initially before location: distance indicates location required
   await expect(modal.getByText('نیازمند تعیین موقعیت کاربر').first()).toBeVisible();
 
+  // Filters are collapsed behind one details toggle
+  await modal.locator('.offers-filters > summary').click();
+
   // Enter manual coordinates (central Tehran) and radius 5km
   await modal.getByLabel('عرض جغرافیایی (lat)', { exact: true }).fill('35.700');
   await modal.getByLabel('طول جغرافیایی (lon)', { exact: true }).fill('51.400');
@@ -334,6 +337,8 @@ test('synthetic fixture: browser geolocation explicit click and error handling',
   const modal = page.locator('.offers-modal');
   await expect(modal).toBeVisible();
 
+  await modal.locator('.offers-filters > summary').click();
+
   // Click on "دریافت موقعیت از مرورگر"
   await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
 
@@ -349,6 +354,8 @@ test('synthetic fixture: radius without coordinates is rejected before network r
   await page.locator('.product-card .secondary-btn').first().click();
   const modal = page.locator('.offers-modal');
   await expect(modal).toBeVisible();
+
+  await modal.locator('.offers-filters > summary').click();
 
   // Choose radius without entering lat/lon
   await modal.getByLabel('شعاع جست‌وجو', { exact: true }).selectOption('5');

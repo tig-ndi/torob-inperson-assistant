@@ -274,6 +274,7 @@ function OffersModal({
   const [radiusInput, setRadiusInput] = useState(maxDistanceKm !== null ? String(maxDistanceKm) : '');
   const [locationError, setLocationError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
+  const filtersRef = useRef<HTMLDetailsElement>(null);
 
   function handleLocateMe() {
     setLocationError('');
@@ -356,6 +357,11 @@ function OffersModal({
   }
 
   const hasLocationFilter = userLat !== null && userLon !== null;
+  const activeFilterCount = (openNowOnly ? 1 : 0) + (inPersonCreditOnly ? 1 : 0) + (hasLocationFilter ? 1 : 0);
+  const locationSummary =
+    userLat !== null && userLon !== null
+      ? `محدودهٔ ${userLat.toFixed(2)}، ${userLon.toFixed(2)}${maxDistanceKm !== null ? ` · شعاع ${numbers.format(maxDistanceKm)} کیلومتر` : ''}`
+      : null;
   const uniqueShopCount = state.kind === 'success'
     ? new Set(state.page.items.map(o => o.shop_id)).size
     : 0;
@@ -381,110 +387,130 @@ function OffersModal({
           <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
         </div>
 
-        <div className="hours-filter-box">
-          <label className="hours-filter-label">
-            <input type="checkbox" checked={openNowOnly} onChange={e => onHoursFilterChange(e.target.checked)} />
-            فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند
-          </label>
-          <p className="caption">این فیلتر تأیید زنده نیست؛ فروشگاه‌های با ساعت نامشخص را هم کنار می‌گذارد.</p>
-          {state.kind === 'success' && <p className="caption hours-checked-at">
-            زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
-          </p>}
-          <button type="button" className="secondary small-action-btn" disabled={state.kind === 'loading'}
-            onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
-        </div>
-
-        <div className="credit-filter-box">
-          <label className="hours-filter-label">
-            <input type="checkbox" checked={inPersonCreditOnly} onChange={e => onCreditFilterChange(e.target.checked)} />
-            فقط آفرهای منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری
-          </label>
-          <p className="caption">کانال نامشخص، قیمت نامعلوم و شرایط ناقص کنار گذاشته می‌شوند. این فیلتر تأیید اعتبار یا امکان قطعی خرید نیست.</p>
-        </div>
-
-        {/* Location & Radius Filter Section */}
-        <div className="location-filter-box">
-          <div className="location-filter-header">
-            <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
-            <p className="caption">
-              محاسبهٔ فاصله بر مبنای تقریب کروی هاورسین است و زمان مسیر یا مسافت رانندگی نیست.
-            </p>
-          </div>
-
-          <form onSubmit={handleApplyLocation} className="location-form">
-            <div className="location-inputs-row">
-              <div className="loc-field">
-                <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>
-                <input
-                  id="user-lat"
-                  value={latInput}
-                  onChange={e => setLatInput(e.target.value)}
-                  placeholder="مثلاً ۳۵.۷۰۰"
-                  inputMode="decimal"
-                />
+        <div className="offers-filter-bar">
+          <details className="offers-filters" ref={filtersRef}>
+            <summary>
+              <span>فیلترها</span>
+              <span className={`offers-filter-count${activeFilterCount > 0 ? ' active' : ''}`}>
+                {activeFilterCount > 0 ? `${numbers.format(activeFilterCount)} فیلتر فعال` : 'بدون فیلتر فعال'}
+              </span>
+            </summary>
+            <div className="offers-filters-body">
+              <div className="hours-filter-box">
+                <label className="hours-filter-label">
+                  <input type="checkbox" checked={openNowOnly} onChange={e => onHoursFilterChange(e.target.checked)} />
+                  فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند
+                </label>
+                <p className="caption">این فیلتر تأیید زنده نیست؛ فروشگاه‌های با ساعت نامشخص را هم کنار می‌گذارد.</p>
+                {state.kind === 'success' && <p className="caption hours-checked-at">
+                  زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
+                </p>}
+                <button type="button" className="secondary small-action-btn" disabled={state.kind === 'loading'}
+                  onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
               </div>
 
-              <div className="loc-field">
-                <label htmlFor="user-lon">طول جغرافیایی (lon)</label>
-                <input
-                  id="user-lon"
-                  value={lonInput}
-                  onChange={e => setLonInput(e.target.value)}
-                  placeholder="مثلاً ۵۱.۴۰۰"
-                  inputMode="decimal"
-                />
+              <div className="credit-filter-box">
+                <label className="hours-filter-label">
+                  <input type="checkbox" checked={inPersonCreditOnly} onChange={e => onCreditFilterChange(e.target.checked)} />
+                  فقط آفرهای منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری
+                </label>
+                <p className="caption">کانال نامشخص، قیمت نامعلوم و شرایط ناقص کنار گذاشته می‌شوند. این فیلتر تأیید اعتبار یا امکان قطعی خرید نیست.</p>
               </div>
 
-              <div className="loc-field">
-                <label htmlFor="radius-select">شعاع جست‌وجو</label>
-                <select
-                  id="radius-select"
-                  value={radiusInput}
-                  onChange={e => setRadiusInput(e.target.value)}
-                >
-                  <option value="">بدون محدودیت شعاع</option>
-                  <option value="2">۲ کیلومتر</option>
-                  <option value="5">۵ کیلومتر</option>
-                  <option value="10">۱۰ کیلومتر</option>
-                  <option value="20">۲۰ کیلومتر</option>
-                </select>
+              {/* Location & Radius Filter Section */}
+              <div className="location-filter-box">
+                <div className="location-filter-header">
+                  <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
+                  <p className="caption">
+                    محاسبهٔ فاصله بر مبنای تقریب کروی هاورسین است و زمان مسیر یا مسافت رانندگی نیست.
+                  </p>
+                </div>
+
+                <form onSubmit={handleApplyLocation} className="location-form">
+                  <div className="location-inputs-row">
+                    <div className="loc-field">
+                      <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>
+                      <input
+                        id="user-lat"
+                        value={latInput}
+                        onChange={e => setLatInput(e.target.value)}
+                        placeholder="مثلاً ۳۵.۷۰۰"
+                        inputMode="decimal"
+                      />
+                    </div>
+
+                    <div className="loc-field">
+                      <label htmlFor="user-lon">طول جغرافیایی (lon)</label>
+                      <input
+                        id="user-lon"
+                        value={lonInput}
+                        onChange={e => setLonInput(e.target.value)}
+                        placeholder="مثلاً ۵۱.۴۰۰"
+                        inputMode="decimal"
+                      />
+                    </div>
+
+                    <div className="loc-field">
+                      <label htmlFor="radius-select">شعاع جست‌وجو</label>
+                      <select
+                        id="radius-select"
+                        value={radiusInput}
+                        onChange={e => setRadiusInput(e.target.value)}
+                      >
+                        <option value="">بدون محدودیت شعاع</option>
+                        <option value="2">۲ کیلومتر</option>
+                        <option value="5">۵ کیلومتر</option>
+                        <option value="10">۱۰ کیلومتر</option>
+                        <option value="20">۲۰ کیلومتر</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="location-actions-row">
+                    <button type="submit" className="small-action-btn">اعمال فیلتر محدوده</button>
+                    <button
+                      type="button"
+                      className="secondary small-action-btn"
+                      onClick={handleLocateMe}
+                      disabled={isLocating}
+                    >
+                      {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
+                    </button>
+                    {hasLocationFilter && (
+                      <button
+                        type="button"
+                        className="text-btn"
+                        onClick={handleClearLocation}
+                      >
+                        حذف موقعیت
+                      </button>
+                    )}
+                  </div>
+
+                  {locationError && (
+                    <p className="error-text" role="alert">{locationError}</p>
+                  )}
+
+                  {hasLocationFilter && (
+                    <div className="active-location-badge">
+                      <span>
+                        موقعیت فعال: {userLat !== null ? userLat.toFixed(3) : ''}, {userLon !== null ? userLon.toFixed(3) : ''}
+                        {maxDistanceKm !== null ? ` · شعاع: تا ${numbers.format(maxDistanceKm)} کیلومتر` : ' · بدون سقف شعاع'}
+                      </span>
+                    </div>
+                  )}
+                </form>
               </div>
             </div>
+          </details>
 
-            <div className="location-actions-row">
-              <button type="submit" className="small-action-btn">اعمال فیلتر محدوده</button>
-              <button
-                type="button"
-                className="secondary small-action-btn"
-                onClick={handleLocateMe}
-                disabled={isLocating}
-              >
-                {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
-              </button>
-              {hasLocationFilter && (
-                <button
-                  type="button"
-                  className="text-btn"
-                  onClick={handleClearLocation}
-                >
-                  حذف موقعیت
-                </button>
-              )}
+          {activeFilterCount > 0 && (
+            <div className="offers-active-summary">
+              {openNowOnly && <span className="offers-summary-chip">فقط فروشگاه‌های باز اکنون</span>}
+              {inPersonCreditOnly && <span className="offers-summary-chip">فقط اعتبار حضوری</span>}
+              {locationSummary && <span className="offers-summary-chip">{locationSummary}</span>}
             </div>
-
-            {locationError && (
-              <p className="error-text" role="alert">{locationError}</p>
-            )}
-
-            {hasLocationFilter && (
-              <div className="active-location-badge">
-                <span>
-                  موقعیت فعال: {userLat.toFixed(3)}, {userLon.toFixed(3)}
-                  {maxDistanceKm !== null ? ` · شعاع: تا ${numbers.format(maxDistanceKm)} کیلومتر` : ' · بدون سقف شعاع'}
-                </span>
-              </div>
-            )}
-          </form>
+          )}
         </div>
 
         {state.kind === 'loading' && (
@@ -518,6 +544,37 @@ function OffersModal({
                     ? 'هیچ فروشگاهی با قیمت کمتر یا مساوی سقف بودجهٔ تعیین‌شده ثبت نشده است.'
                     : 'هیچ آفری برای این کالا در کاتالوگ ثبت نشده است.'}
                 </p>
+                {(openNowOnly || inPersonCreditOnly || hasLocationFilter) && (
+                  <div className="empty-actions">
+                    {openNowOnly && (
+                      <button type="button" className="secondary small-action-btn" onClick={() => onHoursFilterChange(false)}>
+                        حذف فیلتر ساعت
+                      </button>
+                    )}
+                    {inPersonCreditOnly && (
+                      <button type="button" className="secondary small-action-btn" onClick={() => onCreditFilterChange(false)}>
+                        حذف فیلتر اعتبار حضوری
+                      </button>
+                    )}
+                    {hasLocationFilter && (
+                      <button type="button" className="secondary small-action-btn" onClick={handleClearLocation}>
+                        حذف محدودهٔ فاصله
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={() => {
+                        if (filtersRef.current) {
+                          filtersRef.current.open = true;
+                          filtersRef.current.querySelector('summary')?.focus();
+                        }
+                      }}
+                    >
+                      تغییر شرایط در فیلترها
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -984,7 +1041,7 @@ function App() {
             </div>
 
             <p id="search-help" className="caption">
-              جست‌وجو به اطلاعات ثبت‌شده در کاتالوگ محدود است. ارقام بودجه می‌توانند فارسی یا انگلیسی باشند.
+              جست‌وجو به اطلاعات ثبت‌شده در کاتالوگ محدود است.
             </p>
           </form>
 
@@ -1062,6 +1119,190 @@ function App() {
             </div>
           )}
         </section>
+
+        {comparisonWarning && (
+          <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
+            <div className="toast-message">
+              <span className="toast-icon" aria-hidden="true">⚠️</span>
+              <div>
+                <strong>محدودیت مقایسه: </strong>
+                <span>{comparisonWarning}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="toast-close-btn"
+              onClick={() => setComparisonWarning('')}
+              aria-label="بستن پیام"
+            >
+              ✕
+            </button>
+          </aside>
+        )}
+
+        {/* Sticky comparison bar */}
+        {selectedForComparison.length > 0 && (
+          <aside className="compare-bar" aria-label="نوار ابزار مقایسهٔ محصولات">
+            <div className="compare-bar-info">
+              <strong>{numbers.format(selectedForComparison.length)} محصول</strong> برای مقایسه انتخاب شده (حداکثر ۳ کالا)
+            </div>
+            <div className="compare-bar-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={selectedForComparison.length < 2}
+                onClick={() => setShowComparisonView(true)}
+              >
+                مشاهدهٔ مقایسهٔ محصولات
+              </button>
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => setSelectedForComparison([])}
+              >
+                پاک کردن
+              </button>
+            </div>
+          </aside>
+        )}
+
+        <section className="results" aria-labelledby="results-title" aria-busy={state.kind === 'loading'}>
+          <div className="results-heading">
+            <h2 id="results-title">
+              {state.kind === 'idle'
+                ? 'نتایج جست‌وجو'
+                : `نتایج برای «${state.query}»`}
+            </h2>
+            {state.kind === 'success' && state.page.items.length > 0 && (
+              <span className="caption">
+                صفحهٔ {numbers.format(state.offset / PAGE_SIZE + 1)}
+              </span>
+            )}
+          </div>
+
+          {state.kind === 'idle' && (
+            <div className="state-panel">
+              <h3>اولین کالا را پیدا کنید</h3>
+              <p>نام کالا را وارد کنید یا یکی از پیشنهادهای بالا را بزنید.</p>
+            </div>
+          )}
+
+          {state.kind === 'loading' && (
+            <div className="state-panel" role="status">
+              <span className="spinner" aria-hidden="true" />
+              <p>در حال جست‌وجوی کاتالوگ…</p>
+            </div>
+          )}
+
+          {state.kind === 'error' && (
+            <div className="state-panel error-panel" role="alert">
+              <h3>جست‌وجو انجام نشد</h3>
+              <p>{state.message}</p>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void search(state.query, state.offset, state.budget, activeCategory, categoryCleared)}
+              >
+                تلاش مجدد
+              </button>
+            </div>
+          )}
+
+          {state.kind === 'success' && (
+            <>
+              {(state.categoryName === 'گوشی موبایل' || state.page.items.some(p => p.category_name === 'گوشی موبایل')) && (
+                <fieldset className="spec-focus-controls">
+                  <legend>کدام مشخصات برای بررسی نیاز شما مهم‌تر است؟</legend>
+                  <div className="spec-focus-actions">
+                    {([['camera', 'دوربین'], ['battery', 'باتری'], ['both', 'هر دو']] as const).map(([value, label]) => (
+                      <button key={value} type="button" className="secondary small-action-btn" aria-pressed={specFocus === value}
+                        onClick={() => setSpecFocus(value)}>بررسی {label}</button>
+                    ))}
+                    {specFocus && <button type="button" className="secondary small-action-btn" onClick={() => setSpecFocus(null)}>بستن مشخصات مرتبط</button>}
+                  </div>
+                  <details className="spec-focus-help">
+                    <summary>این گزینه چه کاری انجام می‌دهد؟</summary>
+                    <p className="caption">مشخصات دوربین یا باتری را بررسی می‌کند؛ عدد مگاپیکسل یا ظرفیت باتری به‌تنهایی کیفیت واقعی را ثابت نمی‌کند.</p>
+                    <p className="caption">این انتخاب فقط نمایش مشخصات را تغییر می‌دهد؛ فیلتر یا رتبه‌بندی بر اساس این ویژگی‌ها اعمال نمی‌شود.</p>
+                  </details>
+                </fieldset>
+              )}
+              <p role="status" className="sr-only">
+                {numbers.format(state.page.items.length)} محصول در این صفحه
+              </p>
+              {state.page.items.length === 0 ? (
+                <div className="state-panel">
+                  <h3>کالایی با این جست‌وجو پیدا نشد</h3>
+                  <p>
+                    {state.budget
+                      ? 'کالایی با این نام و واجد سقف بودجهٔ انتخابی ثبت نشده است. سقف بودجه را تغییر داده یا حذف کنید.'
+                      : 'نام کوتاه‌تر یا واژهٔ دیگری را امتحان کنید؛ نبود نتیجه به معنی نبود کالا در بازار نیست.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="product-grid">
+                  {state.page.items.map(product => {
+                    const isSelected = selectedForComparison.some(p => p.product_id === product.product_id);
+                    return (
+                      <ProductCard
+                        key={product.product_id}
+                        product={product}
+                        specFocus={specFocus}
+                        isSelected={isSelected}
+                        onToggleCompare={toggleCompare}
+                        onViewOffers={openOffers}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
+              {(state.offset > 0 || state.page.has_more) && (
+                <nav className="pagination" aria-label="صفحه‌های نتایج">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={state.offset === 0}
+                    onClick={() =>
+                      void search(
+                        state.query,
+                        Math.max(0, state.offset - PAGE_SIZE),
+                        state.budget,
+                        activeCategory,
+                        categoryCleared
+                      )
+                    }
+                  >
+                    صفحهٔ قبل
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!state.page.has_more}
+                    onClick={() =>
+                      void search(
+                        state.query,
+                        state.offset + PAGE_SIZE,
+                        state.budget,
+                        activeCategory,
+                        categoryCleared
+                      )
+                    }
+                  >
+                    صفحهٔ بعد
+                  </button>
+                </nav>
+              )}
+            </>
+          )}
+        </section>
+
+        <aside className="notice">
+          <strong>قبل از مراجعه، قیمت و موجودی را تأیید کنید.</strong>
+          <span>
+            این کاتالوگ سابقهٔ آفرهای ثبت‌شده است؛ قیمت ثبت‌شده نشانهٔ موجودی فعلی یا قطعی فروشگاه نیست.
+          </span>
+        </aside>
 
         <Assistant
           budget={budgetInput ? normalizeBudget(budgetInput) : null}
@@ -1146,187 +1387,6 @@ function App() {
             }
           }}
         />
-
-        {comparisonWarning && (
-          <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
-            <div className="toast-message">
-              <span className="toast-icon" aria-hidden="true">⚠️</span>
-              <div>
-                <strong>محدودیت مقایسه: </strong>
-                <span>{comparisonWarning}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="toast-close-btn"
-              onClick={() => setComparisonWarning('')}
-              aria-label="بستن پیام"
-            >
-              ✕
-            </button>
-          </aside>
-        )}
-
-        <aside className="notice">
-          <strong>قبل از مراجعه، قیمت و موجودی را تأیید کنید.</strong>
-          <span>
-            این کاتالوگ سابقهٔ آفرهای ثبت‌شده است؛ قیمت ثبت‌شده نشانهٔ موجودی فعلی یا قطعی فروشگاه نیست.
-          </span>
-        </aside>
-
-        {/* Sticky comparison bar */}
-        {selectedForComparison.length > 0 && (
-          <aside className="compare-bar" aria-label="نوار ابزار مقایسهٔ محصولات">
-            <div className="compare-bar-info">
-              <strong>{numbers.format(selectedForComparison.length)} محصول</strong> برای مقایسه انتخاب شده (حداکثر ۳ کالا)
-            </div>
-            <div className="compare-bar-actions">
-              <button
-                type="button"
-                className="secondary"
-                disabled={selectedForComparison.length < 2}
-                onClick={() => setShowComparisonView(true)}
-              >
-                مشاهدهٔ مقایسهٔ محصولات
-              </button>
-              <button
-                type="button"
-                className="text-btn"
-                onClick={() => setSelectedForComparison([])}
-              >
-                پاک کردن
-              </button>
-            </div>
-          </aside>
-        )}
-
-        <section className="results" aria-labelledby="results-title" aria-busy={state.kind === 'loading'}>
-          <div className="results-heading">
-            <h2 id="results-title">
-              {state.kind === 'idle'
-                ? 'نتایج جست‌وجو'
-                : `نتایج برای «${state.query}»`}
-            </h2>
-            {state.kind === 'success' && state.page.items.length > 0 && (
-              <span className="caption">
-                صفحهٔ {numbers.format(state.offset / PAGE_SIZE + 1)}
-              </span>
-            )}
-          </div>
-
-          {state.kind === 'idle' && (
-            <div className="state-panel">
-              <h3>اولین کالا را پیدا کنید</h3>
-              <p>نام کالا را وارد کنید یا یکی از پیشنهادهای بالا را بزنید.</p>
-            </div>
-          )}
-
-          {state.kind === 'loading' && (
-            <div className="state-panel" role="status">
-              <span className="spinner" aria-hidden="true" />
-              <p>در حال جست‌وجوی کاتالوگ…</p>
-            </div>
-          )}
-
-          {state.kind === 'error' && (
-            <div className="state-panel error-panel" role="alert">
-              <h3>جست‌وجو انجام نشد</h3>
-              <p>{state.message}</p>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => void search(state.query, state.offset, state.budget, activeCategory, categoryCleared)}
-              >
-                تلاش مجدد
-              </button>
-            </div>
-          )}
-
-          {state.kind === 'success' && (
-            <>
-              {(state.categoryName === 'گوشی موبایل' || state.page.items.some(p => p.category_name === 'گوشی موبایل')) && (
-                <fieldset className="spec-focus-controls">
-                  <legend>کدام مشخصات برای بررسی نیاز شما مهم‌تر است؟</legend>
-                  <p className="caption">مشخصات دوربین یا باتری را بررسی کنید؛ عدد مگاپیکسل یا ظرفیت باتری به‌تنهایی کیفیت واقعی را ثابت نمی‌کند.</p>
-                  <p className="caption">این انتخاب نمایش مشخصات را تغییر می‌دهد؛ فیلتر یا رتبه‌بندی بر اساس این ویژگی‌ها اعمال نمی‌شود.</p>
-                  <div className="spec-focus-actions">
-                    {([['camera', 'دوربین'], ['battery', 'باتری'], ['both', 'هر دو']] as const).map(([value, label]) => (
-                      <button key={value} type="button" className="secondary" aria-pressed={specFocus === value}
-                        onClick={() => setSpecFocus(value)}>بررسی {label}</button>
-                    ))}
-                    {specFocus && <button type="button" className="secondary" onClick={() => setSpecFocus(null)}>بستن مشخصات مرتبط</button>}
-                  </div>
-                </fieldset>
-              )}
-              <p role="status" className="sr-only">
-                {numbers.format(state.page.items.length)} محصول در این صفحه
-              </p>
-              {state.page.items.length === 0 ? (
-                <div className="state-panel">
-                  <h3>کالایی با این جست‌وجو پیدا نشد</h3>
-                  <p>
-                    {state.budget
-                      ? 'کالایی با این نام و واجد سقف بودجهٔ انتخابی ثبت نشده است. سقف بودجه را تغییر داده یا حذف کنید.'
-                      : 'نام کوتاه‌تر یا واژهٔ دیگری را امتحان کنید؛ نبود نتیجه به معنی نبود کالا در بازار نیست.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="product-grid">
-                  {state.page.items.map(product => {
-                    const isSelected = selectedForComparison.some(p => p.product_id === product.product_id);
-                    return (
-                      <ProductCard
-                        key={product.product_id}
-                        product={product}
-                        specFocus={specFocus}
-                        isSelected={isSelected}
-                        onToggleCompare={toggleCompare}
-                        onViewOffers={openOffers}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-
-              {(state.offset > 0 || state.page.has_more) && (
-                <nav className="pagination" aria-label="صفحه‌های نتایج">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={state.offset === 0}
-                    onClick={() =>
-                      void search(
-                        state.query,
-                        Math.max(0, state.offset - PAGE_SIZE),
-                        state.budget,
-                        activeCategory,
-                        categoryCleared
-                      )
-                    }
-                  >
-                    صفحهٔ قبل
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={!state.page.has_more}
-                    onClick={() =>
-                      void search(
-                        state.query,
-                        state.offset + PAGE_SIZE,
-                        state.budget,
-                        activeCategory,
-                        categoryCleared
-                      )
-                    }
-                  >
-                    صفحهٔ بعد
-                  </button>
-                </nav>
-              )}
-            </>
-          )}
-        </section>
       </main>
 
       {/* Comparison Modal */}
