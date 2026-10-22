@@ -4,6 +4,7 @@ import './discovery.css';
 import type { Screen } from '../../base/domain/contracts.ts';
 import type { CataloguePage } from '../../base/domain/contracts.ts';
 import { CataloguePreview } from '../../base/ui/ContractPreview.tsx';
+import { DecideScreen } from './decide.tsx';
 
 /** Stable mount point. A may replace this file and add files only in screens/a. */
 export function DiscoveryScreen({ screen, catalogue }: { screen: Screen; catalogue: CataloguePage | null }) {
@@ -20,14 +21,15 @@ export function DiscoveryScreen({ screen, catalogue }: { screen: Screen; catalog
       </div>
       <div className="ua-start-option">
         <h3>هنوز تصمیم نگرفته‌اید؟</h3>
-        <p>بخش گفت‌وگو در گام بعد تکمیل می‌شود؛ فعلاً می‌توانید از جست‌وجوی مستقیم استفاده کنید.</p>
+        <p>نیازتان را بنویسید؛ اگر اطلاعات کافی نباشد سؤال می‌پرسیم. فقط با ارسال صریح شما درخواست فرستاده می‌شود.</p>
         <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'decide' })}>کمک برای انتخاب</Button>
       </div>
     </div>
     <p className="ub-meta">نتایج از کاتالوگ ثبت‌شده می‌آیند؛ قیمت و موجودی زنده تأیید نشده‌اند. برای شروع، دسترسی به موقعیت لازم نیست.</p>
   </section>;
+  if (screen === 'decide') return <DecideScreen />;
   if (screen === 'results' && catalogue) return <CataloguePreview page={catalogue} />;
-  return <Empty title={screen === 'decide' ? 'نیازتان را دقیق‌تر بررسی کنیم' : screen === 'results' ? 'انتخاب محصول' : 'برای خرید حضوری، از نیازتان شروع کنید'}>
-    <p>ورودی بالای صفحه به کاتالوگ واقعی وصل است. صفحه‌های کشف، گفت‌وگو و مقایسهٔ محصول در تسک A تکمیل می‌شوند.</p>
+  return <Empty title={screen === 'results' ? 'انتخاب محصول' : 'برای خرید حضوری، از نیازتان شروع کنید'}>
+    <p>ورودی بالای صفحه به کاتالوگ واقعی وصل است. صفحه‌های نتایج و مقایسهٔ محصول در تسک A تکمیل می‌شوند.</p>
   </Empty>;
 }
