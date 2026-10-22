@@ -184,6 +184,11 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
     assert type(approved) is int and 1 <= approved <= 100
     assert type(start['baseline_attempts']) is int and start['baseline_attempts'] >= 0
     assert start['model'] == service.settings.model
+    assert start['attempt_limit'] == start['baseline_attempts'] + approved, 'Process cap must equal baseline + approved calls.'
+    assert service.settings.attempt_limit == start['attempt_limit'], 'Process cap does not match the approved window.'
+    with closing(sqlite3.connect(service.ledger.path.as_uri() + '?mode=ro', uri=True)) as ledger:
+        actual_baseline = ledger.execute('SELECT COUNT(*) FROM attempts').fetchone()[0]
+    assert start['baseline_attempts'] <= actual_baseline < start['attempt_limit'], f'Ledger is outside the approved window ({actual_baseline}); do not spend.'
     target = ROOT / f'.local/qa/luna-{label}.json'
     assert not target.exists(), 'Use a fresh label; never overwrite an earlier run.'
     report = {'model': service.settings.model, 'reasoning_effort': 'low', 'evidence': 'in-process public HTTP API + real provider + source SQLite; no UI/deployment',
@@ -197,7 +202,7 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
         for case in selected:
             if case.after and case.after not in successes:
                 report['turns'].append({'case': case.id, 'skipped': 'failed or absent prerequisite'})
-                continue
+                break  # No prerequisite means no later turn may run.
             with closing(sqlite3.connect(service.ledger.path.as_uri() + '?mode=ro', uri=True)) as ledger:
                 count = ledger.execute('SELECT COUNT(*) FROM attempts').fetchone()[0]
             assert 0 <= count - start['baseline_attempts'] < approved, 'Human-approved slice allowance exhausted.'
@@ -227,8 +232,8 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
             report.update(reported_cost=str(total_cost), unknown_cost_attempts=unknown_costs, currency_verified=False,
                           snapshot_unchanged=report['snapshot_before'] == sha256(database))
             target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-            if response.status_code != 200:
-                break  # No retries/fallback; preserve provider failure and stop spending.
+            if not record['passed']:
+                break  # Stop at the first failure; no retries or fallback.
     report['passed'] = len(report['turns']) == len(selected) and all(t.get('passed') for t in report['turns']) and report.get('snapshot_unchanged', False)
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     return report

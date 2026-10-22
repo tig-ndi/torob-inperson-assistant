@@ -81,6 +81,62 @@ NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES,
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
 BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر))*\s*:?\s+'
+QUERY_STOPWORDS = frozenset('من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
+MAX_TOPIC_WORDS = 4
+TOPIC_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛]')
+
+
+def _strip_budget_phrases(text: str) -> str:
+    cleaned = normalize_text(text)
+    cleaned = re.sub(rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
+    cleaned = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
+    return re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر|$|[.،؛؟!]))', ' ', cleaned)
+
+
+def _catalogue_words(category_names):
+    categories, heads = [], set()
+    for name in category_names or ():
+        if not isinstance(name, str):
+            continue
+        words = re.findall(r'[^\W_]+', normalize_text(name), flags=re.UNICODE)
+        if words:
+            heads.add(words[0])
+            categories.append((words[0], set(words)))
+    return categories, heads
+
+
+def _content_tokens(text: str) -> list[str]:
+    tokens = []
+    for token in re.findall(r'[^\W_]+', text, flags=re.UNICODE):
+        if token in QUERY_STOPWORDS or token in GENERIC_TOPIC_WORDS or token in tokens:
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def _topic_heads(text: str, heads: set[str]) -> list[set[str]]:
+    segment_heads = []
+    for segment in TOPIC_SEPARATORS.split(text):
+        heading = {token for token in _content_tokens(segment) if token in heads}
+        if heading:
+            segment_heads.append(heading)
+    return segment_heads
+
+
+def multiple_topic_heads(text: str, category_names) -> bool:
+    """Detect a coordinated/list request carrying two distinct category heads.
+
+    Segmentation happens before stopword removal, so 'شارژر و گوشی' can never
+    collapse into one phrase. This is a conservative structural check: a
+    feature list whose segments each contain a category head is also held for
+    clarification, and semantic intent is not verified.
+    """
+    if not text or not isinstance(text, str):
+        return False
+    _, heads = _catalogue_words(category_names)
+    segment_heads = _topic_heads(_strip_budget_phrases(text), heads)
+    return len(segment_heads) > 1 and len(set().union(*segment_heads)) > 1
 
 
 def parse_toman(quote: str) -> int:
@@ -179,7 +235,7 @@ def query_choices(request: AssistantRequest) -> list[str]:
     These are lexical candidates, not verified recommendations or semantic matches.
     The model selects among them; the repository determines whether evidence exists.
     """
-    stop = set('من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+    stop = QUERY_STOPWORDS
     tokens = []
     for message in reversed(request.messages):
         if message.role != 'user':
@@ -216,3 +272,31 @@ def query_choices(request: AssistantRequest) -> list[str]:
             if query and len(query) <= 120 and query not in candidates:
                 candidates.append(query)
     return candidates[:6]
+
+
+def clear_product_topic(text: str, category_names) -> str | None:
+    """Return a short literal topic backed by one catalogue category.
+
+    All content words must belong to the same category and the topic's first
+    word must be that category's leading word. Coordinated or list-style
+    requests are rejected before stopword removal when two segments each carry
+    a category head. Word order, grammar and semantic suitability are not
+    verified; unverified words are rejected, never dropped. Compound category
+    names that span two heads are also rejected by this fallback.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    cleaned = _strip_budget_phrases(text)
+    categories, heads = _catalogue_words(category_names)
+    if not categories:
+        return None
+    segment_heads = _topic_heads(cleaned, heads)
+    if len(segment_heads) > 1 and len(set().union(*segment_heads)) > 1:
+        return None
+    tokens = _content_tokens(cleaned)
+    if not 1 <= len(tokens) <= MAX_TOPIC_WORDS:
+        return None
+    if tokens[0] not in heads or not any(
+            head == tokens[0] and set(tokens) <= words for head, words in categories):
+        return None
+    return ' '.join(tokens)

@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from apps.api.agent_usage import AgentError, UsageLedger, reported_cost
 from apps.api.assistant import AgentSettings, AssistantService, BoxProvider, ENDPOINT
 from apps.api.catalogue import Catalogue, CatalogueUnavailable
-from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, parse_toman, proposed_budget, explicit_budget, query_choices
+from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, parse_toman, proposed_budget, explicit_budget, query_choices
 from apps.api.main import create_app
 import test_api
 
@@ -104,6 +104,31 @@ class IntentTests(unittest.TestCase):
         for query in ['', ' '.join(['گوشی'] * 13), 'x' * 121]:
             with self.assertRaises(ValueError):
                 AssistantRequest.model_validate(body(context_query=query))
+
+    def test_clear_product_topic_requires_one_category_and_a_matching_head(self):
+        names = ['گوشی موبایل', 'گوشی پزشکی', 'کیف و کاور گوشی', 'کفش و کتانی طبی',
+                 'کفش کالج مردانه', 'کتانی و کفش اسپرت', 'شارژر گوشی', 'لباس ورزشی']
+        for text, expected in [('حالا کفش کتانی می‌خواهم', 'کفش کتانی'), ('کفش', 'کفش'), ('کتانی', 'کتانی'),
+                               ('کفش کتانی تا ده میلیون تومان', 'کفش کتانی'), ('گوشی', 'گوشی'),
+                               ('گوشی پزشکی', 'گوشی پزشکی'), ('شارژر گوشی', 'شارژر گوشی')]:
+            with self.subTest(text=text):
+                self.assertEqual(clear_product_topic(text, names), expected)
+        for text in ['چیزی برای ورزش می‌خواهم', 'یک کالای ورزشی می‌خواهم', 'برای ورزش کفش می‌خواهم',
+                     'ورزش', 'کفش ناموجود', 'گوشی سامسونگ', 'محصولناموجود', 'بودجه را هشت میلیون کن',
+                     'گوشی کتانی', 'کفش گوشی', 'کاور گوشی']:
+            with self.subTest(text=text):
+                self.assertIsNone(clear_product_topic(text, names))
+
+    def test_coordinated_requests_are_not_collapsed_before_stopword_removal(self):
+        names = ['گوشی موبایل', 'شارژر گوشی', 'کفش و کتانی طبی', 'کتانی و کفش اسپرت', 'کیف و کاور گوشی']
+        for text in ['شارژر و گوشی', 'گوشی و شارژر', 'گوشی، شارژر', 'شارژر یا گوشی',
+                     'کفش و گوشی', 'کفش و کتانی', 'کیف و کاور گوشی']:
+            with self.subTest(text=text):
+                self.assertTrue(multiple_topic_heads(text, names))
+                self.assertIsNone(clear_product_topic(text, names))
+        for text in ['گوشی', 'شارژر گوشی', 'کفش کتانی', 'گوشی با باتری قوی']:
+            with self.subTest(text=text):
+                self.assertFalse(multiple_topic_heads(text, names))
 
     def test_ambiguous_budget_edits_cannot_reuse_or_invent_an_amount(self):
         for text in ['ارزان‌ترش را می‌خواهم', 'بودجه را کمتر کن', 'بودجه را ده میلیون ریال کن', 'بودجه را ۱۲,۳۴ کن']:
@@ -243,6 +268,138 @@ class AssistantApiTests(unittest.TestCase):
         response = self.post(body('گوشی برای کار روزمره می‌خواهم، حداکثر ده میلیون تومان.')).json()
         self.assertEqual(response['status'], 'results')
         self.assertEqual(response['max_price_toman'], '10000000')
+        self.assertEqual(len(self.calls), 1)
+
+    def test_budget_question_with_clear_new_product_searches_and_clears_capacity(self):
+        for budget in (None, '8000000'):
+            with self.subTest(budget=budget):
+                self.response = completion(proposal(action='clarify', query=None, question='budget'))
+                result = self.post(body(
+                    'حالا کفش می‌خواهم', context_query='گوشی', context_category='گوشی موبایل',
+                    max_price_toman=budget,
+                    context_battery_requirement={'status': 'minimum', 'minimum_mah': 5000},
+                )).json()
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['query'], 'کفش')
+                self.assertEqual(result['max_price_toman'], budget)
+                self.assertIsNone(result['category_name'])
+                self.assertEqual(result['battery_requirement'], {'status': 'unspecified', 'minimum_mah': None})
+                self.assertIsNone(result['products']['min_battery_capacity_mah'])
+                self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_budget_fallback_holds_incompatible_and_coordinated_requests(self):
+        names = ('گوشی موبایل', 'شارژر گوشی', 'کتانی و کفش اسپرت', 'کفش و کتانی طبی', 'کیف و کاور گوشی')
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            for text, query in [('گوشی کتانی', None), ('کفش گوشی', None),
+                                ('شارژر و گوشی', 'شارژر گوشی')]:
+                with self.subTest(text=text, query=query):
+                    self.response = completion(proposal(action='clarify', query=query, question='budget'))
+                    result = self.post(body(text)).json()
+                    self.assertEqual(result['status'], 'needs_input')
+                    self.assertEqual(result['question'], QUESTIONS['budget'])
+                    self.assertIsNone(result['query'])
+                    self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 3)
+
+    def test_budget_fallback_searches_a_single_category_topic(self):
+        names = ('گوشی موبایل', 'شارژر گوشی', 'کتانی و کفش اسپرت', 'کفش و کتانی طبی', 'کیف و کاور گوشی')
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            self.response = completion(proposal(action='clarify', query=None, question='budget'))
+            result = self.post(body('کفش کتانی')).json()
+            self.assertEqual(result['status'], 'results')
+            self.assertEqual(result['query'], 'کفش کتانی')
+            self.assertIsNone(result['question'])
+            self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_budget_question_with_vague_use_case_does_not_create_a_query(self):
+        self.response = completion(proposal(action='clarify', query=None, question='budget'))
+        result = self.post(body('چیزی برای ورزش می‌خواهم')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_invalid_budget_with_clear_new_product_still_clarifies_without_search(self):
+        self.response = completion(proposal(action='clarify', query=None, question='budget'))
+        result = self.post(body('حالا کفش کتانی می‌خواهم؛ تا ده میلیون تومان یا تا بیست میلیون تومان')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question'], QUESTIONS['budget'])
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_clear_product_search_without_budget_is_allowed(self):
+        self.response = completion(proposal(query='کفش'))
+        result = self.post(body('کفش می‌خواهم')).json()
+        self.assertEqual(result['status'], 'results')
+        self.assertIsNone(result['question'])
+        self.assertIsNone(result['max_price_toman'])
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+
+    def test_unnecessary_priority_question_with_clear_product_searches_and_clears_capacity(self):
+        names = ('گوشی موبایل', 'شارژر گوشی', 'کفش و کتانی طبی', 'کتانی و کفش اسپرت')
+        self.response = completion(proposal(action='clarify', query=None, question='priority'))
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            result = self.post(body(
+                'حالا کفش کتانی می‌خواهم', context_query='گوشی', context_category='گوشی موبایل',
+                max_price_toman='8000000',
+                context_battery_requirement={'status': 'minimum', 'minimum_mah': 5000},
+            )).json()
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'کفش کتانی')
+        self.assertEqual(result['max_price_toman'], '8000000')
+        self.assertIsNone(result['category_name'])
+        self.assertEqual(result['battery_requirement'], {'status': 'unspecified', 'minimum_mah': None})
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_unnecessary_product_kind_question_with_clear_product_searches(self):
+        names = ('گوشی موبایل', 'کفش و کتانی طبی', 'کتانی و کفش اسپرت')
+        self.response = completion(proposal(action='clarify', query=None, question='product_kind'))
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            result = self.post(body('کفش کتانی')).json()
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'کفش کتانی')
+        self.assertIsNone(result['question'])
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_unnecessary_questions_stay_for_ambiguous_and_multi_product_requests(self):
+        names = ('گوشی موبایل', 'شارژر گوشی', 'کفش و کتانی طبی')
+        self.response = completion(proposal(action='clarify', query=None, question='priority'))
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            ambiguous = self.post(body('شارژر می‌خواهم')).json()
+            multi = self.post(body('کفش و گوشی')).json()
+        self.assertEqual(ambiguous['status'], 'needs_input')
+        self.assertEqual(ambiguous['question'], QUESTIONS['product_kind'])
+        self.assertIsNone(ambiguous['query'])
+        self.assertIsNone(ambiguous['products'])
+        self.assertEqual(multi['status'], 'needs_input')
+        self.assertIsNone(multi['query'])
+        self.assertIsNone(multi['products'])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_invalid_budget_precedes_an_unnecessary_priority_search(self):
+        names = ('گوشی موبایل', 'کفش و کتانی طبی', 'کتانی و کفش اسپرت')
+        self.response = completion(proposal(action='clarify', query=None, question='priority'))
+        with patch.object(self.service.catalogue, 'category_names', return_value=names):
+            result = self.post(body('حالا کفش کتانی می‌خواهم؛ تا ده میلیون تومان یا تا بیست میلیون تومان')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question'], QUESTIONS['budget'])
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_genuine_absence_of_evidence_is_not_replaced_by_a_nearby_match(self):
+        self.response = completion(proposal(query='کفش ناموجود'))
+        result = self.post(body('کفش ناموجود می‌خواهم')).json()
+        self.assertEqual(result['status'], 'no_evidence')
+        self.assertEqual(result['query'], 'کفش ناموجود')
+        self.assertIsNone(result['question'])
+        self.assertEqual(result['products']['items'], [])
         self.assertEqual(len(self.calls), 1)
 
     def test_full_usage_phrase_outside_grounded_choices_is_rejected_not_queried(self):

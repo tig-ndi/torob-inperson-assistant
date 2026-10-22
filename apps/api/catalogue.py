@@ -112,6 +112,11 @@ class Catalogue:
                 "dataset": profile["dataset"], "generated_at_utc": profile["generated_at_utc"],
                 "currency": "toman", "inventory_status": "unconfirmed"}
 
+    def category_names(self) -> tuple[str, ...]:
+        with self.connect() as connection:
+            return tuple(row[0] for row in connection.execute(
+                "SELECT DISTINCT category_name FROM products WHERE category_name IS NOT NULL ORDER BY category_name"))
+
     @staticmethod
     def product(connection: sqlite3.Connection, row: sqlite3.Row, capacity=None) -> dict:
         summary = connection.execute(

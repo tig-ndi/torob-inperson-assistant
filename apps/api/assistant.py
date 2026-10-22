@@ -17,7 +17,7 @@ from apps.api.category import (
     is_ambiguous_product_intent,
     resolve_accessory_category,
 )
-from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, proposed_budget, query_choices
+from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, proposed_budget, query_choices
 from apps.api.explanations import explain_search
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
@@ -223,13 +223,35 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='budget')
                 budget = request.max_price_toman
                 budget_uncertain = True
-            if not budget_uncertain and plan.action == 'clarify' and plan.question == 'budget' and budget is not None and plan.query:
-                plan = IntentPlan(action='search', query=plan.query, budget_text=None, question=None)
+            if not budget_uncertain and plan.action == 'clarify' and plan.question == 'budget':
+                category_names = await asyncio.to_thread(self.catalogue.category_names)
+                if multiple_topic_heads(latest_msg, category_names):
+                    # No single topic exists for a coordinated/list request; keep
+                    # the clarification instead of collapsing it into one query.
+                    plan = IntentPlan(action='clarify', query=None, budget_text=None, question='budget')
+                else:
+                    topic = plan.query
+                    if topic is None or budget is None:
+                        if topic is not None:
+                            topic = clear_product_topic(topic, category_names)
+                        if topic is None:
+                            topic = clear_product_topic(latest_msg, category_names)
+                    if topic is not None:
+                        plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
             if not budget_uncertain and battery_phone and plan.query and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'}:
                 plan = IntentPlan(action='search', query=plan.query, budget_text=None, question=None)
             if plan.action == 'clarify' and plan.question == 'product_kind':
                 # Lexical filler in an ambiguous request must not become the current topic.
                 plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
+            if not budget_uncertain and plan.action == 'clarify' and plan.question in {'priority', 'product_kind'}:
+                category_names = await asyncio.to_thread(self.catalogue.category_names)
+                if not multiple_topic_heads(latest_msg, category_names):
+                    topic = clear_product_topic(latest_msg, category_names)
+                    if topic is not None:
+                        # A single-category request does not need a generic use-case
+                        # question; the ambiguity intercept below can still restore
+                        # product_kind for an accessory lacking a target device.
+                        plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
 
             # Host intercept: guarantee clarification for ambiguous requests lacking a target device,
             # including a premature model budget question. An uncertain explicit amount
