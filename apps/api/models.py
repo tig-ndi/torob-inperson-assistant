@@ -65,6 +65,52 @@ class AssistantStatus(Model):
     attempt_limit: int
 
 
+class SpecReference(Model):
+    source_index: int = Field(ge=0)
+    section: str | None
+    key: str | None
+    value: str | None
+    state: Literal['recorded', 'negative', 'unknown']
+
+
+class TopicExplanation(Model):
+    topic: Literal['camera', 'battery']
+    status: Literal['recorded', 'missing', 'source_warning', 'conflicting', 'not_assessed']
+    summary: str
+    evidence_count: int = Field(ge=0)
+    evidence: list[SpecReference] = Field(max_length=4)
+
+
+class BudgetEvidence(Model):
+    offer_id: str
+    product_id: str
+    shop_id: str
+    price_toman: str = Field(pattern=r'^[0-9]{1,19}$')
+    last_price_changed_at: str | None
+    inventory_status: Literal['unconfirmed']
+    selection_basis: Literal['lowest_recorded_qualifying_price_then_offer_id']
+
+
+class ProductExplanation(Model):
+    product_id: str
+    reasons: list[str]
+    budget_offer: BudgetEvidence | None
+    topics: list[TopicExplanation] = Field(max_length=2)
+    suitability: Literal['not_verified']
+
+
+class SearchExplanation(Model):
+    query: str
+    category_name: str | None
+    max_price_toman: str | None
+    ranking_basis: Literal['lexical_match_then_product_id']
+    topics: list[Literal['camera', 'battery']] = Field(max_length=2)
+    summary: str
+    limitations: list[str]
+    products: list[ProductExplanation] = Field(max_length=12)
+    provenance: Provenance
+
+
 class AssistantResult(Model):
     request_id: str
     status: Literal['needs_input', 'results', 'no_evidence']
@@ -74,6 +120,7 @@ class AssistantResult(Model):
     question: str | None
     products: ProductPage | None
     model: str
+    explanation: SearchExplanation | None = None
 
 
 class Shop(Model):

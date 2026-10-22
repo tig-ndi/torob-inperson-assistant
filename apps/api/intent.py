@@ -35,6 +35,8 @@ class AssistantRequest(StrictModel):
     context_query: str | None = Field(default=None, min_length=1, max_length=120)
     context_category: str | None = Field(default=None, min_length=1, max_length=120)
     category_cleared: bool = False
+    # Review topics are preferences for source evidence, never verified capabilities.
+    context_topics: list[Literal['camera', 'battery']] | None = Field(default=None, max_length=2)
 
     @model_validator(mode="after")
     def bounded_history(self):
@@ -73,7 +75,7 @@ SCALES = {"هزار": 1000, "میلیون": 10**6, "میلیارد": 10**9}
 NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES, 'و'])
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
-BUDGET_PREFIX = r'بودجه(?:\s+ام)?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر))*\s*:?\s+'
+BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر))*\s*:?\s+'
 
 
 def parse_toman(quote: str) -> int:
@@ -172,14 +174,14 @@ def query_choices(request: AssistantRequest) -> list[str]:
     These are lexical candidates, not verified recommendations or semantic matches.
     The model selects among them; the repository determines whether evidence exists.
     """
-    stop = set('من یک یه برای جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+    stop = set('من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
     tokens = []
     for message in reversed(request.messages):
         if message.role != 'user':
             continue
         text = normalize_text(message.content)
-        text = re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?:\s*(?:تومان|تومن|ریال))?', ' ', text)
-        text = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)', ' ', text)
+        text = re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?:\s*(?:تومان|تومن|ریال)(?:ه)?)?', ' ', text)
+        text = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', text)
         if detect_category_intent(message.content) == CAT_MOBILE_PHONE:
             # Qualitative use cases are not literal catalogue names or verified
             # feature predicates. Keep the phone/brand/model; show source specs.

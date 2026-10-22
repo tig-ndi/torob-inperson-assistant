@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from apps.api.agent_usage import AgentError, UsageLedger, reported_cost
 from apps.api.assistant import AgentSettings, AssistantService, BoxProvider, ENDPOINT
 from apps.api.catalogue import Catalogue, CatalogueUnavailable
-from apps.api.intent import AssistantRequest, IntentPlan, parse_toman, proposed_budget, explicit_budget, query_choices
+from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, parse_toman, proposed_budget, explicit_budget, query_choices
 from apps.api.main import create_app
 import test_api
 
@@ -36,6 +36,20 @@ def completion(plan, **changes):
 
 
 class IntentTests(unittest.TestCase):
+    def test_colloquial_possessive_budget_keeps_decimal_amount_and_clean_product_query(self):
+        for message in ['یه گوشی میخوام؛ سقف بودجه‌م ۱۲٫۵ میلیون تومنه.',
+                        'گوشی می‌خواهم؛ بودجه م ١٢٫٥ میلیون تومن است.']:
+            with self.subTest(message=message):
+                self.assertEqual(explicit_budget(message), '12500000')
+                self.assertEqual(query_choices(AssistantRequest.model_validate(body(message))), ['گوشی'])
+
+    def test_colloquial_preposition_is_not_a_literal_product_or_accessory_term(self):
+        self.assertEqual(query_choices(AssistantRequest.model_validate(body('یه موبایل واسه کار روزمره میخوام؛ بودجه م ٩٫٥ میلیون تومنه.'))), ['موبایل'])
+        choices = query_choices(AssistantRequest.model_validate(body('شارژر واسه لپ‌تاپ می‌خوام')))
+        self.assertTrue(any('شارژر' in q for q in choices))
+        self.assertTrue(any('لپ' in q for q in choices))
+        self.assertFalse(any('واسه' in q for q in choices))
+
     def test_money_quotes_keep_exact_units_null_zero_and_large_integers(self):
         for quote, expected in [('۱۰٬۰۰۰٬۰۰۰ تومان', 10000000), ('ده میلیون تومان', 10000000),
                                 ('بيست و پنج میلیون تومن', 25000000), ('١٠٫٥ میلیون تومان', 10500000),
@@ -127,7 +141,7 @@ class AssistantApiTests(unittest.TestCase):
         self.response = completion(proposal())
         self.http_status = 200
         self.ledger = UsageLedger(self.root / 'usage.sqlite3')
-        self.settings = AgentSettings(True, 'synthetic-secret-never-log', attempt_limit=3)
+        self.settings = AgentSettings(True, 'synthetic-secret-never-log', model='gpt-5-mini', attempt_limit=3)
 
         def handler(request):
             self.calls.append(request)
@@ -167,6 +181,38 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(self.rows(), [('completed', 410, 120, '0.0002', None)])
         self.assertNotIn(b'synthetic-secret', self.ledger.path.read_bytes())
         self.assertNotIn('ده میلیون', str(self.rows()))
+
+    def test_target_device_clarification_precedes_budget_for_ambiguous_accessories(self):
+        self.response = completion(proposal(action='clarify', query=None, question='budget'))
+        for context in [{}, {'context_query': 'گوشی پزشکی', 'context_category': 'گوشی پزشکی'}]:
+            with self.subTest(context=context):
+                response = self.post(body('شارژر می‌خواهم.', **context))
+                result = response.json()
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(result['status'], 'needs_input')
+                self.assertEqual(result['question'], QUESTIONS['product_kind'])
+                self.assertIsNone(result['query'])
+                self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 2)
+
+    def test_explanation_is_additive_source_backed_and_source_failures_are_not_empty_success(self):
+        response = self.post(body(context_topics=['battery']))
+        result = response.json()
+        explanation = result['explanation']
+        self.assertEqual(explanation['topics'], ['battery'])
+        self.assertEqual(explanation['provenance'], result['products']['provenance'])
+        self.assertEqual([p['product_id'] for p in explanation['products']], [p['product_id'] for p in result['products']['items']])
+        self.assertTrue(all(p['suitability'] == 'not_verified' for p in explanation['products']))
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.post(body(context_topics=['invented_capability'])).status_code, 422)
+        self.assertEqual(len(self.calls), 1)
+        with patch.object(self.service.catalogue, 'offers', return_value=None):
+            failed = self.post()
+        self.assertEqual(failed.status_code, 503)
+        self.assertEqual(failed.json()['code'], 'catalogue_unavailable')
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(self.rows()[-1][0], 'failed')
+        self.assertEqual(self.rows()[-1][1:4], (410, 120, '0.0002'))
 
     def test_clarification_followup_and_empty_results_are_different(self):
         self.response = completion(proposal(action='clarify', query=None, question='product_kind'))
@@ -470,6 +516,26 @@ class AssistantApiTests(unittest.TestCase):
 
 
 class EnvelopeTests(unittest.TestCase):
+    def test_luna_and_legacy_models_keep_bounded_structured_requests_without_fallback(self):
+        self.assertEqual(AgentSettings().model, 'gpt-5.6-luna')
+        for model, effort in [('gpt-5.6-luna', 'low'), ('gpt-5-mini', 'low'), ('gpt-5.4-mini', 'none')]:
+            calls = []
+
+            def handler(request):
+                calls.append(json.loads(request.content))
+                return httpx.Response(200, json=completion(proposal(), model=model))
+
+            with self.subTest(model=model):
+                settings = AgentSettings(True, 'synthetic', model=model)
+                provider = BoxProvider(settings, httpx.MockTransport(handler))
+                asyncio.run(provider.complete(AssistantRequest.model_validate(body())))
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0]['model'], model)
+                self.assertEqual(calls[0]['reasoning_effort'], effort)
+                self.assertEqual(calls[0]['max_completion_tokens'], 1200)
+                self.assertTrue(calls[0]['response_format']['json_schema']['strict'])
+                self.assertFalse(calls[0]['store'])
+
     def test_settings_are_allowlisted_redacted_and_environment_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
