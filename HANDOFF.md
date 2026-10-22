@@ -1,4 +1,24 @@
-# تحویل جاری — برش P3-A بک‌اند و وضعیت باز P2
+# تحویل جاری — جمع‌بندی پذیرش بک‌اند P2/P3 و smoke زنجیره
+
+## گام پانزدهم — smoke زنجیرهٔ P2→P3 و تطبیق شکست تاریخی | ساخته و بررسی‌شده؛ P2/P3 باز
+
+۲۰۲۶-۱۰-۲۲. این گام فقط جمع‌بندی پذیرش بک‌اند P2/P3 بود؛ شروع `a392df8` و تنها فایل تازه `tools/smoke_chain.py`. هیچ فایل `apps/web`، مدل پولی، دیپلوی، remote یا push تغییر/اجرا نشد. هیچ آزمون یکپارچهٔ موجودی کل زنجیره را پوشش نمی‌داد: `tests/test_need_state.py` گذارهای state، `tests/test_assistant.py` تغییر بودجه/کالا، و `tests/test_followups.py` همراه `tools/smoke_followups.py` فقط دو endpoint پیگیری را می‌سنجند؛ اتصال turn دستیار به انتخاب آفر و سپس alternatives در هیچ‌کدام نبود.
+
+`tools/smoke_chain.py` روی snapshot واقعی و ASGI درون‌پردازه‌ای، با دو طرح provider مصنوعی و ledger موقت، همان مسیر را از endpointهای واقعی اجرا می‌کند: نیاز گوشی با بودجهٔ ۸ میلیون → ویرایش بودجه به ۴ میلیون با `context_need_state` → انتخاب پویا از نتایج واقعی یک محصول با حداقل دو فروشگاه زیر بودجه → `/api/products/{id}/offers` → `/api/followups/prepare` → نتیجهٔ simulated/no_answer → `/api/followups/alternatives`. هیچ ID یا شماره‌ای در خروجی چاپ نمی‌شود.
+
+**نتیجهٔ اجرا:** ۵ بررسی، ۲ turn، ۲ فراخوان provider مصنوعی، بودجهٔ ۸→۴ میلیون، حفظ topic_query/category/offer_sort/battery/review/pending، ۲ آفر محصول زیر بودجه، ۱ آفر از فروشگاه گزارش‌شده، ۱ جایگزین از فروشگاه دیگر، پیش‌نویس `draft_not_sent`، outcome `simulated` با هر دو flag تأیید false، برابری دقیق مجموعهٔ offer_id جایگزین با offers فیلترشده، و snapshot با hash ثابت؛ ۰٫۵۴۲ ثانیه.
+
+```json
+{"evidence": "real snapshot + in-process ASGI + synthetic provider; no billable model, browser, deployment, or contact", "checks": 5, "turns": 2, "provider_calls": 2, "initial_budget": "8000000", "changed_budget": "4000000", "topic_preserved": true, "product_offers_under_budget": 2, "reported_shop_offers": 1, "alternatives": 1, "draft_unsent": true, "outcome_source": "simulated", "snapshot_unchanged": true, "elapsed_seconds": 0.542}
+```
+
+این شاهد deterministic/ASGI روی دادهٔ واقعی است؛ مدل واقعی، مرورگر/build، deployed journey، موجودی زنده یا تماس را اثبات نمی‌کند. انتخاب پویا فقط یک محصول/فروشگاه واقعی را در همین snapshot می‌سنجد و نمونهٔ آماری نیست.
+
+**تطبیق شکست تاریخی:** شکست تغییر به کفش بدون بودجه از اجرای live پیشین (۶ موفق از ۷، با Luna) یک شاهد تاریخی است، نه رفتار نسخهٔ فعلی. اصلاح بعدی در host، عبارت کاملِ یک‌دستهٔ روشن را از سؤال بودجه به جست‌وجو تبدیل کرد و رگرسیون قطعی `test_budget_question_with_clear_new_product_searches_and_clears_capacity` (همراه پاک‌شدن باتری) دارد؛ `test_clear_product_search_without_budget_is_allowed` نیز جست‌وجوی روشن بدون بودجه را می‌سنجد. شواهد live بعدی فقط تغییر کالا با بودجه را پوشش می‌دهند؛ همان سناریوی بدون بودجه با مدل واقعی تازه بازآزمایی نشده است. بنابراین نه شکست قدیمی نتیجهٔ نسخهٔ فعلی است و نه اصلاح آن تأیید live تازه دارد.
+
+**جمع‌بندی الزامات:** در این بررسی، الزام مسابقه‌ایِ باقی‌مانده‌ای که صرفاً منطق بک‌اند باشد پیدا نشد. P3-A بک‌اند و مسیر زنجیره‌ای شاهد دارند؛ شکاف P3 اتصال UI، مسیر قابل‌مشاهدهٔ demo-to-alternative و پذیرش انسانی است. شکاف P2 اتصال UI state/باتری/شواهد، اصلاح reset تاریخچه با بودجه، پذیرش انسانی و بررسی نسخهٔ ادغام‌شده است؛ فیلتر حافظه/مشخصات پیشنهاد اختیاری و عقب‌افتاده است، نه الزام مسابقه. دیپلوی و ویدئو الزام تحویل‌اند ولی در P4 معوق‌اند. تماس واقعی با شماره‌های مصنوعی عمداً خارج دامنه است و محدودیت آن باید برای داوری ثبت شود. نقص مسدودکنندهٔ بک‌اند در این گام پیدا نشد.
+
+**باز:** اتصال UI، بررسی مرورگر/نسخهٔ ادغام‌شده، پذیرش کامل P2/P3 و P4. گام بعد فقط پیشنهادی است و شروع خودکار ندارد.
 
 ## گام چهاردهم — P3-A: پیش‌نویس پیگیری، نتیجهٔ صریح و جایگزین همان محصول | ساخته و بررسی‌شده؛ UI باز
 
