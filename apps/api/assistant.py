@@ -1,7 +1,7 @@
 """One bounded intent call, then deterministic catalogue retrieval. No agent loop."""
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import os
 from pathlib import Path
@@ -284,9 +284,17 @@ class AssistantService:
                 plan = IntentPlan(action='search', query=authoritative or request.context_query,
                                   budget_text=None, question=None)
             battery_phone = latest_category == 'گوشی موبایل' or phone_topic(plan.query, latest_category)
-            if not battery_phone and latest_category is None and has_phone_context and plan.query:
-                battery_phone = (request.context_query is not None and normalize_text(plan.query) == normalize_text(request.context_query)) or await asyncio.to_thread(
-                    self.catalogue.matches_identity, plan.query, 'گوشی موبایل')
+            if not battery_phone and latest_category is None and has_phone_context:
+                # No model query and no newly grounded product means the final topic
+                # remains the phone context; a named product must still match it.
+                if plan.query is None:
+                    battery_phone = latest_span is None
+                else:
+                    battery_phone = (
+                        (request.context_query is not None
+                         and normalize_text(plan.query) == normalize_text(request.context_query))
+                        or await asyncio.to_thread(
+                            self.catalogue.matches_identity, plan.query, 'گوشی موبایل'))
             requirement = resolve_requirement(request, battery_phone)
             if battery_phone and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'} and plan.query is None:
                 query = authoritative or next(iter(query_choices(request)), None)
@@ -436,9 +444,33 @@ class AssistantService:
                     plan = IntentPlan(action='clarify', query=needs.state.topic_query,
                                       budget_text=None, question=question)
                     effective_category = None if needs.state.category_cleared else needs.state.category_name
-                elif needs.controlled and plan.question == 'unsupported_filter':
-                    plan = IntentPlan(action='search', query=needs.state.topic_query, budget_text=None, question=None)
-                    effective_category = None if needs.state.category_cleared else needs.state.category_name
+                elif plan.question == 'unsupported_filter':
+                    # The model's question is valid only while the final state still
+                    # carries a real unhandled requirement. With none, derive the
+                    # answer from the retained topic and the other blocking guards.
+                    topic = needs.state.topic_query
+                    grounded = topic is not None and (
+                        detect_category_intent(topic) is not None
+                        or any(token in identity_words or any(character.isdigit() for character in token)
+                               or token.isascii()
+                               for token in re.findall(r'[^\W_]+', topic, flags=re.UNICODE)))
+                    if not grounded:
+                        # Lexical filler must not become a topic or a search.
+                        needs = replace(needs, state=needs.state.model_copy(
+                            update={'topic_query': None, 'category_name': None}))
+                        plan = IntentPlan(action='clarify', query=None, budget_text=None,
+                                          question='product_kind')
+                        effective_category = None
+                    else:
+                        plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
+                        effective_category = (None if needs.state.category_cleared
+                                              else needs.state.category_name)
+            if plan.action == 'clarify' and plan.question == 'budget':
+                # The clarification must describe the valid topic/category the final
+                # state keeps; an invalid amount still blocks every search.
+                plan = IntentPlan(action='clarify', query=needs.state.topic_query,
+                                  budget_text=None, question='budget')
+                effective_category = None if needs.state.category_cleared else needs.state.category_name
             if (plan.action == 'clarify' and plan.question == 'battery_scope'
                     and not (not battery_phone and latest_has_capacity_unit)):
                 # A model-supplied scope question has no standing after a clear product

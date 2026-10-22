@@ -1338,3 +1338,148 @@ class SnapshotAssistantApiTests(unittest.TestCase):
         self.assertEqual(result['need_state']['topic_query'], 'گوشی')
         self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
         self.assertEqual(len(self.calls), 1)
+
+    def test_recorded_s03_unbacked_question_searches_with_camera_witness(self):
+        # The model asked unsupported_filter for a camera preference that is a
+        # review topic, not a pending filter; the absence of a real need must not
+        # hide a valid phone topic or silently drop the preference.
+        result = self.post_turn(
+            'سلام داداش، بودجه‌ام دوازده میلیون تومانه؛ یه گوشی سامسونگ با دوربین خوب می‌خوام.', None,
+            {'action': 'clarify', 'query': 'داداش گوشی سامسونگ',
+             'budget_text': 'دوازده میلیون تومان', 'question': 'unsupported_filter'})
+        self.assertEqual(result['status'], 'results', result)
+        self.assertIsNone(result['question_code'])
+        self.assertIsNone(result['question'])
+        self.assertEqual(result['query'], 'گوشی سامسونگ')
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
+        self.assertEqual(result['max_price_toman'], '12000000')
+        self.assertEqual(len(result['products']['items']), 12)
+        self.assertEqual({item['category_name'] for item in result['products']['items']}, {'گوشی موبایل'})
+        self.assertEqual(result['products']['category_name'], 'گوشی موبایل')
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertEqual(result['need_state']['review_topics'], ['camera'])
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertEqual(result['explanation']['topics'], ['camera'])
+        self.assertTrue(all(item['suitability'] == 'not_verified'
+                            for item in result['explanation']['products']))
+        self.assertEqual(len(self.calls), 1)
+
+    def test_recorded_s18_budget_clarification_keeps_state_topic_and_category(self):
+        state = {
+            'version': 1, 'topic_query': 'شیائومی', 'category_name': 'گوشی موبایل',
+            'category_cleared': False, 'max_price_toman': '9000000', 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'unspecified', 'minimum_mah': None},
+            'review_topics': [], 'pending_requirements': [],
+        }
+        result = self.post_turn(
+            'ارزان‌ترش رو می‌خوام', state,
+            {'action': 'clarify', 'query': None, 'budget_text': None, 'question': 'budget'})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'budget')
+        self.assertEqual(result['query'], 'شیائومی')
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
+        self.assertEqual(result['max_price_toman'], '9000000')
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['explanation'])
+        self.assertEqual(result['need_state']['topic_query'], 'شیائومی')
+        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertTrue(result['need_state']['budget_needs_input'])
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertEqual(result['need_state']['battery_requirement'],
+                         {'status': 'unspecified', 'minimum_mah': None})
+        self.assertEqual(result['need_state']['category_cleared'], False)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_independent_unbacked_question_searches_the_retained_topic(self):
+        result = self.post_turn(
+            'گوشی شیائومی با دوربین خوب می‌خوام', None,
+            {'action': 'clarify', 'query': 'گوشی شیائومی', 'budget_text': None,
+             'question': 'unsupported_filter'})
+        self.assertEqual(result['status'], 'results', result)
+        self.assertIsNone(result['question_code'])
+        self.assertEqual(result['query'], 'گوشی شیائومی')
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
+        self.assertTrue(result['products']['items'])
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی شیائومی')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertEqual(result['need_state']['review_topics'], ['camera'])
+        self.assertEqual(result['explanation']['topics'], ['camera'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_real_unsupported_constraint_still_backs_the_question_and_state(self):
+        result = self.post_turn(
+            'گوشی سامسونگ با گارانتی ۱۸ ماهه می‌خوام', None,
+            {'action': 'clarify', 'query': 'گوشی سامسونگ', 'budget_text': None,
+             'question': 'unsupported_filter'})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'unsupported_filter')
+        self.assertEqual(result['query'], 'گوشی سامسونگ')
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['explanation'])
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+        self.assertEqual([item['key'] for item in result['need_state']['pending_requirements']],
+                         ['گارانتی'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_ambiguous_no_topic_question_is_not_a_search_or_a_topic(self):
+        result = self.post_turn(
+            'یه چیز خوب می‌خوام', None,
+            {'action': 'clarify', 'query': 'چیز خوب', 'budget_text': None,
+             'question': 'unsupported_filter'})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'product_kind')
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['category_name'])
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['explanation'])
+        self.assertIsNone(result['need_state']['topic_query'])
+        self.assertIsNone(result['need_state']['category_name'])
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_cleared_invalid_budget_keeps_valid_context_and_constraints(self):
+        state = {
+            'version': 1, 'topic_query': 'گوشی سامسونگ', 'category_name': 'گوشی موبایل',
+            'category_cleared': True, 'max_price_toman': '15000000', 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'minimum', 'minimum_mah': 5000},
+            'review_topics': ['battery'],
+            'pending_requirements': [{'key': 'گارانتی', 'source_text': 'با گارانتی اصلی',
+                                      'status': 'unsupported'}],
+        }
+        result = self.post_turn(
+            'بودجه را ده میلیون ریال کن', state,
+            {'action': 'clarify', 'query': None, 'budget_text': None, 'question': 'budget'})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'budget')
+        self.assertEqual(result['query'], 'گوشی سامسونگ')
+        self.assertIsNone(result['category_name'])
+        self.assertEqual(result['max_price_toman'], '15000000')
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['explanation'])
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertTrue(result['need_state']['category_cleared'])
+        self.assertTrue(result['need_state']['budget_needs_input'])
+        self.assertEqual(result['need_state']['battery_requirement'],
+                         {'status': 'minimum', 'minimum_mah': 5000})
+        self.assertEqual(result['need_state']['review_topics'], ['battery'])
+        self.assertEqual([item['key'] for item in result['need_state']['pending_requirements']],
+                         ['گارانتی'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_invalid_budget_without_a_topic_does_not_guess_query_or_category(self):
+        result = self.post_turn(
+            'بودجه را ده میلیون ریال کن', None,
+            {'action': 'clarify', 'query': None, 'budget_text': None, 'question': 'budget'})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'budget')
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['category_name'])
+        self.assertIsNone(result['max_price_toman'])
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['explanation'])
+        self.assertIsNone(result['need_state']['topic_query'])
+        self.assertTrue(result['need_state']['budget_needs_input'])
+        self.assertEqual(len(self.calls), 1)
