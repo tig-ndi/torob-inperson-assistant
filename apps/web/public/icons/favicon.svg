@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>دستیار خرید حضوری</title>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#b52331" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+  <path d="M13 29H20V39C20 43.5 24.5 46 32 46C39.5 46 44 43.5 44 39V29H51V39C51 47.5 44 52 32 52C20 52 13 47.5 13 39Z" fill="#ffffff"/>
+  <rect x="24" y="19.5" width="4.4" height="4.4" rx="1" fill="#ffffff"/>
+  <rect x="35.6" y="19.5" width="4.4" height="4.4" rx="1" fill="#ffffff"/>
+</svg>
