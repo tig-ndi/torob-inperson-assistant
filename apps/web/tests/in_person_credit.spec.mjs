@@ -29,7 +29,7 @@ async function openSynthetic(page, budget = false) {
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
   await page.goto('/');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('آزمایشی');
-  if (budget) await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۱۰۰۰۰');
+  if (budget) await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۱۰۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').click();
   return page.getByRole('dialog', { name: 'آفرهای فروشندگان' });
@@ -66,6 +66,7 @@ test('synthetic credit disclosures, exact amounts, combined filters, pagination 
   await page.setViewportSize({ width: 390, height: 844 });
   await modal.locator('.credit-conditions').first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.resolve('../../.local/qa/credit-synthetic-mobile.png') });
+  await modal.locator('.offers-filters > summary').click();
   await modal.getByLabel(filterName).check();
   await expect(modal.locator('.offer-card')).toHaveCount(2);
   expect(queries.at(-1).get('max_price_toman')).toBe('10000');
@@ -105,6 +106,7 @@ test('synthetic credit empty, failure, retry, malformed response and unknown cha
   await expect(modal.locator('.credit-status')).toHaveText('وضعیت خرید اعتباری حضوری نامشخص');
   await modal.locator('.credit-conditions summary').click();
   await expect(modal.getByText('حضوری بودن این روش در منبع مشخص نشده است')).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
   await modal.getByLabel(filterName).check();
   await expect(modal.getByText('هیچ آفری با شرایط انتخابی یافت نشد')).toBeVisible();
   await expect(modal.getByText(/می‌توانید فیلتر اعتباری را بردارید/)).toBeVisible();
@@ -130,6 +132,7 @@ test('real dataset credit display and filter through isolated API', async ({ pag
   await expect(modal.locator('.offer-card').first()).toBeVisible();
   const original = await modal.locator('.offer-card').count();
   await expect(modal.locator('.credit-conditions')).toHaveCount(original);
+  await modal.locator('.offers-filters > summary').click();
   await modal.getByLabel(filterName).check();
   await expect(modal.locator('.state-panel[role="status"]')).toHaveCount(0);
   await expect(modal.getByText('خطا در دریافت آفرها', { exact: true })).toHaveCount(0);

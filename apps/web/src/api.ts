@@ -1,3 +1,53 @@
+
+export type BatteryEvidence = {
+  source_index: number;
+  section: string;
+  key: string;
+  value: string;
+  parsed_mah: number | null;
+};
+
+export type BatteryCapacityInfo = {
+  status: 'known' | 'unknown' | 'conflicting' | 'not_applicable';
+  capacity_mah: number | null;
+  reason?: string;
+  evidence_count?: number;
+  evidence?: BatteryEvidence[];
+};
+
+export type AssistantBatteryRequirement = {
+  status: 'unspecified' | 'awaiting_minimum' | 'no_minimum' | 'minimum';
+  minimum_mah: number | null;
+};
+
+export type ExplanationProduct = {
+  product_id: string;
+  reasons: string[];
+  suitability: string;
+  budget_offer?: {
+    offer_id: string;
+    product_id: string;
+    shop_id: string;
+    price_toman: string;
+    last_price_changed_at: string | null;
+    inventory_status: string;
+  } | null;
+  topics?: Record<string, unknown>;
+  battery_capacity?: BatteryCapacityInfo;
+};
+
+export type AssistantExplanation = {
+  query: string;
+  category_name: string | null;
+  max_price_toman: string | null;
+  ranking_basis: string;
+  topics: string[];
+  summary?: string;
+  limitations?: string;
+  provenance?: Record<string, unknown>;
+  products: ExplanationProduct[];
+};
+
 export type Spec = {
   key: string | null;
   section: string | null;
@@ -12,6 +62,7 @@ export type Product = {
   model: string | null;
   image_urls: string[];
   specs: Spec[];
+  battery_capacity?: BatteryCapacityInfo;
   offer_summary: {
     offer_count: number;
     min_price_toman: string | null;
@@ -101,6 +152,7 @@ export type ProductPage = {
   items: Product[];
   has_more: boolean;
   category_name?: string | null;
+  min_battery_capacity_mah?: number | null;
 };
 
 export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
@@ -111,6 +163,8 @@ export type AssistantResult = {
   max_price_toman: string | null;
   question: string | null;
   products: ProductPage | null;
+  battery_requirement?: AssistantBatteryRequirement | null;
+  explanation?: AssistantExplanation | null;
 };
 
 export async function fetchAssistantStatus(signal: AbortSignal): Promise<{ ready: boolean; reason: string; remaining_calls: number }> {
@@ -137,7 +191,31 @@ export function parseAssistantResult(value: unknown, requestId: string): Assista
       (result.status !== 'needs_input' && (!query || question !== null || products === null)) ||
       (result.status === 'results' && products?.items.length === 0) ||
       (result.status === 'no_evidence' && products?.items.length !== 0)) throw new Error('ساختار پاسخ دستیار معتبر نیست.');
-  return { status: result.status, query, category_name, max_price_toman: budget, question, products };
+  let battery_requirement: AssistantBatteryRequirement | null = null;
+  if (result.battery_requirement && typeof result.battery_requirement === 'object') {
+    const br = result.battery_requirement as Record<string, unknown>;
+    const status = typeof br.status === 'string' ? br.status as AssistantBatteryRequirement['status'] : 'unspecified';
+    const minMah = typeof br.minimum_mah === 'number' ? br.minimum_mah : null;
+    battery_requirement = { status, minimum_mah: minMah };
+  }
+
+  let explanation: AssistantExplanation | null = null;
+  if (result.explanation && typeof result.explanation === 'object') {
+    const exp = result.explanation as Record<string, unknown>;
+    explanation = {
+      query: typeof exp.query === 'string' ? exp.query : '',
+      category_name: typeof exp.category_name === 'string' ? exp.category_name : null,
+      max_price_toman: typeof exp.max_price_toman === 'string' ? exp.max_price_toman : null,
+      ranking_basis: typeof exp.ranking_basis === 'string' ? exp.ranking_basis : '',
+      topics: Array.isArray(exp.topics) ? exp.topics.filter(t => typeof t === 'string') : [],
+      summary: typeof exp.summary === 'string' ? exp.summary : undefined,
+      limitations: typeof exp.limitations === 'string' ? exp.limitations : undefined,
+      provenance: typeof exp.provenance === 'object' && exp.provenance !== null ? exp.provenance as Record<string, unknown> : undefined,
+      products: Array.isArray(exp.products) ? exp.products as ExplanationProduct[] : [],
+    };
+  }
+
+  return { status: result.status, query, category_name, max_price_toman: budget, question, products, battery_requirement, explanation };
 }
 
 export type OfferPage = {
@@ -202,6 +280,17 @@ export function parseProduct(item: unknown): Product {
   const rawImages = Array.isArray(product.image_urls) ? product.image_urls : [];
   const image_urls: string[] = rawImages.filter((img): img is string => typeof img === 'string');
 
+  const rawBattery = product.battery_capacity && typeof product.battery_capacity === 'object'
+    ? (product.battery_capacity as Record<string, unknown>)
+    : null;
+  const battery_capacity: BatteryCapacityInfo | undefined = rawBattery ? {
+    status: (rawBattery.status as BatteryCapacityInfo['status']) || 'unknown',
+    capacity_mah: typeof rawBattery.capacity_mah === 'number' ? rawBattery.capacity_mah : null,
+    reason: typeof rawBattery.reason === 'string' ? rawBattery.reason : undefined,
+    evidence_count: typeof rawBattery.evidence_count === 'number' ? rawBattery.evidence_count : undefined,
+    evidence: Array.isArray(rawBattery.evidence) ? (rawBattery.evidence as BatteryEvidence[]) : undefined,
+  } : undefined;
+
   return {
     product_id: product.product_id,
     persian_title: nullableText(product.persian_title),
@@ -210,6 +299,7 @@ export function parseProduct(item: unknown): Product {
     model: nullableText(product.model),
     image_urls,
     specs,
+    battery_capacity,
     offer_summary: {
       offer_count: count(summary.offer_count),
       missing_price_count: count(summary.missing_price_count),
@@ -228,7 +318,10 @@ export function parsePage(value: unknown): ProductPage {
   }
   const items = page.items.map(parseProduct);
   const category_name = nullableText(page.category_name);
-  return { items, has_more: page.has_more, category_name };
+  const min_battery_capacity_mah = typeof page.min_battery_capacity_mah === 'number'
+    ? page.min_battery_capacity_mah
+    : null;
+  return { items, has_more: page.has_more, category_name, min_battery_capacity_mah };
 }
 
 export function parseProductDetail(value: unknown): ProductDetail {
@@ -364,7 +457,8 @@ export async function searchProducts(
   maxPrice: string | null,
   signal: AbortSignal,
   categoryName?: string | null,
-  categoryCleared?: boolean
+  categoryCleared?: boolean,
+  minBatteryCapacityMah?: number | null
 ): Promise<ProductPage> {
   const params = new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) });
   if (maxPrice) {
@@ -374,6 +468,9 @@ export async function searchProducts(
     params.set('category_cleared', 'true');
   } else if (categoryName) {
     params.set('category_name', categoryName);
+  }
+  if (minBatteryCapacityMah !== null && minBatteryCapacityMah !== undefined) {
+    params.set('min_battery_capacity_mah', String(minBatteryCapacityMah));
   }
   let response: Response;
   try {
@@ -464,15 +561,68 @@ export async function fetchProductOffers(
   return parseOfferPage(body);
 }
 
-export function parseCoordinate(input: string): number | null {
-  const normalized = input
+export type CoordinateValidationResult =
+  | { status: 'empty'; value: null }
+  | { status: 'valid'; value: number }
+  | { status: 'invalid'; value: null; error: string };
+
+export function parseCoordinateWithValidation(
+  input: string,
+  kind: 'lat' | 'lon'
+): CoordinateValidationResult {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { status: 'empty', value: null };
+  }
+
+  // Normalize Persian digits (۰-۹), Arabic digits (٠-٩), Persian decimal comma (٫), Arabic comma (،), regular comma (,)
+  const normalized = trimmed
     .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 1776))
     .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632))
-    .trim();
-  if (!normalized) return null;
+    .replace(/[٫،,]/g, '.')
+    .replace(/\s+/g, '');
+
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+    return {
+      status: 'invalid',
+      value: null,
+      error: kind === 'lat'
+        ? 'عرض جغرافیایی باید یک عدد معتبر باشد.'
+        : 'طول جغرافیایی باید یک عدد معتبر باشد.',
+    };
+  }
+
   const num = Number(normalized);
-  if (!Number.isFinite(num)) return null;
-  return num;
+  if (!Number.isFinite(num)) {
+    return {
+      status: 'invalid',
+      value: null,
+      error: 'مختصات باید یک عدد معتبر باشد.',
+    };
+  }
+
+  if (kind === 'lat' && (num < -90 || num > 90)) {
+    return {
+      status: 'invalid',
+      value: null,
+      error: 'عرض جغرافیایی باید بین ۹۰- و ۹۰ باشد.',
+    };
+  }
+
+  if (kind === 'lon' && (num < -180 || num > 180)) {
+    return {
+      status: 'invalid',
+      value: null,
+      error: 'طول جغرافیایی باید بین ۱۸۰- و ۱۸۰ باشد.',
+    };
+  }
+
+  return { status: 'valid', value: num };
+}
+
+export function parseCoordinate(input: string): number | null {
+  const res = parseCoordinateWithValidation(input, 'lat');
+  return res.status === 'valid' ? res.value : null;
 }
 
 export function formatDistance(meters: number | null): string {

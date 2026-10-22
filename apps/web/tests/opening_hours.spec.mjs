@@ -40,6 +40,7 @@ test('synthetic hours states, combined controls, refresh, unknown exclusion and 
       hours_evaluated_at: `2026-10-21T10:${String(requests.length).padStart(2, '0')}:00+03:30` } });
   });
   const modal = await openSynthetic(page);
+  await modal.locator('.offers-filters > summary').click();
   await expect(modal.locator('.offer-card')).toHaveCount(4);
   await expect(modal.getByText('طبق ساعات ثبت‌شده اکنون باز', { exact: true })).toHaveCount(2);
   await expect(modal.getByText('طبق ساعات ثبت‌شده اکنون بسته', { exact: true })).toBeVisible();
@@ -85,6 +86,7 @@ test('synthetic hours filter empty state, failed refresh and retry keep filter; 
       hours_evaluated_at: mode === 'malformed' ? null : '2026-10-21T10:00:00+03:30' } });
   });
   const modal = await openSynthetic(page);
+  await modal.locator('.offers-filters > summary').click();
   await expect(modal.locator('.offer-card')).toHaveCount(1);
   await modal.getByLabel('فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند').check();
   await expect(modal.getByText('هیچ آفری با شرایط انتخابی یافت نشد')).toBeVisible();
@@ -107,6 +109,7 @@ test('real dataset hours display and open-only request through isolated API', as
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').first().click();
   const modal = page.getByRole('dialog', { name: 'آفرهای فروشندگان' });
+  await modal.locator('.offers-filters > summary').click();
   await expect(modal.locator('.hours-checked-at')).toBeVisible();
   const originalCount = await modal.locator('.offer-card').count();
   expect(originalCount).toBeGreaterThan(0);

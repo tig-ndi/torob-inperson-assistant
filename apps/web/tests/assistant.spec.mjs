@@ -29,12 +29,12 @@ test('synthetic assistant clarification, followup, exact budget, real cards and 
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('برای خرید تا ده میلیون تومان کمک می‌خواهم');
   await submit(page);
   await expect(page.getByText('چه نوع کالایی می‌خواهید؟', { exact: false })).toBeVisible();
-  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('10,000,000');
+  await expect(page.getByLabel('سقف بودجه (تومان)', { exact: true })).toHaveValue('10,000,000');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   await expect(page.locator('.product-card')).toHaveCount(1);
   await expect(page.locator('.active-filter-badge')).toContainText('۱۰٬۰۰۰٬۰۰۰');
-  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('10,000,000');
+  await expect(page.getByLabel('سقف بودجه (تومان)', { exact: true })).toHaveValue('10,000,000');
   expect(requests[1].messages.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
   expect(requests[1].max_price_toman).toBe('10000000');
   expect(requests[1].messages[1].content).toBe('چه نوع کالایی می‌خواهید؟');
@@ -56,12 +56,12 @@ test('synthetic assistant uses typed budget before manual search and rejects inv
     return route.fulfill({ json: searchResult(request) });
   });
   await page.goto('/');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۷۳۳۵۱۸۹۴۰۷۴۷۲۹۸۹۴۴');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۷۳۳۵۱۸۹۴۰۷۴۷۲۹۸۹۴۴');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   await expect(page.locator('.product-card')).toHaveCount(1);
   expect(requests[0].max_price_toman).toBe('733518940747298944');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('-1');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('-1');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی دوم');
   await submit(page);
   await expect(page.locator('#validation')).toBeVisible();
@@ -127,6 +127,77 @@ test('disabled assistant does not prevent direct catalogue search', async ({ pag
   await expect(page.locator('.product-card')).toHaveCount(1);
 });
 
+test('synthetic assistant status retry re-checks without page refresh', async ({ page }) => {
+  let mode = 'disabled';
+  await page.route('**/api/assistant/status', route => route.fulfill({ json: mode === 'ready'
+    ? { ready: true, reason: 'ready', remaining_calls: 3, attempt_limit: 3, model: 'synthetic-model' }
+    : { ready: false, reason: 'disabled', remaining_calls: 0, attempt_limit: 3, model: 'synthetic-model' } }));
+  await page.goto('/');
+  const retry = page.getByRole('button', { name: 'بررسی مجدد وضعیت دستیار', exact: true });
+  await expect(page.getByText('دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.')).toBeVisible();
+  await expect(retry).toBeVisible();
+  mode = 'ready';
+  await retry.click();
+  await expect(page.getByText(/درخواست باقی‌مانده در سقف تنظیم‌شده: ۳/)).toBeVisible();
+  await expect(retry).toHaveCount(0);
+});
+
+test('synthetic attempt limit shows its message without a retry button', async ({ page }) => {
+  await page.route('**/api/assistant/status', route => route.fulfill({ json: {
+    ready: false, reason: 'attempt_limit', remaining_calls: 0, attempt_limit: 3, model: 'synthetic-model' } }));
+  await page.goto('/');
+  await expect(page.getByText(/سقف درخواست‌های تنظیم‌شدهٔ دستیار تمام شده است/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'بررسی مجدد وضعیت دستیار', exact: true })).toHaveCount(0);
+});
+
+test('synthetic assistant processing keeps previous successful results visible (R03)', async ({ page }) => {
+  await statusRoute(page);
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/products?**', route => route.fulfill({ json: products }));
+  await page.route('**/api/assistant/turn', async route => {
+    const request = route.request().postDataJSON();
+    await gate;
+    await route.fulfill({ json: searchResult(request) });
+  });
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.locator('.product-card')).toHaveCount(1);
+  await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
+  await submit(page);
+  // While the assistant processes, the previous results stay visible and processing is shown separately
+  await expect(page.getByText('در حال بررسی درخواست…')).toBeVisible();
+  await expect(page.locator('.product-card')).toHaveCount(1);
+  await expect(page.locator('.product-card')).toContainText('گوشی آزمایشی');
+  release();
+  await expect(page.getByRole('button', { name: 'لغو درخواست', exact: true })).toHaveCount(0);
+  await expect(page.locator('.product-card')).toHaveCount(1);
+});
+
+test('synthetic same-query budget clear keeps assistant topic and history (R03)', async ({ page }) => {
+  await statusRoute(page);
+  await page.route('**/api/products?**', route => route.fulfill({ json: products }));
+  await page.route('**/api/assistant/turn', route => {
+    const request = route.request().postDataJSON();
+    return route.fulfill({ json: { ...searchResult(request), max_price_toman: '10000000' } });
+  });
+  await page.goto('/');
+  await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
+  await submit(page);
+  await expect(page.locator('.product-card')).toHaveCount(1);
+  const clearBudget = page.getByRole('button', { name: 'حذف بودجه ✕', exact: true });
+  await expect(clearBudget).toBeVisible();
+  const topic = page.locator('.assistant-notice').filter({ hasText: 'موضوع فعلی:' });
+  await expect(topic).toContainText('گوشی');
+  await expect(page.locator('.assistant-history li')).toHaveCount(2);
+  await clearBudget.click();
+  await expect(clearBudget).toHaveCount(0);
+  await expect(topic).toContainText('گوشی');
+  await expect(page.locator('.assistant-history li')).toHaveCount(2);
+  await expect(page.locator('.product-card')).toHaveCount(1);
+});
+
 test('result followups retain topic and budget, replace product, roll history and reset explicitly', async ({ page }) => {
   await statusRoute(page);
   const requests = [];
@@ -165,7 +236,7 @@ test('result followups retain topic and budget, replace product, roll history an
   await page.getByRole('button', { name: 'گفت‌وگوی تازه', exact: true }).click();
   await expect(topic).toHaveCount(0);
   await expect(page.locator('.assistant-history')).toHaveCount(0);
-  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('8,000,000');
+  await expect(page.getByLabel('سقف بودجه (تومان)', { exact: true })).toHaveValue('8,000,000');
   await need.fill('گوشی');
   await submit(page);
   await expect(need).toHaveValue('');
@@ -199,7 +270,7 @@ test('manual search provides context; an empty result and clarification retain i
   await expect(page.locator('.assistant-history')).toContainText('نتیجه‌ای ثبت نشده');
   await expect(page.locator('.assistant-notice')).toContainText('موضوع فعلی: «گوشی»');
   expect(requests[1].context_query).toBe('گوشی');
-  await expect(page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('سقف بودجه (تومان)', { exact: true })).toHaveValue('0');
 });
 
 test('long followups keep complete recent pairs within the API character bound', async ({ page }) => {
@@ -235,7 +306,7 @@ test('new conversation resets removed category while keeping the visible budget'
   });
   await page.goto('/');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('10000000');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'حذف فیلتر دسته', exact: true }).click();
   await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();

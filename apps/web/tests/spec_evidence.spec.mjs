@@ -72,7 +72,7 @@ test('need focus survives clarification and budget, is user editable without cal
   await need.fill('بودجه ده میلیون تومان');
   await page.getByRole('button', { name: 'بررسی نیاز', exact: true }).click();
   await expect(page.getByRole('button', { name: 'بررسی دوربین', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('12000000');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('12000000');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByRole('button', { name: 'بررسی دوربین', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'بررسی باتری', exact: true }).click();

@@ -1,17 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type ProductPage } from './api';
+import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type ProductPage, type AssistantBatteryRequirement, type AssistantExplanation } from './api';
+import { AssistantActivity } from './presentation/icons-motion/AssistantActivity';
+import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from './presentation/icons-motion/icons';
 
 type Props = {
   budget: string | null;
   contextQuery: string | null;
   contextCategory?: string | null;
   categoryCleared?: boolean;
+  contextBatteryRequirement?: AssistantBatteryRequirement | null;
+  contextTopics?: string[] | null;
   onContext: (query: string | null, category?: string | null, version?: number) => void;
   cancelVersion: number;
   onStart: () => number | null;
-  onBudget: (budget: string | null, version: number, need: string) => void;
-  onResults: (page: ProductPage, query: string, budget: string | null, version: number, category: string | null, need: string) => void;
+  onBudget: (budget: string | null, version: number, need: string, batteryRequirement?: AssistantBatteryRequirement | null) => void;
+  onResults: (
+    page: ProductPage,
+    query: string,
+    budget: string | null,
+    version: number,
+    category: string | null,
+    need: string,
+    batteryRequirement?: AssistantBatteryRequirement | null,
+    explanation?: AssistantExplanation | null
+  ) => void;
 };
 const numbers = new Intl.NumberFormat('fa-IR');
 const failures: Record<string, string> = {
@@ -24,7 +37,19 @@ const failures: Record<string, string> = {
   invalid_output: 'برداشت دستیار قابل استفاده نبود؛ اطلاعات حدسی نمایش داده نشد.',
 };
 
-export function Assistant({ budget, contextQuery, contextCategory = null, categoryCleared = false, onContext, cancelVersion, onStart, onBudget, onResults }: Props) {
+export function Assistant({
+  budget,
+  contextQuery,
+  contextCategory = null,
+  categoryCleared = false,
+  contextBatteryRequirement = null,
+  contextTopics = null,
+  onContext,
+  cancelVersion,
+  onStart,
+  onBudget,
+  onResults,
+}: Props) {
   const [status, setStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [remaining, setRemaining] = useState(0);
   const [unavailableReason, setUnavailableReason] = useState('');
@@ -34,23 +59,30 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const active = useRef<AbortController | null>(null);
+  const statusController = useRef<AbortController | null>(null);
+
+  function checkStatus() {
+    statusController.current?.abort();
+    const controller = new AbortController();
+    statusController.current = controller;
+    setStatus('checking');
+    setNotice('');
+    void fetchAssistantStatus(controller.signal).then(result => {
+      if (controller.signal.aborted) return;
+      setStatus(result.ready ? 'ready' : 'unavailable');
+      setRemaining(result.remaining_calls);
+      setUnavailableReason(result.reason);
+      setNotice(result.reason === 'attempt_limit' ? failures.attempt_limit! : result.ready ? '' : 'دستیار در این اجرا فعال نیست؛ از جست‌وجوی مستقیم استفاده کنید.');
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setStatus('unavailable');
+      setNotice('وضعیت دستیار در دسترس نیست؛ جست‌وجوی مستقیم را امتحان کنید.');
+    });
+  }
 
   useEffect(() => {
-    const controller = new AbortController();
-    void fetchAssistantStatus(controller.signal).then(result => {
-      if (!controller.signal.aborted) {
-        setStatus(result.ready ? 'ready' : 'unavailable');
-        setRemaining(result.remaining_calls);
-        setUnavailableReason(result.reason);
-        setNotice(result.reason === 'attempt_limit' ? failures.attempt_limit! : result.ready ? '' : 'دستیار در این اجرا فعال نیست؛ از جست‌وجوی مستقیم استفاده کنید.');
-      }
-    }).catch(() => {
-      if (!controller.signal.aborted) {
-        setStatus('unavailable');
-        setNotice('وضعیت دستیار در دسترس نیست؛ جست‌وجوی مستقیم را امتحان کنید.');
-      }
-    });
-    return () => { controller.abort(); active.current?.abort(); };
+    checkStatus();
+    return () => { statusController.current?.abort(); active.current?.abort(); };
   }, []);
 
   useEffect(() => {
@@ -105,6 +137,8 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
           context_query: contextQuery,
           context_category: contextCategory,
           category_cleared: categoryCleared,
+          context_battery_requirement: contextBatteryRequirement ?? undefined,
+          context_topics: contextTopics ?? undefined,
         }),
       });
       const body: unknown = await response.json();
@@ -116,7 +150,7 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
       if (controller.signal.aborted) return;
       setInput('');
       if (result.status === 'needs_input' && result.question) {
-        onBudget(result.max_price_toman, version, text);
+        onBudget(result.max_price_toman, version, text, result.battery_requirement);
         if (result.query) onContext(result.query, result.category_name ?? contextCategory, version);
         setHistory([...messages, { role: 'assistant', content: result.question }]);
       } else if (result.products && result.query) {
@@ -124,7 +158,16 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
           ? `برای «${result.query}» با بودجهٔ انتخابی نتیجه‌ای ثبت نشده؛ عبارت یا بودجه را تغییر دهید.`
           : `نتایج کاتالوگ برای «${result.query}» در ادامه آمده‌اند. برای بررسی تناسب با کاربردتان، مشخصات کالاها را مقایسه کنید.`;
         setHistory([...messages, { role: 'assistant', content: summary }]);
-        onResults(result.products, result.query, result.max_price_toman, version, result.category_name ?? null, text);
+        onResults(
+          result.products,
+          result.query,
+          result.max_price_toman,
+          version,
+          result.category_name ?? null,
+          text,
+          result.battery_requirement,
+          result.explanation
+        );
       }
     } catch (failure: unknown) {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'دریافت پاسخ دستیار ناموفق بود.');
@@ -161,19 +204,39 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
         onChange={event => setInput(event.target.value)} placeholder="مثلاً گوشی برای عکاسی می‌خواهم؛ بودجه‌ام ده میلیون تومان است."
         aria-describedby="assistant-help" />
       <div className="assistant-actions">
-        <button type="submit" disabled={pending || status !== 'ready' || !input.trim()}>بررسی نیاز</button>
-        {pending && <button type="button" className="secondary" onClick={cancel}>لغو درخواست</button>}
-        {(history.length > 0 || contextQuery !== null) && !pending && <button type="button" className="secondary" onClick={() => {
-          setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null, null);
-        }}>گفت‌وگوی تازه</button>}
+        <button type="submit" className="tia-motion-press" disabled={pending || status !== 'ready' || !input.trim()}>
+          <SparklesIcon />
+          بررسی نیاز
+        </button>
+        {pending && (
+          <button type="button" className="secondary tia-motion-press" onClick={cancel}>
+            <StopCircleIcon />
+            لغو درخواست
+          </button>
+        )}
+        {(history.length > 0 || contextQuery !== null) && !pending && (
+          <button type="button" className="secondary tia-motion-press" onClick={() => {
+            setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null, null);
+          }}>
+            <RestartIcon />
+            گفت‌وگوی تازه
+          </button>
+        )}
       </div>
     </form>
     <p id="assistant-help" className="caption">موضوع فعلی و چند پیام اخیر تا بازبودن این صفحه حفظ می‌شوند. فقط هنگام زدن «بررسی نیاز» درخواست ارسال می‌شود. بودجه را می‌توانید در کادر بالا هم تغییر دهید؛ اطلاعات تماس و شخصی ننویسید.</p>
-    {status === 'checking' && <p role="status">در حال بررسی دسترسی دستیار…</p>}
+    <AssistantActivity phase={pending ? 'pending' : status === 'checking' ? 'checking' : 'idle'} />
     {status === 'ready' && <p className="caption">درخواست باقی‌مانده در سقف تنظیم‌شده: {numbers.format(remaining)}</p>}
-    {status === 'unavailable' && <p className="caption">{unavailableReason === 'attempt_limit'
-      ? failures.attempt_limit : 'دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.'}</p>}
-    {pending && <p role="status">در حال بررسی نیاز؛ لطفاً صبر کنید…</p>}
+    {status === 'unavailable' && <div>
+      <p className="caption">{unavailableReason === 'attempt_limit'
+        ? failures.attempt_limit : 'دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.'}</p>
+      {unavailableReason !== 'attempt_limit' && (
+        <button type="button" className="secondary small-action-btn tia-motion-press" onClick={checkStatus}>
+          <RefreshIcon />
+          بررسی مجدد وضعیت دستیار
+        </button>
+      )}
+    </div>}
     {notice && <p className="assistant-notice" role="status">{notice}</p>}
     {error && <div role="alert" className="error-text"><p>{error}</p>
       <p className="caption">ارسال دوباره یک درخواست تازه است و ممکن است اعتبار مصرف کند.</p></div>}

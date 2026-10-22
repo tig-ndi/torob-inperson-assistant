@@ -13,16 +13,23 @@ import {
   getProductSpecValue,
   normalizeBudget,
   numberToPersianWords,
-  parseCoordinate,
+  parseCoordinateWithValidation,
   searchProducts,
   validateBudget,
 } from './api';
-import type { OfferPage, Product, ProductPage } from './api';
+import type { AssistantBatteryRequirement, Offer, OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
 import { Assistant } from './Assistant';
+import { Modal } from './Modal';
+import {
+  BatteryIcon, CameraIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon,
+  CompareIcon, CrosshairIcon, MapPinIcon, PlusIcon, RefreshIcon, SearchIcon, StoreIcon,
+} from './presentation/icons-motion/icons';
+import './presentation/icons-motion/motion.css';
 import { SpecEvidence } from './SpecEvidence';
 import { focusFromNeed, type SpecFocus } from './specEvidenceData';
+import { tehranDistricts } from './tehranNeighborhoods';
 import './style.css';
 
 type SearchState =
@@ -43,12 +50,14 @@ const formatMoney = (value: string) => numbers.format(BigInt(value));
 function ProductCard({
   product,
   isSelected,
+  budget,
   onToggleCompare,
   onViewOffers,
   specFocus,
 }: {
   product: Product;
   isSelected: boolean;
+  budget: string | null;
   onToggleCompare: (product: Product) => void;
   onViewOffers: (product: Product) => void;
   specFocus: SpecFocus | null;
@@ -57,6 +66,7 @@ function ProductCard({
   const min = summary.min_price_toman;
   const max = summary.max_price_toman;
   const precisionWarning = max !== null && BigInt(max) > 9007199254740991n;
+  const budgetQualified = min !== null && budget !== null && BigInt(min) <= BigInt(budget);
 
   return (
     <article className={`product-card ${isSelected ? 'selected' : ''}`} data-product-id={product.product_id}>
@@ -85,6 +95,9 @@ function ProductCard({
           )}
         </p>
         {precisionWarning && <p className="warning">عدد بسیار بزرگ در منبع؛ نیازمند بررسی قیمت</p>}
+        {budgetQualified && (
+          <span className="budget-qualified-badge">حداقل یک پیشنهاد در بودجهٔ شما</span>
+        )}
       </div>
       <p className="offer-count">
         {numbers.format(summary.offer_count)} آفر ثبت‌شده
@@ -93,22 +106,46 @@ function ProductCard({
         )}
       </p>
       <p className="inventory">موجودی تأیید نشده (سابقهٔ کاتالوگ)</p>
+      {product.battery_capacity && (
+        <p className="battery-capacity-line">
+          {product.battery_capacity.status === 'known' && product.battery_capacity.capacity_mah !== null ? (
+            <>
+              ظرفیت باتری ثبت‌شده: <bdi>{numbers.format(product.battery_capacity.capacity_mah)}</bdi> میلی‌آمپرساعت
+            </>
+          ) : product.battery_capacity.status === 'conflicting' ? (
+            'ظرفیت باتری در منبع به‌صورت متناقض ثبت شده است'
+          ) : (
+            'ظرفیت باتری در منبع ثبت نشده است'
+          )}
+        </p>
+      )}
       {specFocus && <SpecEvidence product={product} focus={specFocus} />}
       <div className="card-actions">
         <button
           type="button"
-          className="secondary-btn"
+          className="secondary-btn tia-motion-press"
           onClick={() => onViewOffers(product)}
         >
+          <StoreIcon />
           مشاهدهٔ آفرها ({numbers.format(summary.offer_count)})
         </button>
         <button
           type="button"
-          className={`compare-btn ${isSelected ? 'active' : ''}`}
+          className={`compare-btn tia-motion-press ${isSelected ? 'active' : ''}`}
           onClick={() => onToggleCompare(product)}
           aria-pressed={isSelected}
         >
-          {isSelected ? '✓ در مقایسه' : '+ انتخاب برای مقایسه'}
+          {isSelected ? (
+            <>
+              <CheckIcon />
+              در مقایسه
+            </>
+          ) : (
+            <>
+              <PlusIcon />
+              انتخاب برای مقایسه
+            </>
+          )}
         </button>
       </div>
     </article>
@@ -124,19 +161,18 @@ function ComparisonModal({
   products: Product[];
   onClose: () => void;
   onRemove: (productId: string) => void;
-  onViewOffers: (product: Product) => void;
+  onViewOffers: (product: Product, fromCompare: boolean) => void;
 }) {
   const specKeys = extractAllSpecKeys(products);
 
   return (
-    <section className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="compare-modal-title">
-      <div className="modal-content comparison-modal">
-        <div className="modal-header">
+    <Modal isOpen onClose={onClose} titleId="compare-modal-title" className="comparison-modal">
+      <div className="modal-header">
           <div>
             <h2 id="compare-modal-title">مقایسهٔ ۲ تا ۳ محصول</h2>
             <p className="caption">مشخصات بر اساس کلید و بخش منبع تطبیق داده شده‌اند؛ اطلاعات ناموجود به‌طور صریح مشخص‌اند.</p>
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="بستن پنجرهٔ مقایسه">✕</button>
+          <button type="button" className="close-btn tia-motion-press" onClick={onClose} aria-label="بستن پنجرهٔ مقایسه"><CloseIcon size={16} /></button>
         </div>
 
         {products.length < 2 ? (
@@ -147,18 +183,23 @@ function ComparisonModal({
         ) : (
           <div className="comparison-body">
             <div className="comparison-products-row">
-              {products.map(p => {
+              {products.map((p, index) => {
                 const s = p.offer_summary;
+                const columnLetter = String.fromCharCode(65 + index);
                 return (
                   <div key={p.product_id} className="compare-product-col">
-                    <button
-                      type="button"
-                      className="remove-col-btn"
-                      onClick={() => onRemove(p.product_id)}
-                      title="حذف از مقایسه"
-                    >
-                      حذف از مقایسه ✕
-                    </button>
+                    <div className="compare-col-top">
+                      <button
+                        type="button"
+                        className="remove-col-btn"
+                        onClick={() => onRemove(p.product_id)}
+                        title="حذف از مقایسه"
+                      >
+                        <CloseIcon size={14} />
+                        حذف از مقایسه
+                      </button>
+                      <span className="compare-col-badge" title={`ستون ${columnLetter}`}>{columnLetter}</span>
+                    </div>
                     <h3 className="compare-product-title">{p.persian_title?.trim() || 'عنوان محصول ثبت نشده'}</h3>
                     <p className="caption">برند: {p.brand_name?.trim() || 'ثبت نشده'}</p>
                     <p className="caption">دسته: {p.category_name?.trim() || 'ثبت نشده'}</p>
@@ -177,12 +218,13 @@ function ComparisonModal({
                     </p>
                     <button
                       type="button"
-                      className="secondary-btn small-btn"
+                      className="secondary-btn small-btn tia-motion-press"
                       onClick={() => {
                         onClose();
-                        onViewOffers(p);
+                        onViewOffers(p, true);
                       }}
                     >
+                      <StoreIcon />
                       مشاهدهٔ آفرها
                     </button>
                   </div>
@@ -205,9 +247,12 @@ function ComparisonModal({
                         )}
                       </div>
                       <div className="spec-values">
-                        {products.map(p => (
+                        {products.map((p, index) => (
                           <div key={p.product_id} className="spec-val-item">
-                            <span className="product-tag">{p.persian_title?.slice(0, 20) || 'کالا'}</span>
+                            <div className="spec-val-top">
+                              <span className="compare-col-badge" title={`ستون ${String.fromCharCode(65 + index)}`}>{String.fromCharCode(65 + index)}</span>
+                              <span className="product-tag" title={p.persian_title?.trim() || 'کالا'}>{p.persian_title?.trim() || 'کالا'}</span>
+                            </div>
                             <span className="val-text">{getProductSpecValue(p, k.section, k.key)}</span>
                           </div>
                         ))}
@@ -219,8 +264,7 @@ function ComparisonModal({
             </div>
           </div>
         )}
-      </div>
-    </section>
+      </Modal>
   );
 }
 
@@ -240,6 +284,7 @@ function OffersModal({
   onCreditFilterChange,
   onRefreshHours,
   onRetry,
+  onBackToCompare,
 }: {
   product: Product;
   budget: string | null;
@@ -256,12 +301,29 @@ function OffersModal({
   onCreditFilterChange: (creditOnly: boolean) => void;
   onRefreshHours: () => void;
   onRetry: () => void;
+  onBackToCompare?: (() => void) | null;
 }) {
   const [latInput, setLatInput] = useState(userLat !== null ? String(userLat) : '');
   const [lonInput, setLonInput] = useState(userLon !== null ? String(userLon) : '');
   const [radiusInput, setRadiusInput] = useState(maxDistanceKm !== null ? String(maxDistanceKm) : '');
+  const [districtId, setDistrictId] = useState('');
   const [locationError, setLocationError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
+  const filtersRef = useRef<HTMLDetailsElement>(null);
+
+  function handleNeighborhoodChange(districtValue: string) {
+    const district = tehranDistricts.find(d => d.id === districtValue);
+    if (!district) {
+      setDistrictId('');
+      return;
+    }
+    setDistrictId(district.id);
+    setLatInput(district.lat.toFixed(4));
+    setLonInput(district.lon.toFixed(4));
+    setLocationError('');
+    const rad = radiusInput ? Number(radiusInput) : null;
+    onLocationChange(district.lat, district.lon, rad);
+  }
 
   function handleLocateMe() {
     setLocationError('');
@@ -277,6 +339,7 @@ function OffersModal({
         const lon = position.coords.longitude;
         setLatInput(lat.toFixed(5));
         setLonInput(lon.toFixed(5));
+        setDistrictId('');
         const rad = radiusInput ? Number(radiusInput) : null;
         onLocationChange(lat, lon, rad);
       },
@@ -284,6 +347,10 @@ function OffersModal({
         setIsLocating(false);
         if (error.code === 1) {
           setLocationError('اجازهٔ دسترسی به موقعیت مکانی داده نشد؛ می‌توانید مختصات را دستی وارد کنید.');
+        } else if (error.code === 2) {
+          setLocationError('موقعیت مکانی در دسترس نیست؛ شاید GPS یا شبکه خاموش باشد. می‌توانید مختصات را دستی وارد کنید.');
+        } else if (error.code === 3) {
+          setLocationError('دریافت موقعیت در زمان معقول انجام نشد؛ لطفاً دوباره تلاش کنید یا مختصات را دستی وارد کنید.');
         } else {
           setLocationError('دریافت موقعیت مکانی با خطا مواجه شد؛ لطفاً مختصات را دستی وارد کنید.');
         }
@@ -295,14 +362,27 @@ function OffersModal({
   function handleApplyLocation(e: FormEvent) {
     e.preventDefault();
     setLocationError('');
-    const lat = parseCoordinate(latInput);
-    const lon = parseCoordinate(lonInput);
+    const latRes = parseCoordinateWithValidation(latInput, 'lat');
+    const lonRes = parseCoordinateWithValidation(lonInput, 'lon');
     const rad = radiusInput ? Number(radiusInput) : null;
 
-    if (lat === null && lon === null && rad === null) {
+    if (latRes.status === 'empty' && lonRes.status === 'empty' && rad === null) {
       onLocationChange(null, null, null);
       return;
     }
+
+    if (latRes.status === 'invalid') {
+      setLocationError(latRes.error);
+      return;
+    }
+
+    if (lonRes.status === 'invalid') {
+      setLocationError(lonRes.error);
+      return;
+    }
+
+    const lat = latRes.status === 'valid' ? latRes.value : null;
+    const lon = lonRes.status === 'valid' ? lonRes.value : null;
 
     if ((lat === null) !== (lon === null)) {
       setLocationError('مختصات عرض (lat) و طول (lon) جغرافیایی باید هر دو با هم وارد شوند.');
@@ -311,16 +391,6 @@ function OffersModal({
 
     if (rad !== null && (lat === null || lon === null)) {
       setLocationError('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر (عرض و طول جغرافیایی) است.');
-      return;
-    }
-
-    if (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
-      setLocationError('عرض جغرافیایی باید عددی بین ۹۰- و ۹۰ باشد.');
-      return;
-    }
-
-    if (lon !== null && (!Number.isFinite(lon) || lon < -180 || lon > 180)) {
-      setLocationError('طول جغرافیایی باید عددی بین ۱۸۰- و ۱۸۰ باشد.');
       return;
     }
 
@@ -336,19 +406,37 @@ function OffersModal({
     setLatInput('');
     setLonInput('');
     setRadiusInput('');
+    setDistrictId('');
     setLocationError('');
     onLocationChange(null, null, null);
   }
 
   const hasLocationFilter = userLat !== null && userLon !== null;
+  const activeFilterCount = (openNowOnly ? 1 : 0) + (inPersonCreditOnly ? 1 : 0) + (hasLocationFilter ? 1 : 0);
+  const locationSummary =
+    userLat !== null && userLon !== null
+      ? `محدودهٔ ${userLat.toFixed(2)}، ${userLon.toFixed(2)}${maxDistanceKm !== null ? ` · شعاع ${numbers.format(maxDistanceKm)} کیلومتر` : ''}`
+      : null;
   const uniqueShopCount = state.kind === 'success'
     ? new Set(state.page.items.map(o => o.shop_id)).size
     : 0;
+  const shopGroups: { shopId: string; shop: Offer['shop']; offers: Offer[] }[] = [];
+  if (state.kind === 'success') {
+    const groupIndex = new Map<string, number>();
+    for (const offer of state.page.items) {
+      let idx = groupIndex.get(offer.shop_id);
+      if (idx === undefined) {
+        idx = shopGroups.length;
+        groupIndex.set(offer.shop_id, idx);
+        shopGroups.push({ shopId: offer.shop_id, shop: offer.shop, offers: [] });
+      }
+      shopGroups[idx]!.offers.push(offer);
+    }
+  }
 
   return (
-    <section className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="offers-modal-title">
-      <div className="modal-content offers-modal">
-        <div className="modal-header">
+    <Modal isOpen onClose={onClose} titleId="offers-modal-title" className="offers-modal">
+      <div className="modal-header">
           <div>
             <h2 id="offers-modal-title">آفرهای فروشندگان</h2>
             <p className="caption">
@@ -364,111 +452,167 @@ function OffersModal({
               </p>
             )}
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
-        </div>
-
-        <div className="hours-filter-box">
-          <label className="hours-filter-label">
-            <input type="checkbox" checked={openNowOnly} onChange={e => onHoursFilterChange(e.target.checked)} />
-            فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند
-          </label>
-          <p className="caption">این فیلتر تأیید زنده نیست؛ فروشگاه‌های با ساعت نامشخص را هم کنار می‌گذارد.</p>
-          {state.kind === 'success' && <p className="caption hours-checked-at">
-            زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
-          </p>}
-          <button type="button" className="secondary small-action-btn" disabled={state.kind === 'loading'}
-            onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
-        </div>
-
-        <div className="credit-filter-box">
-          <label className="hours-filter-label">
-            <input type="checkbox" checked={inPersonCreditOnly} onChange={e => onCreditFilterChange(e.target.checked)} />
-            فقط آفرهای منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری
-          </label>
-          <p className="caption">کانال نامشخص، قیمت نامعلوم و شرایط ناقص کنار گذاشته می‌شوند. این فیلتر تأیید اعتبار یا امکان قطعی خرید نیست.</p>
-        </div>
-
-        {/* Location & Radius Filter Section */}
-        <div className="location-filter-box">
-          <div className="location-filter-header">
-            <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
-            <p className="caption">
-              محاسبهٔ فاصله بر مبنای تقریب کروی هاورسین است و زمان مسیر یا مسافت رانندگی نیست.
-            </p>
-          </div>
-
-          <form onSubmit={handleApplyLocation} className="location-form">
-            <div className="location-inputs-row">
-              <div className="loc-field">
-                <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>
-                <input
-                  id="user-lat"
-                  value={latInput}
-                  onChange={e => setLatInput(e.target.value)}
-                  placeholder="مثلاً ۳۵.۷۰۰"
-                />
-              </div>
-
-              <div className="loc-field">
-                <label htmlFor="user-lon">طول جغرافیایی (lon)</label>
-                <input
-                  id="user-lon"
-                  value={lonInput}
-                  onChange={e => setLonInput(e.target.value)}
-                  placeholder="مثلاً ۵۱.۴۰۰"
-                />
-              </div>
-
-              <div className="loc-field">
-                <label htmlFor="radius-select">شعاع جست‌وجو</label>
-                <select
-                  id="radius-select"
-                  value={radiusInput}
-                  onChange={e => setRadiusInput(e.target.value)}
-                >
-                  <option value="">بدون محدودیت شعاع</option>
-                  <option value="2">۲ کیلومتر</option>
-                  <option value="5">۵ کیلومتر</option>
-                  <option value="10">۱۰ کیلومتر</option>
-                  <option value="20">۲۰ کیلومتر</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="location-actions-row">
-              <button type="submit" className="small-action-btn">اعمال فیلتر محدوده</button>
+          <div className="modal-header-actions">
+            {onBackToCompare && (
               <button
                 type="button"
-                className="secondary small-action-btn"
-                onClick={handleLocateMe}
-                disabled={isLocating}
+                className="secondary small-action-btn tia-motion-press"
+                onClick={onBackToCompare}
+                title="بازگشت به پنجرهٔ مقایسه (دکمهٔ بازگشت مرورگر بین پنجره‌ها ناوبری نمی‌کند)"
               >
-                {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
+                <CompareIcon />
+                بازگشت به مقایسه
               </button>
-              {hasLocationFilter && (
-                <button
-                  type="button"
-                  className="text-btn"
-                  onClick={handleClearLocation}
-                >
-                  حذف موقعیت
+            )}
+            <button type="button" className="close-btn tia-motion-press" onClick={onClose} aria-label="بستن لیست آفرها"><CloseIcon size={16} /></button>
+          </div>
+        </div>
+
+        <div className="offers-filter-bar">
+          <details className="offers-filters" ref={filtersRef}>
+            <summary>
+              <span>فیلترها</span>
+              <span className={`offers-filter-count${activeFilterCount > 0 ? ' active' : ''}`}>
+                {activeFilterCount > 0 ? `${numbers.format(activeFilterCount)} فیلتر فعال` : 'بدون فیلتر فعال'}
+              </span>
+            </summary>
+            <div className="offers-filters-body">
+              <div className="hours-filter-box">
+                <label className="hours-filter-label">
+                  <input type="checkbox" checked={openNowOnly} onChange={e => onHoursFilterChange(e.target.checked)} />
+                  فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند
+                </label>
+                <p className="caption">این فیلتر تأیید زنده نیست؛ فروشگاه‌های با ساعت نامشخص را هم کنار می‌گذارد.</p>
+                {state.kind === 'success' && <p className="caption hours-checked-at">
+                  زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
+                </p>}
+                <button type="button" className="secondary small-action-btn tia-motion-press" disabled={state.kind === 'loading'}
+                  onClick={onRefreshHours}>
+                  <RefreshIcon />
+                  به‌روزرسانی وضعیت ساعت
                 </button>
-              )}
-            </div>
-
-            {locationError && (
-              <p className="error-text" role="alert">{locationError}</p>
-            )}
-
-            {hasLocationFilter && (
-              <div className="active-location-badge">
-                <span>
-                  موقعیت فعال: {userLat.toFixed(3)}, {userLon.toFixed(3)}
-                  {maxDistanceKm !== null ? ` · شعاع: تا ${numbers.format(maxDistanceKm)} کیلومتر` : ' · بدون سقف شعاع'}
-                </span>
               </div>
-            )}
-          </form>
+
+              <div className="credit-filter-box">
+                <label className="hours-filter-label">
+                  <input type="checkbox" checked={inPersonCreditOnly} onChange={e => onCreditFilterChange(e.target.checked)} />
+                  فقط آفرهای منطبق با شرایط ثبت‌شدهٔ خرید اعتباری حضوری
+                </label>
+                <p className="caption">کانال نامشخص، قیمت نامعلوم و شرایط ناقص کنار گذاشته می‌شوند. این فیلتر تأیید اعتبار یا امکان قطعی خرید نیست.</p>
+              </div>
+
+              {/* Location & Radius Filter Section */}
+              <div className="location-filter-box">
+                <div className="location-filter-header">
+                  <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
+                  <p className="caption">
+                    فاصلهٔ نمایشی، مستقیم هوایی است؛ مسیر رانندگی یا زمان سفر نیست. مختصات محله‌ها تقریبی (مرکز منطقه) است.
+                  </p>
+                </div>
+
+                <form onSubmit={handleApplyLocation} className="location-form">
+                  <div className="loc-field loc-field-wide">
+                    <label htmlFor="district-select">انتخاب سریع محله (مختصات تقریبی)</label>
+                    <select
+                      id="district-select"
+                      value={districtId}
+                      onChange={e => handleNeighborhoodChange(e.target.value)}
+                    >
+                      <option value="">بدون انتخاب محله</option>
+                      {tehranDistricts.map(d => (
+                        <option key={d.id} value={d.id}>{d.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="location-inputs-row">
+                    <div className="loc-field">
+                      <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>
+                      <input
+                        id="user-lat"
+                        value={latInput}
+                        onChange={e => setLatInput(e.target.value)}
+                        placeholder="مثلاً ۳۵.۷۰۰"
+                        inputMode="decimal"
+                      />
+                    </div>
+
+                    <div className="loc-field">
+                      <label htmlFor="user-lon">طول جغرافیایی (lon)</label>
+                      <input
+                        id="user-lon"
+                        value={lonInput}
+                        onChange={e => setLonInput(e.target.value)}
+                        placeholder="مثلاً ۵۱.۴۰۰"
+                        inputMode="decimal"
+                      />
+                    </div>
+
+                    <div className="loc-field">
+                      <label htmlFor="radius-select">شعاع جست‌وجو</label>
+                      <select
+                        id="radius-select"
+                        value={radiusInput}
+                        onChange={e => setRadiusInput(e.target.value)}
+                      >
+                        <option value="">بدون محدودیت شعاع</option>
+                        <option value="2">۲ کیلومتر</option>
+                        <option value="5">۵ کیلومتر</option>
+                        <option value="10">۱۰ کیلومتر</option>
+                        <option value="20">۲۰ کیلومتر</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="location-actions-row">
+                    <button type="submit" className="small-action-btn tia-motion-press">
+                      <MapPinIcon />
+                      اعمال فیلتر محدوده
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary small-action-btn tia-motion-press"
+                      onClick={handleLocateMe}
+                      disabled={isLocating}
+                    >
+                      <CrosshairIcon />
+                      {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
+                    </button>
+                    {hasLocationFilter && (
+                      <button
+                        type="button"
+                        className="text-btn"
+                        onClick={handleClearLocation}
+                      >
+                        حذف موقعیت
+                      </button>
+                    )}
+                  </div>
+
+                  {locationError && (
+                    <p className="error-text" role="alert">{locationError}</p>
+                  )}
+
+                  {hasLocationFilter && (
+                    <div className="active-location-badge">
+                      <span>
+                        موقعیت فعال: {userLat !== null ? userLat.toFixed(3) : ''}, {userLon !== null ? userLon.toFixed(3) : ''}
+                        {maxDistanceKm !== null ? ` · شعاع: تا ${numbers.format(maxDistanceKm)} کیلومتر` : ' · بدون سقف شعاع'}
+                      </span>
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+          </details>
+
+          {activeFilterCount > 0 && (
+            <div className="offers-active-summary">
+              {openNowOnly && <span className="offers-summary-chip">فقط فروشگاه‌های باز اکنون</span>}
+              {inPersonCreditOnly && <span className="offers-summary-chip">فقط اعتبار حضوری</span>}
+              {locationSummary && <span className="offers-summary-chip">{locationSummary}</span>}
+            </div>
+          )}
         </div>
 
         {state.kind === 'loading' && (
@@ -482,7 +626,10 @@ function OffersModal({
           <div className="state-panel error-panel" role="alert">
             <h3>خطا در دریافت آفرها</h3>
             <p>{state.message}</p>
-            <button type="button" className="secondary" onClick={onRetry}>تلاش مجدد</button>
+            <button type="button" className="secondary tia-motion-press" onClick={onRetry}>
+              <RefreshIcon />
+              تلاش مجدد
+            </button>
           </div>
         )}
 
@@ -502,6 +649,40 @@ function OffersModal({
                     ? 'هیچ فروشگاهی با قیمت کمتر یا مساوی سقف بودجهٔ تعیین‌شده ثبت نشده است.'
                     : 'هیچ آفری برای این کالا در کاتالوگ ثبت نشده است.'}
                 </p>
+                {(openNowOnly || inPersonCreditOnly || hasLocationFilter) && (
+                  <div className="empty-actions">
+                    {openNowOnly && (
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => onHoursFilterChange(false)}>
+                        <CloseIcon />
+                        حذف فیلتر ساعت
+                      </button>
+                    )}
+                    {inPersonCreditOnly && (
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => onCreditFilterChange(false)}>
+                        <CloseIcon />
+                        حذف فیلتر اعتبار حضوری
+                      </button>
+                    )}
+                    {hasLocationFilter && (
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={handleClearLocation}>
+                        <CloseIcon />
+                        حذف محدودهٔ فاصله
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={() => {
+                        if (filtersRef.current) {
+                          filtersRef.current.open = true;
+                          filtersRef.current.querySelector('summary')?.focus();
+                        }
+                      }}
+                    >
+                      تغییر شرایط در فیلترها
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -517,92 +698,100 @@ function OffersModal({
                 </div>
 
                 <div className="offers-grid">
-                  {state.page.items.map(offer => {
-                    const price = offer.price_toman;
-                    const isVeryLarge = offer.price_quality === 'above_js_safe_integer';
-                    const hasShopCoords = offer.shop.lat !== null && offer.shop.lon !== null;
-                    return (
-                      <article key={offer.offer_id} className="offer-card">
-                        <div className="offer-header">
-                          <h4 className="shop-name">{offer.shop.name?.trim() || 'فروشگاه بدون نام (ناشناس‌شده)'}</h4>
-                          <span className="offer-badge" aria-hidden="true">آفر</span>
-                        </div>
-
-                        <p className="shop-address">
-                          📍 {offer.shop.address?.trim() || offer.shop.location_label?.trim() || 'نشانی ثبت نشده'}
-                        </p>
-
-                        {offer.seller_title?.trim() && (
-                          <p className="seller-title">عنوان اعلامی فروشنده: {offer.seller_title.trim()}</p>
-                        )}
-
-                        <div className="offer-price-block">
-                          <p className="price">
-                            {price === null ? (
-                              'قیمتی ثبت نشده'
-                            ) : (
-                              <>
-                                <bdi>{formatMoney(price)}</bdi> <span>تومان</span>
-                              </>
-                            )}
-                          </p>
-                          {isVeryLarge && (
-                            <p className="warning">هشدار: قیمت بسیار بزرگ در منبع</p>
-                          )}
-                        </div>
-
-                        <div className="offer-details">
-                          <p className="detail-row">
-                            <span>آخرین تغییر قیمت ثبت‌شده:</span>
-                            <strong>{formatTehranDateTime(offer.last_price_changed_at)}</strong>
-                          </p>
-                          <p className="detail-row">
-                            <span>گارانتی:</span>
-                            <span>{formatWarranty(offer.warranty)}</span>
-                          </p>
-
-                          <p className="detail-row">
-                            <span>فاصلهٔ مستقیم هوایی:</span>
-                            {offer.direct_distance_meters !== null ? (
-                              <strong>{formatDistance(offer.direct_distance_meters)}</strong>
-                            ) : !hasShopCoords ? (
-                              <span className="warning">موقعیت ثبت نشده (فاصله نامشخص)</span>
-                            ) : (
-                              <span className="muted-text">نیازمند تعیین موقعیت کاربر</span>
-                            )}
-                          </p>
-
-                          <p className="detail-row provenance-row">
-                            <span>شناسهٔ آفر:</span>
-                            <code>{offer.offer_id}</code>
+                  {shopGroups.map(group => (
+                    <section key={group.shopId} className="offer-shop-group" aria-label={`آفرهای ${group.shop.name?.trim() || 'فروشگاه بدون نام'}`}>
+                      <header className="offer-shop-header">
+                        <div>
+                          <h4 className="shop-name">{group.shop.name?.trim() || 'فروشگاه بدون نام (ناشناس‌شده)'}</h4>
+                          <p className="shop-address">
+                            📍 {group.shop.address?.trim() || group.shop.location_label?.trim() || 'نشانی ثبت نشده'}
                           </p>
                         </div>
+                        <span className="offer-badge" aria-hidden="true">{numbers.format(group.offers.length)} آفر</span>
+                      </header>
+                      <div className="offer-shop-cards">
+                        {group.offers.map(offer => {
+                          const price = offer.price_toman;
+                          const isVeryLarge = offer.price_quality === 'above_js_safe_integer';
+                          const hasShopCoords = offer.shop.lat !== null && offer.shop.lon !== null;
+                          return (
+                            <article key={offer.offer_id} className="offer-card">
+                              {offer.seller_title?.trim() && (
+                                <p className="seller-title">عنوان اعلامی فروشنده: {offer.seller_title.trim()}</p>
+                              )}
 
-                        <OpeningHoursDetails hours={offer.opening_hours} />
-                        <InPersonCreditDetails credit={offer.in_person_credit} />
-                        <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
-                      </article>
-                    );
-                  })}
+                              <div className="offer-price-block">
+                                <p className="price">
+                                  {price === null ? (
+                                    'قیمتی ثبت نشده'
+                                  ) : (
+                                    <>
+                                      <bdi>{formatMoney(price)}</bdi> <span>تومان</span>
+                                    </>
+                                  )}
+                                </p>
+                                {isVeryLarge && (
+                                  <p className="warning">هشدار: قیمت بسیار بزرگ در منبع</p>
+                                )}
+                              </div>
+
+                              <div className="offer-details">
+                                <p className="detail-row">
+                                  <span>آخرین تغییر قیمت ثبت‌شده:</span>
+                                  <strong>{formatTehranDateTime(offer.last_price_changed_at)}</strong>
+                                </p>
+                                <p className="detail-row">
+                                  <span>گارانتی:</span>
+                                  <span>{formatWarranty(offer.warranty)}</span>
+                                </p>
+
+                                <p className="detail-row">
+                                  <span>فاصلهٔ مستقیم هوایی:</span>
+                                  {offer.direct_distance_meters !== null ? (
+                                    <strong>{formatDistance(offer.direct_distance_meters)}</strong>
+                                  ) : !hasShopCoords ? (
+                                    <span className="warning">موقعیت ثبت نشده (فاصله نامشخص)</span>
+                                  ) : (
+                                    <span className="muted-text">نیازمند تعیین موقعیت کاربر</span>
+                                  )}
+                                </p>
+
+                                <p className="detail-row provenance-row">
+                                  <span>شناسهٔ آفر:</span>
+                                  <code>{offer.offer_id}</code>
+                                </p>
+                              </div>
+
+                              <OpeningHoursDetails hours={offer.opening_hours} />
+                              <InPersonCreditDetails credit={offer.in_person_credit} />
+                              <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
 
                 {(state.offset > 0 || state.page.has_more) && (
                   <nav className="pagination" aria-label="صفحه‌های آفرها">
                     <button
                       type="button"
-                      className="secondary"
+                      className="secondary tia-motion-press"
                       disabled={state.offset === 0}
                       onClick={() => onPageChange(Math.max(0, state.offset - OFFERS_PAGE_SIZE))}
                     >
+                      <ChevronRightIcon />
                       صفحهٔ قبل
                     </button>
                     <button
                       type="button"
-                      className="secondary"
+                      className="secondary tia-motion-press"
                       disabled={!state.page.has_more}
                       onClick={() => onPageChange(state.offset + OFFERS_PAGE_SIZE)}
                     >
                       صفحهٔ بعد
+                      <ChevronLeftIcon />
                     </button>
                   </nav>
                 )}
@@ -610,8 +799,7 @@ function OffersModal({
             )}
           </div>
         )}
-      </div>
-    </section>
+      </Modal>
   );
 }
 
@@ -619,17 +807,20 @@ function App() {
   const [input, setInput] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
   const [activeBudget, setActiveBudget] = useState<string | null>(null);
-  const [validation, setValidation] = useState('');
+  const [queryError, setQueryError] = useState('');
+  const [budgetError, setBudgetError] = useState('');
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
 
   // Comparison state
   const [selectedForComparison, setSelectedForComparison] = useState<Product[]>([]);
   const [showComparisonView, setShowComparisonView] = useState(false);
   const [comparisonWarning, setComparisonWarning] = useState('');
+  const lastCompareToggle = useRef<{ id: string; time: number } | null>(null);
 
   // Offers modal state
   const [activeOffersProduct, setActiveOffersProduct] = useState<Product | null>(null);
   const [offersState, setOffersState] = useState<OffersState>({ kind: 'idle' });
+  const [offersOriginCompare, setOffersOriginCompare] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
@@ -640,6 +831,8 @@ function App() {
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
   const interactionVersion = useRef(0);
+  const budgetDraftVersion = useRef(0);
+  const assistantStartDraftVersion = useRef(0);
   const lastCatalogueQuery = useRef<string | null>(null);
   const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
   const [assistantContextQuery, setAssistantContextQuery] = useState<string | null>(null);
@@ -647,6 +840,8 @@ function App() {
   const [categoryCleared, setCategoryCleared] = useState(false);
   const [assistantContextCategory, setAssistantContextCategory] = useState<string | null>(null);
   const [specFocus, setSpecFocus] = useState<SpecFocus | null>(null);
+  const [batteryRequirement, setBatteryRequirement] = useState<AssistantBatteryRequirement | null>(null);
+  const [activeBatteryMah, setActiveBatteryMah] = useState<number | null>(null);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -674,6 +869,7 @@ function App() {
 
     const formatted = formatBudgetInput(raw);
     setBudgetInput(formatted);
+    budgetDraftVersion.current++;
 
     requestAnimationFrame(() => {
       if (!budgetInputRef.current) return;
@@ -697,32 +893,48 @@ function App() {
     });
   }
 
+  function readBudgetDraft(): { ok: true; budget: string | null } | { ok: false; error: string } {
+    const normalized = normalizeBudget(budgetInput);
+    if (!normalized) return { ok: true, budget: null };
+    const check = validateBudget(normalized);
+    if (!check.valid) {
+      return { ok: false, error: check.error || 'بودجهٔ واردشده نامعتبر است.' };
+    }
+    return { ok: true, budget: normalized };
+  }
+
   async function search(
     query: string,
     offset = 0,
     budget: string | null = activeBudget,
     categoryName: string | null = activeCategory,
-    isCategoryCleared: boolean = categoryCleared
+    isCategoryCleared: boolean = categoryCleared,
+    batteryMah: number | null = activeBatteryMah
   ) {
     const trimmed = query.trim();
     if (!trimmed || trimmed.length > 120) {
-      setValidation('نام کالا را بین ۱ تا ۱۲۰ نویسه وارد کنید.');
+      setQueryError('نام کالا را بین ۱ تا ۱۲۰ نویسه وارد کنید.');
       return;
     }
 
     if (budget) {
       const budgetCheck = validateBudget(budget);
       if (!budgetCheck.valid) {
-        setValidation(budgetCheck.error || 'بودجهٔ واردشده نامعتبر است.');
+        setBudgetError(budgetCheck.error || 'بودجهٔ واردشده نامعتبر است.');
         return;
       }
     }
 
-    setValidation('');
+    setQueryError('');
+    setBudgetError('');
+    const isNewTopic = trimmed !== lastCatalogueQuery.current;
     lastCatalogueQuery.current = trimmed;
     interactionVersion.current++;
-    setAssistantCancelVersion(version => version + 1);
-    setAssistantContextQuery(null);
+    if (isNewTopic) {
+      setAssistantCancelVersion(version => version + 1);
+      setAssistantContextQuery(null);
+      setAssistantContextCategory(null);
+    }
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
@@ -741,7 +953,8 @@ function App() {
         budget,
         controller.signal,
         categoryName,
-        isCategoryCleared
+        isCategoryCleared,
+        batteryMah
       );
       if (!controller.signal.aborted) {
         const resolvedCategory = isCategoryCleared ? null : (page.category_name ?? categoryName);
@@ -778,22 +991,23 @@ function App() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalized = normalizeBudget(budgetInput);
+    setQueryError('');
+    setBudgetError('');
     const sameQuery = input.trim() === lastCatalogueQuery.current;
     const nextCategory = sameQuery ? activeCategory : null;
     const nextCleared = sameQuery ? categoryCleared : false;
-    if (normalized) {
-      const check = validateBudget(normalized);
-      if (!check.valid) {
-        setValidation(check.error || 'بودجهٔ واردشده نامعتبر است.');
-        return;
-      }
-      setActiveBudget(normalized);
-      void search(input, 0, normalized, nextCategory, nextCleared);
-    } else {
-      setActiveBudget(null);
-      void search(input, 0, null, nextCategory, nextCleared);
+    const nextBatteryMah = sameQuery ? activeBatteryMah : null;
+    if (!sameQuery) {
+      setActiveBatteryMah(null);
+      setBatteryRequirement(null);
     }
+    const draft = readBudgetDraft();
+    if (!draft.ok) {
+      setBudgetError(draft.error);
+      return;
+    }
+    setActiveBudget(draft.budget);
+    void search(input, 0, draft.budget, nextCategory, nextCleared, nextBatteryMah);
   }
 
   function clearBudget() {
@@ -808,13 +1022,27 @@ function App() {
     setActiveCategory(null);
     setCategoryCleared(true);
     setAssistantContextCategory(null);
+    setActiveBatteryMah(null);
+    setBatteryRequirement(null);
     if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
-      void search(state.query, 0, activeBudget, null, true);
+      void search(state.query, 0, activeBudget, null, true, null);
+    }
+  }
+
+  function handleClearBattery() {
+    setActiveBatteryMah(null);
+    setBatteryRequirement(null);
+    if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
+      void search(state.query, 0, activeBudget, activeCategory, categoryCleared, null);
     }
   }
 
   function toggleCompare(product: Product) {
     setComparisonWarning('');
+    const now = Date.now();
+    const last = lastCompareToggle.current;
+    if (last && last.id === product.product_id && now - last.time < 350) return;
+    lastCompareToggle.current = { id: product.product_id, time: now };
     const exists = selectedForComparison.some(p => p.product_id === product.product_id);
     if (exists) {
       setSelectedForComparison(selectedForComparison.filter(p => p.product_id !== product.product_id));
@@ -831,8 +1059,9 @@ function App() {
     setSelectedForComparison(selectedForComparison.filter(p => p.product_id !== productId));
   }
 
-  function openOffers(product: Product, offset = 0) {
+  function openOffers(product: Product, offset = 0, fromCompare = false) {
     setActiveOffersProduct(product);
+    setOffersOriginCompare(fromCompare);
     loadOffers(product.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm);
   }
 
@@ -883,7 +1112,7 @@ function App() {
           <p className="eyebrow">از پیدا کردن کالا شروع کنیم</p>
           <h1 id="page-title">دنبال چه کالایی می‌گردید؟</h1>
           <p className="intro-copy">
-            نام کالا را جست‌وجو کنید، سقف بودجه تعیین کنید و ۲ تا ۳ کالا را برای مقایسه مشخصات و آفرها انتخاب کنید.
+            نام کالا را جست‌وجو کنید و برای مقایسه، ۲ تا ۳ کالا را انتخاب کنید.
           </p>
 
           <form onSubmit={submit} className="search-form">
@@ -897,13 +1126,18 @@ function App() {
                   onChange={e => setInput(e.target.value)}
                   placeholder="مثلاً گوشی، کفش یا سونی"
                   autoComplete="off"
-                  aria-describedby={validation ? 'validation' : 'search-help'}
-                  aria-invalid={Boolean(validation)}
+                  aria-describedby={queryError ? 'query-validation' : 'search-help'}
+                  aria-invalid={Boolean(queryError)}
                 />
+                {queryError && (
+                  <p id="query-validation" className="error-text" role="alert">
+                    {queryError}
+                  </p>
+                )}
               </div>
 
               <div className="field-group budget-field">
-                <label htmlFor="budget">سقف بودجه (تومان - اختیاری)</label>
+                <label htmlFor="budget" title="سقف بودجه به تومان؛ اختیاری">سقف بودجه (تومان)</label>
                 <input
                   ref={budgetInputRef}
                   id="budget"
@@ -912,27 +1146,33 @@ function App() {
                   onChange={handleBudgetChange}
                   placeholder="مثلاً ۱۰٬۰۰۰٬۰۰۰ یا خالی"
                   autoComplete="off"
+                  inputMode="numeric"
+                  aria-describedby={budgetError ? 'validation' : undefined}
+                  aria-invalid={Boolean(budgetError)}
                 />
                 {budgetWords && (
                   <p className="budget-words-caption" aria-live="polite">
                     <span className="words-label">معادل به حروف:</span> <strong>{budgetWords}</strong>
                   </p>
                 )}
+                {budgetError && (
+                  <p id="validation" className="error-text" role="alert">
+                    {budgetError}
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="form-actions">
-              <button type="submit">جست‌وجو</button>
+              <button type="submit" className="tia-motion-press">
+                <SearchIcon />
+                جست‌وجو
+              </button>
             </div>
 
             <p id="search-help" className="caption">
-              جست‌وجو به اطلاعات ثبت‌شده در کاتالوگ محدود است. ارقام بودجه می‌توانند فارسی یا انگلیسی باشند.
+              جست‌وجو به اطلاعات ثبت‌شده در کاتالوگ محدود است.
             </p>
-            {validation && (
-              <p id="validation" className="error-text" role="alert">
-                {validation}
-              </p>
-            )}
           </form>
 
           <div className="examples">
@@ -941,12 +1181,21 @@ function App() {
               <button
                 key={query}
                 type="button"
-                className="chip"
+                className="chip tia-motion-press"
                 onClick={() => {
                   setInput(query);
                   setActiveCategory(null);
                   setCategoryCleared(false);
-                  void search(query, 0, activeBudget, null, false);
+                  setActiveBatteryMah(null);
+                  setBatteryRequirement(null);
+                  const draft = readBudgetDraft();
+                  if (!draft.ok) {
+                    setBudgetError(draft.error);
+                    return;
+                  }
+                  setBudgetError('');
+                  setActiveBudget(draft.budget);
+                  void search(query, 0, draft.budget, null, false, null);
                 }}
               >
                 {query}
@@ -954,13 +1203,27 @@ function App() {
             ))}
           </div>
 
-          {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName)))) && (
+          {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName))) || (activeBatteryMah !== null && batteryRequirement?.status === 'minimum')) && (
             <div className="active-filters-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
               {activeBudget && (
                 <div className="active-filter-badge">
                   <span>سقف بودجهٔ فعال: <strong>{formatMoney(activeBudget)} تومان</strong></span>
                   <button type="button" className="clear-filter-btn" onClick={clearBudget} title="حذف فیلتر بودجه">
                     حذف بودجه ✕
+                  </button>
+                </div>
+              )}
+              {activeBatteryMah !== null && batteryRequirement?.status === 'minimum' && (
+                <div className="active-filter-badge">
+                  <span>حداقل ظرفیت باتری: <strong>{numbers.format(activeBatteryMah)} میلی‌آمپرساعت</strong></span>
+                  <button
+                    type="button"
+                    className="clear-filter-btn"
+                    onClick={handleClearBattery}
+                    title="حذف شرط ظرفیت باتری"
+                    aria-label="حذف شرط ظرفیت باتری"
+                  >
+                    حذف شرط ✕
                   </button>
                 </div>
               )}
@@ -987,72 +1250,8 @@ function App() {
           )}
         </section>
 
-        <Assistant
-          budget={budgetInput ? normalizeBudget(budgetInput) : null}
-          cancelVersion={assistantCancelVersion}
-          contextQuery={assistantContextQuery}
-          contextCategory={assistantContextCategory}
-          categoryCleared={categoryCleared}
-          onContext={(query, category, version) => {
-            if (version !== undefined && version !== interactionVersion.current) return;
-            setAssistantContextQuery(query);
-            if (query === null && version === undefined) {
-              setCategoryCleared(false);
-              setSpecFocus(null);
-            }
-            if (category !== undefined) {
-              setAssistantContextCategory(category);
-              setActiveCategory(category);
-            }
-          }}
-          onStart={() => {
-            const budget = budgetInput ? normalizeBudget(budgetInput) : null;
-            const check = budget === null ? { valid: true } : validateBudget(budget);
-            if (!check.valid) {
-              setValidation('error' in check ? check.error || 'بودجهٔ واردشده نامعتبر است.' : 'بودجهٔ واردشده نامعتبر است.');
-              return null;
-            }
-            setActiveBudget(budget);
-            setValidation('');
-            activeSearch.current?.abort();
-            setState({ kind: 'idle' });
-            return ++interactionVersion.current;
-          }}
-          onResults={(page, query, budget, version, category, need) => {
-            if (version !== interactionVersion.current) return;
-            lastCatalogueQuery.current = query;
-            setInput(query);
-            setAssistantContextQuery(query);
-            setAssistantContextCategory(category);
-            const hasPhones = category === 'گوشی موبایل' || page.items.some(p => p.category_name === 'گوشی موبایل');
-            setSpecFocus(previous => hasPhones ? focusFromNeed(need) ?? previous : null);
-            setActiveCategory(category);
-            const isCleared = category !== null ? false : categoryCleared;
-            setCategoryCleared(isCleared);
-            setActiveBudget(budget);
-            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
-            setValidation('');
-            setState({
-              kind: 'success',
-              query,
-              offset: 0,
-              budget,
-              page,
-              categoryName: category,
-              categoryCleared: isCleared,
-            });
-          }}
-          onBudget={(budget, version, need) => {
-            if (version !== interactionVersion.current) return;
-            const requestedFocus = focusFromNeed(need);
-            if (requestedFocus) setSpecFocus(requestedFocus);
-            setActiveBudget(budget);
-            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
-          }}
-        />
-
         {comparisonWarning && (
-          <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
+          <aside className="toast-notification warning-notice tia-motion-fade" role="alert" aria-live="assertive">
             <div className="toast-message">
               <span className="toast-icon" aria-hidden="true">⚠️</span>
               <div>
@@ -1066,17 +1265,10 @@ function App() {
               onClick={() => setComparisonWarning('')}
               aria-label="بستن پیام"
             >
-              ✕
+              <CloseIcon size={14} />
             </button>
           </aside>
         )}
-
-        <aside className="notice">
-          <strong>قبل از مراجعه، قیمت و موجودی را تأیید کنید.</strong>
-          <span>
-            این کاتالوگ سابقهٔ آفرهای ثبت‌شده است؛ قیمت ثبت‌شده نشانهٔ موجودی فعلی یا قطعی فروشگاه نیست.
-          </span>
-        </aside>
 
         {/* Sticky comparison bar */}
         {selectedForComparison.length > 0 && (
@@ -1087,10 +1279,11 @@ function App() {
             <div className="compare-bar-actions">
               <button
                 type="button"
-                className="secondary"
+                className="secondary tia-motion-press"
                 disabled={selectedForComparison.length < 2}
                 onClick={() => setShowComparisonView(true)}
               >
+                <CompareIcon />
                 مشاهدهٔ مقایسهٔ محصولات
               </button>
               <button
@@ -1138,9 +1331,10 @@ function App() {
               <p>{state.message}</p>
               <button
                 type="button"
-                className="secondary"
+                className="secondary tia-motion-press"
                 onClick={() => void search(state.query, state.offset, state.budget, activeCategory, categoryCleared)}
               >
+                <RefreshIcon />
                 تلاش مجدد
               </button>
             </div>
@@ -1151,15 +1345,26 @@ function App() {
               {(state.categoryName === 'گوشی موبایل' || state.page.items.some(p => p.category_name === 'گوشی موبایل')) && (
                 <fieldset className="spec-focus-controls">
                   <legend>کدام مشخصات برای بررسی نیاز شما مهم‌تر است؟</legend>
-                  <p className="caption">مشخصات دوربین یا باتری را بررسی کنید؛ عدد مگاپیکسل یا ظرفیت باتری به‌تنهایی کیفیت واقعی را ثابت نمی‌کند.</p>
-                  <p className="caption">این انتخاب نمایش مشخصات را تغییر می‌دهد؛ فیلتر یا رتبه‌بندی بر اساس این ویژگی‌ها اعمال نمی‌شود.</p>
                   <div className="spec-focus-actions">
                     {([['camera', 'دوربین'], ['battery', 'باتری'], ['both', 'هر دو']] as const).map(([value, label]) => (
-                      <button key={value} type="button" className="secondary" aria-pressed={specFocus === value}
-                        onClick={() => setSpecFocus(value)}>بررسی {label}</button>
+                      <button key={value} type="button" className="secondary small-action-btn tia-motion-press" aria-pressed={specFocus === value}
+                        onClick={() => setSpecFocus(value)}>
+                        {value === 'camera' ? <CameraIcon /> : value === 'battery' ? <BatteryIcon /> : <CheckIcon />}
+                        بررسی {label}
+                      </button>
                     ))}
-                    {specFocus && <button type="button" className="secondary" onClick={() => setSpecFocus(null)}>بستن مشخصات مرتبط</button>}
+                    {specFocus && (
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => setSpecFocus(null)}>
+                        <CloseIcon />
+                        بستن مشخصات مرتبط
+                      </button>
+                    )}
                   </div>
+                  <details className="spec-focus-help">
+                    <summary>این گزینه چه کاری انجام می‌دهد؟</summary>
+                    <p className="caption">مشخصات دوربین یا باتری را بررسی می‌کند؛ عدد مگاپیکسل یا ظرفیت باتری به‌تنهایی کیفیت واقعی را ثابت نمی‌کند.</p>
+                    <p className="caption">این انتخاب فقط نمایش مشخصات را تغییر می‌دهد؛ فیلتر یا رتبه‌بندی بر اساس این ویژگی‌ها اعمال نمی‌شود.</p>
+                  </details>
                 </fieldset>
               )}
               <p role="status" className="sr-only">
@@ -1175,13 +1380,14 @@ function App() {
                   </p>
                 </div>
               ) : (
-                <div className="product-grid">
+                <div className="product-grid tia-motion-enter" key={`results-${state.query}-${state.offset}`}>
                   {state.page.items.map(product => {
                     const isSelected = selectedForComparison.some(p => p.product_id === product.product_id);
                     return (
                       <ProductCard
                         key={product.product_id}
                         product={product}
+                        budget={state.budget}
                         specFocus={specFocus}
                         isSelected={isSelected}
                         onToggleCompare={toggleCompare}
@@ -1196,7 +1402,7 @@ function App() {
                 <nav className="pagination" aria-label="صفحه‌های نتایج">
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary tia-motion-press"
                     disabled={state.offset === 0}
                     onClick={() =>
                       void search(
@@ -1208,11 +1414,12 @@ function App() {
                       )
                     }
                   >
+                    <ChevronRightIcon />
                     صفحهٔ قبل
                   </button>
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary tia-motion-press"
                     disabled={!state.page.has_more}
                     onClick={() =>
                       void search(
@@ -1225,12 +1432,134 @@ function App() {
                     }
                   >
                     صفحهٔ بعد
+                    <ChevronLeftIcon />
                   </button>
                 </nav>
               )}
             </>
           )}
         </section>
+
+        <details className="journey-steps">
+          <summary>مسیر خرید حضوری: ۶ گام</summary>
+          <ol className="journey-steps-list">
+            <li aria-current="step" className="journey-step-current">
+              <span className="journey-step-num" aria-hidden="true">۱</span>
+              <span>جست‌وجوی کالا در کاتالوگ</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۲</span>
+              <span>انتخاب ۲ تا ۳ کالا برای مقایسه</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۳</span>
+              <span>بررسی آفرها و قیمت هر فروشگاه</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۴</span>
+              <span>ساعت باز بودن و فاصلهٔ هوایی</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۵</span>
+              <span>اعتبار خرید حضوری فروشنده</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۶</span>
+              <span>مراجعه و خرید حضوری</span>
+              <span className="journey-future-badge">آینده</span>
+            </li>
+          </ol>
+          <p className="journey-note">گام ۶ رویداد فیزیکی است و در این نسخهٔ پروژه پیاده‌سازی نمی‌شود؛ اطلاعات تا پایان گام ۵ همین‌جاست.</p>
+        </details>
+
+        <aside className="notice">
+          <strong>قبل از مراجعه، قیمت و موجودی را تأیید کنید.</strong>
+          <span>
+            این کاتالوگ سابقهٔ آفرهای ثبت‌شده است؛ قیمت ثبت‌شده نشانهٔ موجودی فعلی یا قطعی فروشگاه نیست.
+          </span>
+        </aside>
+
+        <Assistant
+          budget={budgetInput ? normalizeBudget(budgetInput) : null}
+          cancelVersion={assistantCancelVersion}
+          contextQuery={assistantContextQuery}
+          contextCategory={assistantContextCategory}
+          categoryCleared={categoryCleared}
+          contextBatteryRequirement={batteryRequirement}
+          contextTopics={
+            specFocus === 'camera'
+              ? ['camera']
+              : specFocus === 'battery'
+              ? ['battery']
+              : specFocus === 'both'
+              ? ['camera', 'battery']
+              : null
+          }
+          onContext={(query, category, version) => {
+            if (version !== undefined && version !== interactionVersion.current) return;
+            setAssistantContextQuery(query);
+            if (query === null && version === undefined) {
+              setCategoryCleared(false);
+              setSpecFocus(null);
+              setBatteryRequirement(null);
+              setActiveBatteryMah(null);
+            }
+            if (category !== undefined) {
+              setAssistantContextCategory(category);
+              setActiveCategory(category);
+            }
+          }}
+          onStart={() => {
+            const draft = readBudgetDraft();
+            if (!draft.ok) {
+              setBudgetError(draft.error);
+              return null;
+            }
+            setActiveBudget(draft.budget);
+            assistantStartDraftVersion.current = budgetDraftVersion.current;
+            setBudgetError('');
+            setQueryError('');
+            return ++interactionVersion.current;
+          }}
+          onResults={(page, query, budget, version, category, need, batteryReq) => {
+            if (version !== interactionVersion.current) return;
+            lastCatalogueQuery.current = query;
+            setInput(query);
+            setAssistantContextQuery(query);
+            setAssistantContextCategory(category);
+            setBatteryRequirement(batteryReq ?? null);
+            setActiveBatteryMah(batteryReq?.status === 'minimum' && batteryReq.minimum_mah !== null ? batteryReq.minimum_mah : null);
+            const hasPhones = category === 'گوشی موبایل' || page.items.some(p => p.category_name === 'گوشی موبایل');
+            setSpecFocus(previous => hasPhones ? focusFromNeed(need) ?? previous : null);
+            setActiveCategory(category);
+            const isCleared = category !== null ? false : categoryCleared;
+            setCategoryCleared(isCleared);
+            setActiveBudget(budget);
+            if (budgetDraftVersion.current === assistantStartDraftVersion.current) {
+              setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            }
+            setState({
+              kind: 'success',
+              query,
+              offset: 0,
+              budget,
+              page,
+              categoryName: category,
+              categoryCleared: isCleared,
+            });
+          }}
+          onBudget={(budget, version, need, batteryReq) => {
+            if (version !== interactionVersion.current) return;
+            const requestedFocus = focusFromNeed(need);
+            if (requestedFocus) setSpecFocus(requestedFocus);
+            setBatteryRequirement(batteryReq ?? null);
+            setActiveBatteryMah(batteryReq?.status === 'minimum' && batteryReq.minimum_mah !== null ? batteryReq.minimum_mah : null);
+            setActiveBudget(budget);
+            if (budgetDraftVersion.current === assistantStartDraftVersion.current) {
+              setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            }
+          }}
+        />
       </main>
 
       {/* Comparison Modal */}
@@ -1239,7 +1568,7 @@ function App() {
           products={selectedForComparison}
           onClose={() => setShowComparisonView(false)}
           onRemove={removeProductFromComparison}
-          onViewOffers={openOffers}
+          onViewOffers={(product, fromCompare) => openOffers(product, 0, fromCompare)}
         />
       )}
 
@@ -1255,6 +1584,12 @@ function App() {
           inPersonCreditOnly={inPersonCreditOnly}
           state={offersState}
           onClose={() => setActiveOffersProduct(null)}
+          onBackToCompare={offersOriginCompare
+            ? () => {
+                setActiveOffersProduct(null);
+                setShowComparisonView(true);
+              }
+            : null}
           onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm)}
           onLocationChange={(newLat, newLon, newRadius) => {
             setUserLat(newLat);

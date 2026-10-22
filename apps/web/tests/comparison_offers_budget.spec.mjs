@@ -3,6 +3,18 @@ import { HOURS_CHECKED_AT, syntheticHours } from './fixtures/hours.mjs';
 import { unknownCredit } from './fixtures/credit.mjs';
 import path from 'node:path';
 
+function rgbToLuminance(rgb) {
+  const channels = rgb.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number)
+    .map(v => v / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(fgRgb, bgRgb) {
+  const [lighter, darker] = [rgbToLuminance(fgRgb), rgbToLuminance(bgRgb)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 test('real UI: budget filter with Persian digits, active badge and offers modal with real dataset', async ({ page }) => {
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
@@ -11,7 +23,7 @@ test('real UI: budget filter with Persian digits, active badge and offers modal 
 
   // Search with query and Persian digits budget: ۱۰،۰۰۰،۰۰۰
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۱۰،۰۰۰،۰۰۰');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۱۰،۰۰۰،۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
   // Verify active budget badge
@@ -264,7 +276,7 @@ test('synthetic fixture: validate invalid budget input without network request',
   await page.goto('/');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   // Enter invalid budget (letters)
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('abc');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('abc');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
   await expect(page.getByRole('alert')).toContainText('بودجه باید فقط شامل ارقام عددی باشد');
@@ -286,6 +298,9 @@ test('real UI: manual coordinates, radius filter and direct distance calculation
 
   // Initially before location: distance indicates location required
   await expect(modal.getByText('نیازمند تعیین موقعیت کاربر').first()).toBeVisible();
+
+  // Filters are collapsed behind one details toggle
+  await modal.locator('.offers-filters > summary').click();
 
   // Enter manual coordinates (central Tehran) and radius 5km
   await modal.getByLabel('عرض جغرافیایی (lat)', { exact: true }).fill('35.700');
@@ -334,6 +349,8 @@ test('synthetic fixture: browser geolocation explicit click and error handling',
   const modal = page.locator('.offers-modal');
   await expect(modal).toBeVisible();
 
+  await modal.locator('.offers-filters > summary').click();
+
   // Click on "دریافت موقعیت از مرورگر"
   await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
 
@@ -350,6 +367,8 @@ test('synthetic fixture: radius without coordinates is rejected before network r
   const modal = page.locator('.offers-modal');
   await expect(modal).toBeVisible();
 
+  await modal.locator('.offers-filters > summary').click();
+
   // Choose radius without entering lat/lon
   await modal.getByLabel('شعاع جست‌وجو', { exact: true }).selectOption('5');
   await modal.getByRole('button', { name: 'اعمال فیلتر محدوده', exact: true }).click();
@@ -357,10 +376,89 @@ test('synthetic fixture: radius without coordinates is rejected before network r
   await expect(modal.getByRole('alert')).toContainText('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر');
 });
 
+test('synthetic fixture: neighborhood picker fills approximate coords, honest copy and clear reset', async ({ page }) => {
+  const product = {
+    product_id: 'district_synthetic_product', persian_title: 'کالای آزمایشی محله',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  const offersQueryParams = [];
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => {
+    const params = new URL(route.request().url()).searchParams;
+    offersQueryParams.push(params);
+    return route.fulfill({ json: {
+      items: [{
+        offer_id: 'district_offer_1', product_id: product.product_id, shop_id: 'district_shop',
+        price_toman: '1000', price_quality: 'not_assessed', last_price_changed_at: null,
+        seller_title: null, description: null, warranty: null, inventory_status: 'unconfirmed',
+        direct_distance_meters: 1234, opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+        shop: { name: 'فروشگاه محله', address: null, location_label: null, lat: 35.7, lon: 51.4 },
+      }],
+      has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+    } });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('محله');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+
+  // Honest distance copy is visible
+  await expect(modal.getByText(/مسیر رانندگی یا زمان سفر نیست/)).toBeVisible();
+
+  // Picking a district fills approximate coords and applies the filter immediately
+  await modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true }).selectOption('d12');
+  await expect(modal.getByLabel('عرض جغرافیایی (lat)', { exact: true })).toHaveValue('35.6747');
+  await expect(modal.getByLabel('طول جغرافیایی (lon)', { exact: true })).toHaveValue('51.4208');
+  await expect(modal.locator('.active-location-badge')).toContainText('موقعیت فعال');
+  expect(offersQueryParams.at(-1).get('user_lat')).toBe('35.6747');
+  expect(offersQueryParams.at(-1).get('user_lon')).toBe('51.4208');
+
+  // Clearing location also resets the district select
+  await modal.getByRole('button', { name: 'حذف موقعیت', exact: true }).click();
+  await expect(modal.locator('.active-location-badge')).toHaveCount(0);
+  await expect(modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true })).toHaveValue('');
+  expect(offersQueryParams.at(-1).has('user_lat')).toBe(false);
+});
+
+test('synthetic fixture: geolocation unavailable and timeout produce distinct messages', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  await page.locator('.product-card .secondary-btn').first().click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+
+  // Position unavailable (code 2)
+  await page.evaluate(() => {
+    navigator.geolocation.getCurrentPosition = (_success, error) => {
+      error({ code: 2, message: 'Position unavailable' });
+    };
+  });
+  await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
+  await expect(modal.getByRole('alert')).toContainText('موقعیت مکانی در دسترس نیست');
+
+  // Timeout (code 3)
+  await page.evaluate(() => {
+    navigator.geolocation.getCurrentPosition = (_success, error) => {
+      error({ code: 3, message: 'Timeout expired' });
+    };
+  });
+  await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
+  await expect(modal.getByRole('alert')).toContainText('دریافت موقعیت در زمان معقول انجام نشد');
+});
+
 test('local UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
   await page.goto('/');
 
-  const budgetInput = page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true });
+  const budgetInput = page.getByLabel('سقف بودجه (تومان)', { exact: true });
   const wordsCaption = page.locator('.budget-words-caption');
 
   // Initially words caption is hidden
@@ -430,4 +528,245 @@ test('real UI: floating toast appears in viewport after scroll when selecting 4t
   // Dismiss via close button
   await toast.locator('.toast-close-btn').click();
   await expect(toast).toHaveCount(0);
+});
+
+test('synthetic fixture: comparison columns carry fixed A/B badges and titles are never blindly sliced', async ({ page }) => {
+  const longTitleA = 'گوشی هوشمند آزمایشی با عنوان بسیار طولانی تر از بیست نویسه برای بررسی عدم برش کورکورانه';
+  const productA = {
+    product_id: 'compare_badge_a', persian_title: longTitleA, brand_name: 'برند آ', model: null,
+    category_name: 'گوشی موبایل',
+    specs: [{ key: 'حافظه داخلی', section: 'حافظه', value: '۱۲۸ گیگابایت' }],
+    image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '2000', missing_price_count: 0 },
+  };
+  const productB = {
+    product_id: 'compare_badge_b', persian_title: 'کالای کوتاه ب', brand_name: 'برند ب', model: null,
+    category_name: 'گوشی موبایل',
+    specs: [{ key: 'حافظه داخلی', section: 'حافظه', value: '۲۵۶ گیگابایت' }],
+    image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '3000', max_price_toman: '3000', missing_price_count: 0 },
+  };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [productA, productB],
+    has_more: false, provenance: { currency: 'toman', inventory_status: 'unconfirmed' } } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('مقایسه');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  const cards = page.locator('.product-card');
+  await cards.nth(0).locator('.compare-btn').click();
+  await cards.nth(1).locator('.compare-btn').click();
+  await page.getByRole('button', { name: 'مشاهدهٔ مقایسهٔ محصولات' }).click();
+  const modal = page.locator('.comparison-modal');
+  await expect(modal).toBeVisible();
+
+  // Fixed column badges in header cards
+  await expect(modal.locator('.compare-product-col .compare-col-badge')).toHaveText(['A', 'B']);
+  await expect(modal.locator('.compare-product-col .compare-col-badge').first()).toHaveAttribute('title', 'ستون A');
+
+  // Full title is present in the DOM (ellipsis is visual only) with a title attribute
+  await expect(modal.locator('.compare-product-title').first()).toHaveText(longTitleA);
+
+  // Spec rows carry the same badges and the full unsliced title
+  const specRow = modal.locator('.spec-row').first();
+  await expect(specRow.locator('.spec-val-item .compare-col-badge')).toHaveText(['A', 'B']);
+  const tag = specRow.locator('.product-tag').first();
+  await expect(tag).toHaveText(longTitleA);
+  await expect(tag).toHaveAttribute('title', longTitleA);
+});
+
+test('synthetic fixture: offers opened from comparison offer explicit return button; direct offers do not', async ({ page }) => {
+  const product = {
+    product_id: 'return_compare_product', persian_title: 'کالای بازگشت مقایسه', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product, { ...product, product_id: 'return_compare_product_2', persian_title: 'کالای دوم بازگشت' }],
+    has_more: false, provenance: source } }));
+  await page.route('**/api/products/*/offers?**', route => route.fulfill({ json: { items: [], has_more: false,
+    limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بازگشت');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  const cards = page.locator('.product-card');
+  await cards.nth(0).locator('.compare-btn').click();
+  await cards.nth(1).locator('.compare-btn').click();
+  await page.getByRole('button', { name: 'مشاهدهٔ مقایسهٔ محصولات' }).click();
+  const compareModal = page.locator('.comparison-modal');
+  await expect(compareModal).toBeVisible();
+
+  // Open offers from the comparison modal: explicit return button appears
+  await compareModal.getByRole('button', { name: 'مشاهدهٔ آفرها' }).first().click();
+  const offersModal = page.locator('.offers-modal');
+  await expect(offersModal).toBeVisible();
+  await expect(compareModal).toHaveCount(0);
+  const backButton = offersModal.getByRole('button', { name: 'بازگشت به مقایسه', exact: true });
+  await expect(backButton).toBeVisible();
+  await backButton.click();
+  await expect(compareModal).toBeVisible();
+  await expect(offersModal).toHaveCount(0);
+  await expect(compareModal.locator('.compare-product-col')).toHaveCount(2);
+
+  // Close comparison and open offers directly from a card: no return button
+  await compareModal.locator('.close-btn').click();
+  await cards.nth(0).locator('.secondary-btn').click();
+  await expect(offersModal).toBeVisible();
+  await expect(offersModal.getByRole('button', { name: 'بازگشت به مقایسه', exact: true })).toHaveCount(0);
+});
+
+test('synthetic fixture: offers of one shop are grouped under that shop keeping ids and warranties', async ({ page }) => {
+  const product = {
+    product_id: 'grouped_shop_product', persian_title: 'کالای گروه‌بندی فروشگاه',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 3, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  const makeOffer = (id, shopId, shopName, warranty) => ({
+    offer_id: id, product_id: product.product_id, shop_id: shopId, price_toman: '1000',
+    price_quality: 'not_assessed', last_price_changed_at: null, seller_title: null, description: null,
+    warranty, inventory_status: 'unconfirmed', direct_distance_meters: 0,
+    opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+    shop: { name: shopName, address: null, location_label: null, lat: 35.7, lon: 51.4 },
+  });
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => route.fulfill({ json: {
+    items: [
+      makeOffer('grouped_offer_1', 'shop_alpha', 'فروشگاه آلفا', { description: 'گارانتی ۱۸ ماهه' }),
+      makeOffer('grouped_offer_2', 'shop_beta', 'فروشگاه بتا', 'گارانتی شرکتی'),
+      makeOffer('grouped_offer_3', 'shop_alpha', 'فروشگاه آلفا', null),
+    ],
+    has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+  } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گروه');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+
+  // Two distinct shop groups, offers of shop_alpha gathered even though they were not adjacent
+  const groups = modal.locator('.offer-shop-group');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0)).toContainText('فروشگاه آلفا');
+  await expect(groups.nth(0).locator('.offer-card')).toHaveCount(2);
+  await expect(groups.nth(0).locator('.offer-badge')).toHaveText('۲ آفر');
+  await expect(groups.nth(1)).toContainText('فروشگاه بتا');
+  await expect(groups.nth(1).locator('.offer-card')).toHaveCount(1);
+  await expect(groups.nth(1).locator('.offer-badge')).toHaveText('۱ آفر');
+
+  // Offer ids and warranties preserved inside the grouped cards
+  await expect(groups.nth(0).getByText('گارانتی ۱۸ ماهه')).toBeVisible();
+  await expect(groups.nth(0).locator('.provenance-row code')).toHaveText(['grouped_offer_1', 'grouped_offer_3']);
+  await expect(groups.nth(1).getByText('گارانتی شرکتی')).toBeVisible();
+  await expect(groups.nth(1).locator('.provenance-row code')).toHaveText(['grouped_offer_2']);
+  await expect(modal.locator('.offer-card')).toHaveCount(3);
+});
+
+test('synthetic fixture: product card shows budget-qualified badge only when an offer fits', async ({ page }) => {
+  const cheap = {
+    product_id: 'budget_badge_cheap', persian_title: 'کالای ارزان', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 2, min_price_toman: '5000000', max_price_toman: '9000000', missing_price_count: 0 },
+  };
+  const pricey = {
+    product_id: 'budget_badge_pricey', persian_title: 'کالای گران', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '50000000', max_price_toman: '50000000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [cheap, pricey],
+    has_more: false, provenance: source } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بودجه');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  const cheapCard = page.locator('.product-card').filter({ hasText: 'کالای ارزان' });
+  const priceyCard = page.locator('.product-card').filter({ hasText: 'کالای گران' });
+  await expect(cheapCard.getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toBeVisible();
+  await expect(priceyCard.getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toHaveCount(0);
+
+  // Lowering the budget below the cheapest offer removes the badge
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('4000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.locator('.product-card').filter({ hasText: 'کالای ارزان' })
+    .getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toHaveCount(0);
+});
+
+test('synthetic UI: journey stepper lists 6 steps, marks the current step and labels step 6 as future', async ({ page }) => {
+  await page.goto('/');
+  const steps = page.locator('.journey-steps');
+  await expect(steps).toBeVisible();
+  await expect(steps.locator('summary')).toContainText('مسیر خرید حضوری: ۶ گام');
+  await expect(steps).not.toHaveAttribute('open', '');
+
+  await steps.locator('summary').click();
+  const items = steps.locator('.journey-steps-list li');
+  await expect(items).toHaveCount(6);
+  await expect(items.nth(0)).toHaveAttribute('aria-current', 'step');
+  await expect(items.nth(0)).toContainText('جست‌وجوی کالا');
+  await expect(items.nth(5)).toContainText('آینده');
+  await expect(steps.locator('.journey-note')).toContainText('در این نسخهٔ پروژه پیاده‌سازی نمی‌شود');
+
+  for (const width of [360, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.screenshot({ path: path.resolve('../../.local/qa/journey-steps-mobile.png') });
+});
+
+test('synthetic UI: text buttons meet contrast and touch-target minimums (R08, R11)', async ({ page }) => {
+  const product = {
+    product_id: 'a11y_targets_product', persian_title: 'کالای دسترس‌پذیری',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => route.fulfill({ json: {
+    items: [{
+      offer_id: 'a11y_offer_1', product_id: product.product_id, shop_id: 'a11y_shop',
+      price_toman: '1000', price_quality: 'not_assessed', last_price_changed_at: null,
+      seller_title: null, description: null, warranty: null, inventory_status: 'unconfirmed',
+      direct_distance_meters: 1234, opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+      shop: { name: 'فروشگاه دسترس‌پذیری', address: null, location_label: null, lat: 35.7, lon: 51.4 },
+    }],
+    has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+  } }));
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('دسترس');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  // Compare-bar text button sits on the dark bar (#1c2634)
+  await page.locator('.product-card .compare-btn').click();
+  const dark = await page.evaluate(() => {
+    const el = document.querySelector('.compare-bar .text-btn');
+    return { color: getComputedStyle(el).color, height: el.getBoundingClientRect().height };
+  });
+  expect(contrastRatio(dark.color, 'rgb(28, 38, 52)')).toBeGreaterThanOrEqual(4.5);
+  expect(dark.height).toBeGreaterThanOrEqual(24);
+
+  // Filter badge clear button is a small inline target
+  const clearBtn = await page.evaluate(() => {
+    const el = document.querySelector('.clear-filter-btn');
+    const box = el.getBoundingClientRect();
+    return { width: box.width, height: box.height };
+  });
+  expect(clearBtn.height).toBeGreaterThanOrEqual(24);
+  expect(clearBtn.width).toBeGreaterThanOrEqual(24);
+
+  // «حذف موقعیت» text button sits on the white modal surface
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+  await modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true }).selectOption('d12');
+  await expect(modal.getByRole('button', { name: 'حذف موقعیت', exact: true })).toBeVisible();
+  const light = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.text-btn')].find(b => b.textContent.includes('حذف موقعیت'));
+    return { color: getComputedStyle(el).color, height: el.getBoundingClientRect().height };
+  });
+  expect(contrastRatio(light.color, 'rgb(255, 255, 255)')).toBeGreaterThanOrEqual(4.5);
+  expect(light.height).toBeGreaterThanOrEqual(24);
 });
