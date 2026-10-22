@@ -57,23 +57,30 @@ export function Assistant({
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const active = useRef<AbortController | null>(null);
+  const statusController = useRef<AbortController | null>(null);
+
+  function checkStatus() {
+    statusController.current?.abort();
+    const controller = new AbortController();
+    statusController.current = controller;
+    setStatus('checking');
+    setNotice('');
+    void fetchAssistantStatus(controller.signal).then(result => {
+      if (controller.signal.aborted) return;
+      setStatus(result.ready ? 'ready' : 'unavailable');
+      setRemaining(result.remaining_calls);
+      setUnavailableReason(result.reason);
+      setNotice(result.reason === 'attempt_limit' ? failures.attempt_limit! : result.ready ? '' : 'دستیار در این اجرا فعال نیست؛ از جست‌وجوی مستقیم استفاده کنید.');
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setStatus('unavailable');
+      setNotice('وضعیت دستیار در دسترس نیست؛ جست‌وجوی مستقیم را امتحان کنید.');
+    });
+  }
 
   useEffect(() => {
-    const controller = new AbortController();
-    void fetchAssistantStatus(controller.signal).then(result => {
-      if (!controller.signal.aborted) {
-        setStatus(result.ready ? 'ready' : 'unavailable');
-        setRemaining(result.remaining_calls);
-        setUnavailableReason(result.reason);
-        setNotice(result.reason === 'attempt_limit' ? failures.attempt_limit! : result.ready ? '' : 'دستیار در این اجرا فعال نیست؛ از جست‌وجوی مستقیم استفاده کنید.');
-      }
-    }).catch(() => {
-      if (!controller.signal.aborted) {
-        setStatus('unavailable');
-        setNotice('وضعیت دستیار در دسترس نیست؛ جست‌وجوی مستقیم را امتحان کنید.');
-      }
-    });
-    return () => { controller.abort(); active.current?.abort(); };
+    checkStatus();
+    return () => { statusController.current?.abort(); active.current?.abort(); };
   }, []);
 
   useEffect(() => {
@@ -205,8 +212,15 @@ export function Assistant({
     <p id="assistant-help" className="caption">موضوع فعلی و چند پیام اخیر تا بازبودن این صفحه حفظ می‌شوند. فقط هنگام زدن «بررسی نیاز» درخواست ارسال می‌شود. بودجه را می‌توانید در کادر بالا هم تغییر دهید؛ اطلاعات تماس و شخصی ننویسید.</p>
     {status === 'checking' && <p role="status">در حال بررسی دسترسی دستیار…</p>}
     {status === 'ready' && <p className="caption">درخواست باقی‌مانده در سقف تنظیم‌شده: {numbers.format(remaining)}</p>}
-    {status === 'unavailable' && <p className="caption">{unavailableReason === 'attempt_limit'
-      ? failures.attempt_limit : 'دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.'}</p>}
+    {status === 'unavailable' && <div>
+      <p className="caption">{unavailableReason === 'attempt_limit'
+        ? failures.attempt_limit : 'دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.'}</p>
+      {unavailableReason !== 'attempt_limit' && (
+        <button type="button" className="secondary small-action-btn" onClick={checkStatus}>
+          بررسی مجدد وضعیت دستیار
+        </button>
+      )}
+    </div>}
     {pending && <p role="status">در حال بررسی نیاز؛ لطفاً صبر کنید…</p>}
     {notice && <p className="assistant-notice" role="status">{notice}</p>}
     {error && <div role="alert" className="error-text"><p>{error}</p>

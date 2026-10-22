@@ -845,10 +845,14 @@ function App() {
 
     setQueryError('');
     setBudgetError('');
+    const isNewTopic = trimmed !== lastCatalogueQuery.current;
     lastCatalogueQuery.current = trimmed;
     interactionVersion.current++;
-    setAssistantCancelVersion(version => version + 1);
-    setAssistantContextQuery(null);
+    if (isNewTopic) {
+      setAssistantCancelVersion(version => version + 1);
+      setAssistantContextQuery(null);
+      setAssistantContextCategory(null);
+    }
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
@@ -1380,8 +1384,6 @@ function App() {
             assistantStartDraftVersion.current = budgetDraftVersion.current;
             setBudgetError('');
             setQueryError('');
-            activeSearch.current?.abort();
-            setState({ kind: 'idle' });
             return ++interactionVersion.current;
           }}
           onResults={(page, query, budget, version, category, need, batteryReq) => {
