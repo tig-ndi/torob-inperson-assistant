@@ -43,6 +43,7 @@ const blockedCopy: Record<'disabled' | 'missing_key' | 'invalid_config' | 'attem
 };
 
 function Outcome({ turn }: { turn: AssistantTurn }) {
+  const { state, dispatch } = useWorkspace();
   const outcome = assistantOutcome(turn);
   const response = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -64,6 +65,8 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
     <p className="ub-meta">{outcome.kind === 'question'
       ? 'این پرسش فقط برای روشن‌شدن نیاز است؛ تا ارسال پاسخ شما شرط تازه‌ای اعمال نمی‌شود.'
       : 'این خلاصه جای تأیید موجودی، قیمت یا تناسب کالا با نیاز شما را نمی‌گیرد.'}</p>
+    {outcome.kind !== 'question' && state.productResults?.source === 'assistant' &&
+      <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>دیدن محصولات این پاسخ</Button>}
   </section>;
 }
 

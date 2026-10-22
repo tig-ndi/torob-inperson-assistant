@@ -3,11 +3,11 @@ import { useWorkspace } from '../../base/state/Workspace.tsx';
 import './discovery.css';
 import type { Screen } from '../../base/domain/contracts.ts';
 import type { CataloguePage } from '../../base/domain/contracts.ts';
-import { CataloguePreview } from '../../base/ui/ContractPreview.tsx';
 import { DecideScreen } from './decide.tsx';
+import { ResultsScreen } from './results.tsx';
 
 /** Stable mount point. A may replace this file and add files only in screens/a. */
-export function DiscoveryScreen({ screen, catalogue }: { screen: Screen; catalogue: CataloguePage | null }) {
+export function DiscoveryScreen({ screen }: { screen: Screen; catalogue: CataloguePage | null }) {
   const { dispatch } = useWorkspace();
   if (screen === 'home') return <section className="ua-start" aria-labelledby="ua-start-title">
     <p className="ub-meta">انتخاب کالا برای خرید حضوری در تهران</p>
@@ -28,8 +28,8 @@ export function DiscoveryScreen({ screen, catalogue }: { screen: Screen; catalog
     <p className="ub-meta">نتایج از کاتالوگ ثبت‌شده می‌آیند؛ قیمت و موجودی زنده تأیید نشده‌اند. برای شروع، دسترسی به موقعیت لازم نیست.</p>
   </section>;
   if (screen === 'decide') return <DecideScreen />;
-  if (screen === 'results' && catalogue) return <CataloguePreview page={catalogue} />;
-  return <Empty title={screen === 'results' ? 'انتخاب محصول' : 'برای خرید حضوری، از نیازتان شروع کنید'}>
+  if (screen === 'results') return <ResultsScreen />;
+  return <Empty title="برای خرید حضوری، از نیازتان شروع کنید">
     <p>ورودی بالای صفحه به کاتالوگ واقعی وصل است. صفحه‌های نتایج و مقایسهٔ محصول در تسک A تکمیل می‌شوند.</p>
   </Empty>;
 }

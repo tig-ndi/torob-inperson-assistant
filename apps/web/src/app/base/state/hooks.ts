@@ -32,9 +32,21 @@ export function useCommand<T>() {
 }
 export function useCatalogue() {
   const command = useCommand<CataloguePage>();
-  const { state } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
+  const revision = useRef(state.revision);
+  const resultsRequest = useRef(state.productResultsRequest);
+  revision.current = state.revision;
+  resultsRequest.current = state.productResultsRequest;
   useEffect(() => { command.cancel(); }, [state.revision, command.cancel]);
-  const search = useCallback((input: SearchInput) => command.run(signal => searchCatalogue(input, signal)), [command.run]);
+  const search = useCallback(async (input: SearchInput) => {
+    const expectedRevision = revision.current;
+    const expectedResultsRequest = crypto.randomUUID();
+    dispatch({ type: 'beginProductResults', token: expectedResultsRequest });
+    const page = await command.run(signal => searchCatalogue(input, signal));
+    if (!page || expectedRevision !== revision.current || expectedResultsRequest !== resultsRequest.current) return null;
+    dispatch({ type: 'catalogue', page, search: input, expectedRevision, expectedResultsRequest });
+    return page;
+  }, [command.run, dispatch]);
   return { ...command, search };
 }
 export function useAssistant() {
@@ -44,9 +56,11 @@ export function useAssistant() {
   // Explicit submit only. No provider request in an effect, on typing or on mount.
   const submit = useCallback(async (input: AssistantInput) => {
     const expectedRevision = state.revision;
+    const expectedResultsRequest = crypto.randomUUID();
+    dispatch({ type: 'beginProductResults', token: expectedResultsRequest });
     const result = await command.run(signal => sendAssistant(input, signal));
     const lastMessage = input.messages.at(-1);
-    if (result && lastMessage) dispatch({ type: 'assistant', result, userMessage: lastMessage.content, expectedRevision });
+    if (result && lastMessage) dispatch({ type: 'assistant', result, userMessage: lastMessage.content, expectedRevision, expectedResultsRequest });
     return result;
   }, [command.run, state.revision, dispatch]);
   return { ...command, submit };

@@ -1,7 +1,7 @@
 import { parseProductDetail } from '../../../api.ts';
 import type { AssistantMessage } from '../../../api.ts';
 import type { Alternatives, AssistantTurn, CataloguePage, Filters, NeedState, Position, PreparedFollowup,
-  Selection, FollowupOutcome, BatteryRequirement, OfferSort, ReviewTopic } from './contracts.ts';
+  Selection, FollowupOutcome, BatteryRequirement, OfferSort, ReviewTopic, CatalogueSearch } from './contracts.ts';
 import { parseAlternatives, parseBattery, parseCataloguePage, parseNeedState, parseOffers, parsePrepared, parseTurn } from './parsers.ts';
 import { bool, ContractError, identifier, integer, money, oneOf, pairedCoordinates, record } from './validation.ts';
 
@@ -61,11 +61,7 @@ function queryString(values: Record<string, string | number | boolean | null | u
   for (const [key, value] of Object.entries(values)) if (value !== null && value !== undefined) query.set(key, String(value));
   return query.toString();
 }
-export type SearchInput = {
-  query: string; offset?: number; limit?: number; maxPrice: string | null;
-  categoryName?: string | null; categoryCleared?: boolean; minimumBattery?: number | null;
-  sort?: 'relevance' | 'nearest'; position?: Position | null;
-};
+export type SearchInput = CatalogueSearch;
 export function searchCatalogue(input: SearchInput, signal: AbortSignal): Promise<CataloguePage> {
   if (!input.query.trim() || input.query.length > 120) throw new ContractError('عبارت کالا باید بین ۱ تا ۱۲۰ نویسه باشد.');
   money(input.maxPrice);
