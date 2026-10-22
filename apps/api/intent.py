@@ -152,19 +152,67 @@ def _topic_heads(text: str, heads: set[str]) -> list[set[str]]:
     return segment_heads
 
 
-def multiple_topic_heads(text: str, category_names) -> bool:
-    """Detect a coordinated/list request carrying two distinct category heads.
+MENTION_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛.!?؟\n]')
 
-    Segmentation happens before stopword removal, so 'شارژر و گوشی' can never
-    collapse into one phrase. This is a conservative structural check: a
-    feature list whose segments each contain a category head is also held for
-    clarification, and semantic intent is not verified.
+
+def _category_sequences(category_names):
+    sequences = []
+    for name in category_names or ():
+        if not isinstance(name, str):
+            continue
+        words = tuple(re.findall(r'[^\W_]+', normalize_text(name), flags=re.UNICODE))
+        if words:
+            sequences.append(words)
+    return sequences
+
+
+def _mention_signature(tokens, start, sequences, identity_words):
+    head = tokens[start]
+    matched, prefix = 1, (head,)
+    for words in sequences:
+        if words[0] != head:
+            continue
+        limit = min(len(words), len(tokens) - start)
+        size = 0
+        while size < limit and words[size] == tokens[start + size]:
+            size += 1
+        if size > matched:
+            matched, prefix = size, words[:size]
+    if matched >= 2:
+        return ' '.join(prefix)
+    follower = tokens[start + 1] if start + 1 < len(tokens) else None
+    if follower is None or follower in QUERY_STOPWORDS:
+        return head
+    if follower in (identity_words or ()) or any(character.isdigit() for character in follower) or follower.isascii():
+        return head
+    return None
+
+
+def multiple_topic_heads(text: str, category_names, identity_words=None) -> bool:
+    """Detect a coordinated request that names two distinct products.
+
+    A shared category-head token is not evidence by itself: the head must be a
+    stand-alone noun phrase or start a longer catalogue phrase. This keeps a
+    contact request such as 'شماره تماس' from becoming the 'شماره زن' product,
+    while 'شماره زن' and a real 'گوشی و شارژر' list remain recognizable. The
+    first head in each clause is authoritative; later head tokens belong to the
+    same compound. Clause boundaries use conjunctions/list separators and
+    sentence punctuation, and every candidate is also checked lexically.
     """
     if not text or not isinstance(text, str):
         return False
-    _, heads = _catalogue_words(category_names)
-    segment_heads = _topic_heads(_strip_budget_phrases(text), heads)
-    return len(segment_heads) > 1 and len(set().union(*segment_heads)) > 1
+    sequences = _category_sequences(category_names)
+    heads = {sequence[0] for sequence in sequences}
+    signatures = []
+    for segment in MENTION_SEPARATORS.split(_strip_budget_phrases(text)):
+        tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
+        start = next((index for index, token in enumerate(tokens) if token in heads), None)
+        if start is None:
+            continue
+        signature = _mention_signature(tokens, start, sequences, identity_words)
+        if signature is not None:
+            signatures.append(signature)
+    return len(set(signatures)) > 1
 
 
 def parse_toman(quote: str) -> int:
@@ -363,3 +411,50 @@ def clear_product_topic(text: str, category_names) -> str | None:
             head == tokens[0] and set(tokens) <= words for head, words in categories):
         return None
     return ' '.join(tokens)
+
+
+def product_span(text: str, category_names, identity_words) -> str | None:
+    """Return the literal product phrase beginning at a snapshot category head.
+
+    The span stops at conversational fillers, prepositions and clause
+    punctuation, so a greeting or a use-case clause cannot become part of the
+    product query. Tokens the snapshot does not know are preserved inside the
+    span: a brand, model, typo or constraint is never removed merely because it
+    is absent from the vocabulary. This is a structural boundary, not a general
+    language model; the catalogue still decides whether evidence exists.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    cleaned = normalize_text(text)
+    if detect_category_intent(text) == CAT_MOBILE_PHONE:
+        cleaned = strip_capacity_clause(cleaned, AMOUNT)
+    cleaned = _strip_budget_phrases(cleaned)
+    _, heads = _catalogue_words(category_names)
+    if not heads:
+        return None
+    for segment in re.split(r'[.!?؟؛;\n،,]+', cleaned):
+        tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
+        start = next((index for index, token in enumerate(tokens) if token in heads), None)
+        if start is None:
+            continue
+        head = tokens[start]
+        # A brand/model written before its head noun still belongs to the phrase.
+        while start and tokens[start - 1] in identity_words:
+            start -= 1
+        span = []
+        grounded = False
+        for token in tokens[start:]:
+            if span and token in QUERY_STOPWORDS:
+                break
+            if token == head:
+                span.append(token)
+                continue
+            identity = token in identity_words or any(character.isdigit() for character in token) or token.isascii()
+            if grounded and not identity:
+                # A verified brand/model already identifies the product; a later
+                # unmatched token is a use-case/constraint, not part of its name.
+                break
+            span.append(token)
+            grounded = grounded or identity
+        return ' '.join(span) if 1 <= len(span) <= 12 else None
+    return None

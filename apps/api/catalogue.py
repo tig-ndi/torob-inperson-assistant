@@ -125,6 +125,20 @@ class Catalogue:
             return tuple(row[0] for row in connection.execute(
                 "SELECT DISTINCT category_name FROM products WHERE category_name IS NOT NULL ORDER BY category_name"))
 
+    def identity_words(self) -> frozenset[str]:
+        """Normalized brand/model words from the snapshot.
+
+        Used only to recognize a literal product identity span; it is never a
+        whitelist that removes words from a user's query.
+        """
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT brand_name AS value FROM products WHERE brand_name IS NOT NULL "
+                "UNION SELECT model FROM products WHERE model IS NOT NULL")
+            return frozenset(
+                word for row in rows
+                for word in re.findall(r"[^\W_]+", normalize_text(row[0]), flags=re.UNICODE))
+
     @staticmethod
     def product(connection: sqlite3.Connection, row: sqlite3.Row, capacity=None) -> dict:
         summary = connection.execute(

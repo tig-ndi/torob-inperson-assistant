@@ -17,7 +17,7 @@ from apps.api.category import (
     is_ambiguous_product_intent,
     resolve_accessory_category,
 )
-from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, proposed_budget, explicit_budget, query_choices, releases_unsupported
+from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, product_span, proposed_budget, explicit_budget, query_choices, releases_unsupported
 from apps.api.explanations import explain_search
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
@@ -204,17 +204,51 @@ class AssistantService:
             latest_has_capacity_unit = bool(re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)))
             capacity_reply = capacity_followup(request)
             latest_category = detect_category_intent(latest_msg)
+            category_names = await asyncio.to_thread(self.catalogue.category_names)
+            identity_words = await asyncio.to_thread(self.catalogue.identity_words)
+            latest_span = product_span(latest_msg, category_names, identity_words)
+            coordinated = multiple_topic_heads(latest_msg, category_names, identity_words)
+            # The active product is the latest grounded span. If the stored topic
+            # itself is polluted and the new message only refines it, recover the
+            # last explicit product span instead of searching the polluted text.
+            authoritative = latest_span if latest_span is not None and not coordinated else None
+            if authoritative is None and request.context_query is not None:
+                context_span = product_span(request.context_query, category_names, identity_words)
+                if context_span is None or normalize_text(request.context_query) != context_span:
+                    history_span = next((span for message in reversed(request.messages[:-1])
+                                         if message.role == 'user'
+                                         for span in [product_span(message.content, category_names, identity_words)]
+                                         if span is not None), None)
+                    authoritative = history_span or context_span
+            topic_questions = {'location', 'unsupported_filter', 'battery_capacity',
+                               'battery_scope', 'requirement_choice', 'requirement_limit'}
+            if authoritative is not None and (plan.action == 'search' or plan.question in topic_questions):
+                plan = plan.model_copy(update={'query': authoritative})
+            if plan.action == 'clarify' and plan.question == 'product_kind' and latest_span is not None and not coordinated:
+                # A greeting around a clear product request must not block the search.
+                plan = IntentPlan(action='search', query=latest_span, budget_text=plan.budget_text, question=None)
+            if (plan.action == 'search' and latest_span is None and request.context_query is None
+                    and detect_category_intent(latest_msg) is None
+                    and detect_category_intent(plan.query or '') is None):
+                tokens = re.findall(r'[^\W_]+', normalize_text(plan.query or ''), flags=re.UNICODE)
+                if len(tokens) > 1 and not any(
+                        token in identity_words or any(character.isdigit() for character in token)
+                        or token.isascii() for token in tokens):
+                    # No catalogue anchor and no brand/model shape: a search
+                    # over conversational filler is not a product request.
+                    plan = IntentPlan(action='clarify', query=None, budget_text=plan.budget_text,
+                                      question='product_kind')
             if request.context_query and is_need_control(latest_msg, include_ack=bool(request.context_need_state and (
                     request.context_need_state.pending_requirements or request.context_need_state.budget_needs_input))):
-                plan = IntentPlan(action='search', query=normalize_text(request.context_query),
+                plan = IntentPlan(action='search', query=authoritative or normalize_text(request.context_query),
                                   budget_text=plan.budget_text, question=None)
             if releases_unsupported(request):
-                plan = IntentPlan(action='search', query=normalize_text(request.context_query),
+                plan = IntentPlan(action='search', query=authoritative or normalize_text(request.context_query),
                                   budget_text=None, question=None)
             if request.context_query and latest_category is None and is_constraint_followup(latest_msg):
                 plan = IntentPlan(
                     action='clarify' if has_unsupported_modifier(latest_msg) else 'search',
-                    query=normalize_text(request.context_query), budget_text=plan.budget_text,
+                    query=authoritative or normalize_text(request.context_query), budget_text=plan.budget_text,
                     question='unsupported_filter' if has_unsupported_modifier(latest_msg) else None)
             elif plan.question == 'location' and request.user_lat is not None and plan.query:
                 plan = IntentPlan(action='search', query=plan.query, budget_text=plan.budget_text, question=None)
@@ -230,21 +264,23 @@ class AssistantService:
                                      or capacity_reply and normalize_text(plan.budget_text) == normalize_text(latest_msg)):
                 plan = plan.model_copy(update={'budget_text': None})
             if capacity_reply and latest_category is None and has_phone_context and request.context_query is not None:
-                plan = IntentPlan(action='search', query=request.context_query, budget_text=plan.budget_text, question=None)
+                plan = IntentPlan(action='search', query=authoritative or request.context_query,
+                                  budget_text=plan.budget_text, question=None)
             scope_release = (len(request.messages) > 1 and request.messages[-2].content == QUESTIONS['battery_scope']
                              and normalize_text(latest_msg) in {'بدون حداقل', 'بدون این شرط', 'بله', 'آره', 'اره'}
                              and request.context_query is not None)
             if scope_release:
-                plan = IntentPlan(action='search', query=request.context_query, budget_text=None, question=None)
+                plan = IntentPlan(action='search', query=authoritative or request.context_query,
+                                  budget_text=None, question=None)
             battery_phone = latest_category == 'گوشی موبایل' or phone_topic(plan.query, latest_category)
             if not battery_phone and latest_category is None and has_phone_context and plan.query:
                 battery_phone = (request.context_query is not None and normalize_text(plan.query) == normalize_text(request.context_query)) or await asyncio.to_thread(
                     self.catalogue.matches_identity, plan.query, 'گوشی موبایل')
             requirement = resolve_requirement(request, battery_phone)
             if battery_phone and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'} and plan.query is None:
-                candidates = query_choices(request)
-                if candidates:
-                    plan = IntentPlan(action='search', query=candidates[0], budget_text=plan.budget_text, question=None)
+                query = authoritative or next(iter(query_choices(request)), None)
+                if query:
+                    plan = IntentPlan(action='search', query=query, budget_text=plan.budget_text, question=None)
             budget_uncertain = False
             try:
                 budget = proposed_budget(plan, request)
@@ -258,8 +294,7 @@ class AssistantService:
                 budget = request.max_price_toman
                 budget_uncertain = True
             if not budget_uncertain and plan.action == 'clarify' and plan.question == 'budget':
-                category_names = await asyncio.to_thread(self.catalogue.category_names)
-                if multiple_topic_heads(latest_msg, category_names):
+                if coordinated:
                     # No single topic exists for a coordinated/list request; keep
                     # the clarification instead of collapsing it into one query.
                     plan = IntentPlan(action='clarify', query=None, budget_text=None, question='budget')
@@ -272,14 +307,14 @@ class AssistantService:
                             topic = clear_product_topic(latest_msg, category_names)
                     if topic is not None:
                         plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
-            if not budget_uncertain and battery_phone and plan.query and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'}:
-                plan = IntentPlan(action='search', query=plan.query, budget_text=None, question=None)
+            if (not budget_uncertain and battery_phone and (plan.query or authoritative)
+                    and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'}):
+                plan = IntentPlan(action='search', query=authoritative or plan.query, budget_text=None, question=None)
             if plan.action == 'clarify' and plan.question == 'product_kind':
                 # Lexical filler in an ambiguous request must not become the current topic.
                 plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
             if not budget_uncertain and plan.action == 'clarify' and plan.question in {'priority', 'product_kind', 'unsupported_filter'}:
-                category_names = await asyncio.to_thread(self.catalogue.category_names)
-                if not multiple_topic_heads(latest_msg, category_names):
+                if not coordinated:
                     topic = clear_product_topic(latest_msg, category_names)
                     if topic is not None:
                         # A single-category request does not need a generic use-case
@@ -359,8 +394,20 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='location')
             if not budget_uncertain and sort_uncertain:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='priority')
+            if plan.action == 'clarify' and effective_category is None and plan.query:
+                # A clarification about a grounded product keeps its category in state.
+                effective_category = detect_category_intent(plan.query)
             fallback = (request.messages[-3].content if len(request.messages) >= 3
                         and request.messages[-2].content == QUESTIONS['unsupported_filter'] else None)
+            if coordinated:
+                # A true multi-product request has no single topic. Never project
+                # the model's lexical fragment into a search or the need state.
+                if plan.action == 'search':
+                    plan = IntentPlan(action='clarify', query=None, budget_text=plan.budget_text,
+                                      question='product_kind')
+                elif plan.query is not None:
+                    plan = plan.model_copy(update={'query': None})
+                effective_category = None
             needs = await resolve_need_state(self.catalogue, request, plan.query, effective_category,
                                              budget, requirement, offer_sort, fallback,
                                              budget_needs_input=budget_uncertain)
@@ -403,6 +450,10 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
             if plan.action == 'search' and offer_sort == 'nearest' and request.user_lat is None:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='location')
+            if coordinated and (plan.action == 'search' or plan.query is not None):
+                plan = IntentPlan(action='clarify', query=None, budget_text=None,
+                                  question=plan.question or 'product_kind')
+                effective_category = None
             if plan.action == 'search':
                 page = await asyncio.to_thread(
                     self.catalogue.search,
