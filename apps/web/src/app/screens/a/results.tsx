@@ -9,6 +9,7 @@ import { activeBudgetLabel } from './presentation.ts';
 import { productImageUrl } from './resultPresentation.ts';
 import { productHeadingId } from './pagination.ts';
 import { useProductPages } from './useProductPages.ts';
+import { ProductComparison } from './comparison.tsx';
 
 const numbers = new Intl.NumberFormat('fa-IR');
 
@@ -43,7 +44,8 @@ function SourceEvidence({ evidence }: { evidence: Explanation['products'][number
 function ProductCard({ product, evidence, stale, nearestSort }: {
   product: CatalogueProduct; evidence: Explanation['products'][number] | undefined; stale: boolean; nearestSort: boolean;
 }) {
-  const { dispatch } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
+  const compared = state.compareProducts.some(item => item.product_id === product.product_id);
   const title = product.persian_title ?? 'عنوان محصول ثبت نشده';
   const summary = product.offer_summary;
   return <article className="ua-product-card" aria-label={title}>
@@ -56,6 +58,11 @@ function ProductCard({ product, evidence, stale, nearestSort }: {
       dispatch({ type: 'product', value: product });
       dispatch({ type: 'navigate', screen: 'stores' });
     }}>دیدن فروشندگان</Button>
+    <Button tone="ghost" aria-pressed={compared} aria-label={`${compared ? 'حذف' : 'افزودن'} ${title} ${compared ? 'از' : 'به'} مقایسه`}
+      disabled={stale && !compared} onClick={() => {
+        dispatch({ type: 'notice', value: null });
+        dispatch({ type: 'compareProduct', value: product });
+      }}>{compared ? 'حذف از مقایسه' : 'افزودن به مقایسه'}</Button>
     {summary.max_price_toman !== null && summary.max_price_toman !== summary.min_price_toman &&
       <p className="ua-product-upper">بیشترین قیمت ثبت‌شده: <Price value={summary.max_price_toman} /></p>}
     <p className="ub-meta">خلاصهٔ قیمت همهٔ آفرهای محصول؛ قیمتِ نزدیک‌ترین فروشنده نیست. موجودی تأییدنشده است.</p>
@@ -151,5 +158,6 @@ export function ResultsScreen() {
         {results.page.has_more && <p className="ub-meta">نتایج ادامه دارند؛ با انتخاب شما صفحهٔ بعد از همان کاتالوگ دریافت می‌شود، بدون درخواست تازه به مدل.</p>}
       </div>
     </>}
+    <ProductComparison />
   </section>;
 }

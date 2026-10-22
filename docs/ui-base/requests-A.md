@@ -16,6 +16,10 @@
 
 در برش تأییدشدهٔ صفحه‌بندی، فقط `base/domain/contracts.ts` و `base/state/model.ts` از فایل‌های مشترک توسعه یافتند: `initialOffset` مبدأ نتیجه را نگه می‌دارد و action جدید `moreProducts` با revision، token و هویت مجموعهٔ اولیه، صفحه را الحاق می‌کند. در نتیجهٔ تجمیعی، `page.items` همهٔ محصولات بارگذاری‌شده با ID یکتا است؛ `offset/limit/has_more` متعلق به آخرین صفحهٔ دریافت‌شده‌اند و offset بعدی از offset+limit محاسبه می‌شود، نه شمار محصولات یکتا. source، search، explanation اولیه و history تغییر نمی‌کنند. snapshot، دسته و حداقل باتری ناسازگار یا offset نامنتظر الحاق نمی‌شوند. API، hooks موجود، props B و فایل‌های B تغییر نکرده‌اند؛ hook صفحه‌بندی اختصاصی در پوشهٔ A است.
 
+### پنجرهٔ مقایسهٔ محصول — ۲۰۲۶-۱۰-۲۳
+
+در برش تأییدشدهٔ مقایسه، هماهنگ‌کننده فقط prop اختیاری `className` را به Dialog مشترک در `base/ui/primitives.tsx` اضافه کرد تا پنجرهٔ A با کلاس اختصاصی خودش در دسکتاپ عریض شود. مصرف‌کنندگان قبلی بدون ارسال این prop همان استایل و رفتار focus/Escape/Tab را دارند؛ استایل Base و فایل B تغییر نکرده‌اند. state/actionهای موجود compareProducts/compareProduct و Toast بدون تغییر استفاده شدند. این تغییر مجوز عمومی ویرایش Base نیست و باید همراه تغییرات قبلی A در زمان ادغام بررسی شود؛ شاخهٔ واقعی B در این نوبت بررسی نشده است.
+
 ## ۱. نبود منبع صریح برای نتیجهٔ دستی در برابر نتیجهٔ دستیار
 
 - `WorkspaceShell` نتیجهٔ جست‌وجوی دستی را در hook محلی `useCatalogue` نگه می‌دارد و فقط `catalogue.result.data` را به `ScreenOutlet` می‌دهد (`src/app/base/shell/WorkspaceShell.tsx:16` و `:80`).
