@@ -25,6 +25,11 @@ def review_topics(request: AssistantRequest, page: ProductPage, query: str | Non
             return []
         if query_category is None and not all(p.category_name == CAT_MOBILE_PHONE for p in page.items):
             return []  # A stray phone in an unfiltered mixed result is not proof of the active topic.
+    return requested_review_topics(request)
+
+
+def requested_review_topics(request: AssistantRequest) -> list[str]:
+    """User review preferences only; the caller must verify the product scope."""
     # An explicit context field supersedes old history; [] also clears it.
     if request.context_topics is not None:
         topics = list(request.context_topics)

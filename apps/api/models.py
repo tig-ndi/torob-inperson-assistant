@@ -66,6 +66,39 @@ class BatteryRequirement(Model):
         return self
 
 
+class PendingRequirement(Model):
+    key: str = Field(min_length=1, max_length=64)
+    source_text: str = Field(min_length=1, max_length=1000)
+    status: Literal['unsupported'] = 'unsupported'
+
+
+class AssistantNeedState(Model):
+    version: int = Field(default=1, ge=1, le=1)
+    topic_query: str | None = Field(default=None, min_length=1, max_length=120)
+    category_name: str | None = Field(default=None, min_length=1, max_length=120)
+    category_cleared: bool = False
+    max_price_toman: str | None = Field(default=None, pattern=r'^[0-9]{1,19}$')
+    budget_needs_input: bool = False
+    offer_sort: Literal['price', 'nearest'] = 'price'
+    battery_requirement: BatteryRequirement = Field(default_factory=BatteryRequirement)
+    review_topics: list[Literal['camera', 'battery']] = Field(default_factory=list, max_length=2)
+    pending_requirements: list[PendingRequirement] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode='after')
+    def bounded_consistent(self):
+        from tools.prepare_data import normalize_text
+        keys = [normalize_text(item.key) for item in self.pending_requirements]
+        if any(not key for key in keys) or len(keys) != len(set(keys)):
+            raise ValueError('pending requirement keys must be nonempty and unique')
+        if any(not item.source_text.strip() for item in self.pending_requirements):
+            raise ValueError('pending requirement source text must be nonempty')
+        if self.pending_requirements and self.topic_query is None:
+            raise ValueError('pending requirements require a product topic')
+        if self.max_price_toman is not None and int(self.max_price_toman) > 2**63 - 1:
+            raise ValueError('budget exceeds supported integer range')
+        return self
+
+
 class NearestOffer(Model):
     offer_id: str
     product_id: str
@@ -172,6 +205,8 @@ class AssistantResult(Model):
     explanation: SearchExplanation | None = None
     battery_requirement: BatteryRequirement = Field(default_factory=BatteryRequirement)
     offer_sort: Literal['price', 'nearest'] = 'price'
+    need_state: AssistantNeedState = Field(default_factory=AssistantNeedState)
+    question_code: str | None = Field(default=None, max_length=40)
 
 
 class Shop(Model):

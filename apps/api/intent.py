@@ -9,12 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.battery import strip_capacity_clause
-from apps.api.models import BatteryRequirement
+from apps.api.models import BatteryRequirement, AssistantNeedState
+from apps.api.need_state import is_need_control
 from apps.api.visit_intent import is_constraint_followup, wants_nearest
 from tools.prepare_data import normalize_text
 
 
 QUESTIONS = {
+    "requirement_choice": "کدام شرط را حذف کنیم؟ نام آن را بگویید؛ برای حذف همهٔ شرط‌های اجرا‌نشده بگویید «همه شرط های اجرا نشده را حذف کن».",
+    "requirement_limit": "تعداد شرط‌های حل‌نشده زیاد است؛ ابتدا مشخص کنید کدام شرط را نگه داریم یا حذف کنیم. شرط تازه اضافه نشد.",
     "location": "برای یافتن نزدیک‌ترین فروشنده، موقعیت را در بخش محدوده مشخص کنید؛ بدون مختصات معتبر فاصله را حدس نمی‌زنیم.",
     "unsupported_filter": "این شرط هنوز فیلتر قابل اتکایی در دستیار ندارد؛ مشخصات ثبت‌شده را بررسی کنید یا بگویید «بدون این شرط» ادامه دهیم. شرط اعمال نشده است.",
     "battery_capacity": "برای ظرفیت ثبت‌شدهٔ باتری، حداقل چند میلی‌آمپرساعت می‌خواهید؟ اگر حداقل مشخصی ندارید، بگویید «بدون حداقل». ظرفیت به‌تنهایی دوام واقعی باتری را ثابت نمی‌کند.",
@@ -48,9 +51,26 @@ class AssistantRequest(StrictModel):
     user_lat: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
     user_lon: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
     context_offer_sort: Literal['price', 'nearest'] = 'price'
+    context_need_state: AssistantNeedState | None = None
 
     @model_validator(mode="after")
     def bounded_history(self):
+        state = self.context_need_state
+        provided = set(self.model_fields_set)
+        if state is not None:
+            if 'context_query' in provided and self.context_query != state.topic_query:
+                raise ValueError('topic conflicts with supplied need state')
+            if ('context_category' in provided and self.context_category is not None
+                    and state.category_name is not None and self.context_category != state.category_name):
+                raise ValueError('category conflicts with supplied need state')
+            for name, value in {
+                'context_query': state.topic_query, 'context_category': state.category_name,
+                'category_cleared': state.category_cleared, 'max_price_toman': state.max_price_toman,
+                'context_offer_sort': state.offer_sort, 'context_battery_requirement': state.battery_requirement,
+                'context_topics': state.review_topics,
+            }.items():
+                if name not in provided:
+                    setattr(self, name, value)
         if (self.user_lat is None) != (self.user_lon is None):
             raise ValueError('coordinates must be supplied together')
         if any(not m.content.strip() for m in self.messages) or sum(len(m.content) for m in self.messages) > 3000:
@@ -68,7 +88,7 @@ class IntentPlan(StrictModel):
     action: Literal["clarify", "search"]
     query: str | None = Field(max_length=120)
     budget_text: str | None = Field(max_length=100)
-    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope", "location", "unsupported_filter"] | None
+    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope", "location", "unsupported_filter", "requirement_choice", "requirement_limit"] | None
 
     @model_validator(mode="after")
     def valid_action(self):
@@ -253,8 +273,18 @@ def query_choices(request: AssistantRequest) -> list[str]:
     The model selects among them; the repository determines whether evidence exists.
     """
     latest = request.messages[-1].content
+    if request.context_query and is_need_control(latest, include_ack=bool(request.context_need_state and (
+            request.context_need_state.pending_requirements or request.context_need_state.budget_needs_input))):
+        return [normalize_text(request.context_query)]
     if releases_unsupported(request):
         return [normalize_text(request.context_query)]
+    if request.context_query:
+        try:
+            explicit_budget(latest)
+        except ValueError:
+            # An invalid amount is a budget clarification, not a new topic named
+            # 'negative'. Keep the prior product available to the constrained model.
+            return [normalize_text(request.context_query)]
     # A modifier alone must not displace the current product with words such as
     # 'colour blue location'. A newly named product category still takes priority.
     if (request.context_query and is_constraint_followup(latest)
