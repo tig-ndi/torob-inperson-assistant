@@ -53,6 +53,7 @@ export type CatalogueSearch = {
 export type ProductResults = {
   source: 'manual' | 'assistant';
   page: CataloguePage;
+  initialOffset: number;
   search: CatalogueSearch;
   explanation: Explanation | null;
 };

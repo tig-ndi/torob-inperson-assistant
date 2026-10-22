@@ -7,6 +7,8 @@ import { Badge, Button, Empty, ErrorCard, FreshTag, Price } from '../../base/ui/
 import { formatDistance } from '../../../api.ts';
 import { activeBudgetLabel } from './presentation.ts';
 import { productImageUrl } from './resultPresentation.ts';
+import { productHeadingId } from './pagination.ts';
+import { useProductPages } from './useProductPages.ts';
 
 const numbers = new Intl.NumberFormat('fa-IR');
 
@@ -47,7 +49,7 @@ function ProductCard({ product, evidence, stale, nearestSort }: {
   return <article className="ua-product-card" aria-label={title}>
     <div className="ua-product-heading">
       <ProductImage key={product.image_urls.join('|')} product={product} />
-      <div><h3>{title}</h3><p className="ub-meta">{[product.brand_name, product.model, product.category_name].filter(Boolean).join(' · ') || 'برند، مدل و دسته ثبت نشده'}</p></div>
+      <div><h3 id={productHeadingId(product.product_id)} tabIndex={-1}>{title}</h3><p className="ub-meta">{[product.brand_name, product.model, product.category_name].filter(Boolean).join(' · ') || 'برند، مدل و دسته ثبت نشده'}</p></div>
     </div>
     <div className="ua-product-price"><span>کمترین قیمت ثبت‌شدهٔ محصول</span><Price value={summary.min_price_toman} /></div>
     <Button tone="secondary" disabled={stale} onClick={() => {
@@ -78,12 +80,26 @@ function ProductCard({ product, evidence, stale, nearestSort }: {
 export function ResultsScreen() {
   const { state, dispatch } = useWorkspace();
   const catalogue = useCatalogue();
+  const pages = useProductPages();
   const results = state.productResults;
+  const resultCount = useRef<HTMLParagraphElement>(null);
+  const previousResults = useRef(results);
+  useEffect(() => {
+    const previous = previousResults.current;
+    previousResults.current = results;
+    if (!results || !previous || results.page.offset <= previous.page.offset || results.source !== previous.source ||
+      catalogueSearchKey(results.search) !== catalogueSearchKey(previous.search)) return;
+    const oldIds = new Set(previous.page.items.map(product => product.product_id));
+    const firstNew = results.page.items.find(product => !oldIds.has(product.product_id));
+    const target = firstNew ? document.getElementById(productHeadingId(firstNew.product_id)) : resultCount.current;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }, [results]);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); }, []);
   const currentSearch = catalogueSearchForWorkspace(state);
   const stale = results !== null && catalogueSearchKey(results.search) !== catalogueSearchKey(currentSearch);
-  const loading = catalogue.result.status === 'loading';
+  const loading = catalogue.result.status === 'loading' || pages.result.status === 'loading';
   const refresh = () => { void catalogue.search(currentSearch); };
   return <section className="ua-results" aria-labelledby="ua-results-title" aria-busy={loading}>
     <h2 id="ua-results-title" ref={heading} tabIndex={-1}>انتخاب محصول</h2>
@@ -113,18 +129,27 @@ export function ResultsScreen() {
         <summary>توضیح و محدودیت‌های پاسخ</summary>
         <p>{results.explanation.summary}</p>
         <ul>{results.explanation.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul>
+        {results.page.offset > results.initialOffset && <p className="ub-meta">این توضیح مربوط به پاسخ نخست دستیار است؛ برای محصولات صفحات بعد، توضیح تازه‌ای تولید نشده است.</p>}
       </details>}
       {results.source === 'assistant' && state.needState?.pending_requirements.length ? <div className="ua-notice">
         <strong>درخواست‌های هنوز اعمال‌نشده</strong>
         <ul>{state.needState.pending_requirements.map(item => <li key={item.key}>{item.source_text}</li>)}</ul>
       </div> : null}
-      <p className="ub-meta">نمایش {numbers.format(results.page.items.length)} محصول در این صفحه؛ این شمارش کل نتایج نیست.</p>
+      <p ref={resultCount} tabIndex={-1} className="ub-meta" role="status">{numbers.format(results.page.items.length)} محصول بارگذاری‌شده؛ این شمارش کل نتایج نیست.</p>
       {!results.page.items.length && <Empty title="با این عبارت و شرایط، نتیجه‌ای در کاتالوگ ثبت نشده">
         <p>عبارت یا بودجه را تغییر دهید؛ نبود نتیجه به معنی ناموجودبودن قطعی کالا نیست.</p>
       </Empty>}
       {results.page.items.map(product => <ProductCard key={product.product_id} product={product} stale={stale || loading}
         nearestSort={results.search.sort === 'nearest'} evidence={results.explanation?.products.find(item => item.product_id === product.product_id)} />)}
-      {results.page.has_more && <p className="ub-meta">نتایج بیشتری وجود دارد؛ کنترل صفحه‌بندی در گام بعد تکمیل می‌شود.</p>}
+      <div className="ua-pagination" aria-label="ادامهٔ نتایج محصولات">
+        {pages.result.status === 'error' ? <>
+          <ErrorCard message={pages.result.error} onRetry={!stale ? () => void pages.more() : undefined} />
+          <Button tone="ghost" disabled={loading || !currentSearch.query.trim()} onClick={refresh}>از نو جست‌وجو کن</Button>
+        </> : results.page.has_more ? <Button tone="secondary" disabled={stale || loading} onClick={() => void pages.more()}>
+          {pages.result.status === 'loading' ? 'در حال دریافت محصولات بیشتر…' : 'محصولات بیشتر'}
+        </Button> : results.page.items.length > 0 && <p className="ub-meta">پایان نتایج ثبت‌شده با این شرایط.</p>}
+        {results.page.has_more && <p className="ub-meta">نتایج ادامه دارند؛ با انتخاب شما صفحهٔ بعد از همان کاتالوگ دریافت می‌شود، بدون درخواست تازه به مدل.</p>}
+      </div>
     </>}
   </section>;
 }

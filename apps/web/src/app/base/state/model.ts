@@ -1,5 +1,5 @@
 import type { Alternatives, AssistantTurn, CataloguePage, CatalogueProduct, CatalogueSearch, Filters, NeedState, Offer, OfferPage, Position, PreparedFollowup, ProductResults, Screen } from '../domain/contracts.ts';
-import { money, pairedCoordinates } from '../domain/validation.ts';
+import { ContractError, money, pairedCoordinates } from '../domain/validation.ts';
 
 export type WorkspaceState = {
   revision: number;
@@ -45,6 +45,7 @@ export type WorkspaceAction =
   | { type: 'beginProductResults'; token: string }
   | { type: 'assistant'; result: AssistantTurn; userMessage: string; expectedRevision: number; expectedResultsRequest?: string }
   | { type: 'catalogue'; page: CataloguePage; search: CatalogueSearch; expectedRevision: number; expectedResultsRequest?: string }
+  | { type: 'moreProducts'; base: ProductResults; page: CataloguePage; expectedRevision: number; expectedResultsRequest: string }
   | { type: 'newConversation' }
   | { type: 'product'; value: CatalogueProduct }
   | { type: 'compareProduct'; value: CatalogueProduct }
@@ -85,14 +86,17 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
     case 'catalogue':
       if (action.expectedRevision !== state.revision ||
         (action.expectedResultsRequest !== undefined && action.expectedResultsRequest !== state.productResultsRequest)) return state;
-      return { ...state, productResults: { source: 'manual', page: action.page, search: action.search, explanation: null } };
+      return { ...state, productResults: { source: 'manual', page: action.page, initialOffset: action.page.offset, search: action.search, explanation: null } };
+    case 'moreProducts':
+      if (action.expectedRevision !== state.revision || action.expectedResultsRequest !== state.productResultsRequest || state.productResults !== action.base) return state;
+      return { ...state, productResults: appendProductPage(action.base, action.page) };
     case 'assistant': {
       if (action.expectedRevision !== state.revision ||
         (action.expectedResultsRequest !== undefined && action.expectedResultsRequest !== state.productResultsRequest)) return state;
       const result = action.result;
       const answer = result.question ?? result.explanation?.summary ?? `نتایج ثبت‌شده برای «${result.query ?? ''}»`;
       return { ...state, needState: result.need_state, lastTurn: result, revision: state.revision + 1,
-        productResults: result.products ? { source: 'assistant', page: result.products, explanation: result.explanation,
+        productResults: result.products ? { source: 'assistant', page: result.products, initialOffset: result.products.offset, explanation: result.explanation,
           search: { query: result.query ?? result.need_state.topic_query ?? '', maxPrice: result.max_price_toman,
             categoryName: result.products.category_name, categoryCleared: result.need_state.category_cleared,
             minimumBattery: result.need_state.battery_requirement.status === 'minimum' ? result.need_state.battery_requirement.minimum_mah : null,
@@ -168,6 +172,23 @@ export function catalogueSearchKey(search: CatalogueSearch): string {
   return JSON.stringify([search.query.trim(), search.maxPrice, search.categoryCleared ? null : search.categoryName ?? null,
     search.categoryCleared ?? false, search.minimumBattery ?? null, search.sort ?? 'relevance',
     search.position?.lat ?? null, search.position?.lon ?? null]);
+}
+
+/** Merge only the next page of the same snapshot/constraints; keep the original explanation scoped to its IDs. */
+export function appendProductPage(base: ProductResults, page: CataloguePage): ProductResults {
+  const previous = base.page;
+  if (!previous.has_more || page.offset !== previous.offset + previous.limit || page.limit !== previous.limit ||
+    (page.has_more && page.items.length === 0)) throw new ContractError('صفحهٔ برگشتی با ادامهٔ این نتایج سازگار نیست؛ دوباره جست‌وجو کنید.');
+  if (page.provenance.snapshot_id !== previous.provenance.snapshot_id ||
+    page.provenance.dataset !== previous.provenance.dataset || page.provenance.generated_at_utc !== previous.provenance.generated_at_utc) {
+    throw new ContractError('نسخهٔ کاتالوگ تغییر کرده است؛ برای دریافت نتایج یکسان از نو جست‌وجو کنید.');
+  }
+  if (page.category_name !== previous.category_name || page.min_battery_capacity_mah !== previous.min_battery_capacity_mah) {
+    throw new ContractError('شرایط صفحهٔ جدید با نتایج قبلی یکسان نیست؛ از نو جست‌وجو کنید.');
+  }
+  const products = new Map(previous.items.map(product => [product.product_id, product]));
+  for (const product of page.items) products.set(product.product_id, product);
+  return { ...base, page: { ...page, items: [...products.values()] } };
 }
 
 // In-memory key only. Never log, persist or put it in a URL: it contains location.

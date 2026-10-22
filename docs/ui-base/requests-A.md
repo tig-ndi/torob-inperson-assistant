@@ -12,6 +12,10 @@
 
 شرح اصلی درخواست‌ها در ادامه، مربوط به زمان برش decide است.
 
+### تکمیل محدود قرارداد برای صفحه‌بندی — ۲۰۲۶-۱۰-۲۳
+
+در برش تأییدشدهٔ صفحه‌بندی، فقط `base/domain/contracts.ts` و `base/state/model.ts` از فایل‌های مشترک توسعه یافتند: `initialOffset` مبدأ نتیجه را نگه می‌دارد و action جدید `moreProducts` با revision، token و هویت مجموعهٔ اولیه، صفحه را الحاق می‌کند. در نتیجهٔ تجمیعی، `page.items` همهٔ محصولات بارگذاری‌شده با ID یکتا است؛ `offset/limit/has_more` متعلق به آخرین صفحهٔ دریافت‌شده‌اند و offset بعدی از offset+limit محاسبه می‌شود، نه شمار محصولات یکتا. source، search، explanation اولیه و history تغییر نمی‌کنند. snapshot، دسته و حداقل باتری ناسازگار یا offset نامنتظر الحاق نمی‌شوند. API، hooks موجود، props B و فایل‌های B تغییر نکرده‌اند؛ hook صفحه‌بندی اختصاصی در پوشهٔ A است.
+
 ## ۱. نبود منبع صریح برای نتیجهٔ دستی در برابر نتیجهٔ دستیار
 
 - `WorkspaceShell` نتیجهٔ جست‌وجوی دستی را در hook محلی `useCatalogue` نگه می‌دارد و فقط `catalogue.result.data` را به `ScreenOutlet` می‌دهد (`src/app/base/shell/WorkspaceShell.tsx:16` و `:80`).
