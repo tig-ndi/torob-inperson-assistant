@@ -1123,3 +1123,17 @@ h3 {
     width: 100%;
   }
 }
+.spec-focus-controls { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #dbe1ea); border-radius: 14px; min-width: 0; }
+.spec-focus-controls legend { font-weight: 700; }
+.spec-focus-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.spec-focus-actions [aria-pressed="true"] { border: 2px solid #b91c32; background: #fff0f2; color: #9f1239; }
+.spec-evidence { margin: .75rem 0; padding: .75rem; border: 1px solid #dbe1ea; border-radius: 10px; background: #f8fafc; }
+.spec-evidence h4 { margin: 0 0 .5rem; }
+.spec-evidence dl { margin: 0; }
+.spec-evidence-entry { margin: .5rem 0; overflow-wrap: anywhere; }
+.spec-evidence-entry dt { font-weight: 600; font-size: .88rem; }
+.spec-evidence-entry dd { margin: .15rem 0 0; font-size: .9rem; }
+.evidence-source-section { display: block; margin-top: .2rem; color: #475569; }
+.evidence-negative-label { color: #9f1239; }
+.spec-evidence summary { cursor: pointer; overflow-wrap: anywhere; }
+.spec-evidence .caption { margin-bottom: 0; }

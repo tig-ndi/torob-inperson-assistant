@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.catalogue import search_expression
+from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from tools.prepare_data import normalize_text
 
 
@@ -179,6 +180,11 @@ def query_choices(request: AssistantRequest) -> list[str]:
         text = normalize_text(message.content)
         text = re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?:\s*(?:تومان|تومن|ریال))?', ' ', text)
         text = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)', ' ', text)
+        if detect_category_intent(message.content) == CAT_MOBILE_PHONE:
+            # Qualitative use cases are not literal catalogue names or verified
+            # feature predicates. Keep the phone/brand/model; show source specs.
+            text = re.sub(r'\bبرای\s+(?:عکاسی|سلفی|فیلم\s*برداری)\b', ' ', text)
+            text = re.sub(r'\b(?:با\s+)?(?:دوربین|باتری|باطری)\s+(?:خوب|قوی|مناسب|با\s*کیفیت)\b', ' ', text)
         if re.fullmatch(rf'\s*{AMOUNT}\s*[.،؛؟!]*', text):
             text = ''
         for token in re.findall(r'[^\W_]+', text, flags=re.UNICODE):

@@ -90,8 +90,8 @@ class EvalNeedsTests(unittest.TestCase):
 
         result = evaluate_scenario(self.catalogue, scenario)
         self.assertEqual(result["scenario_id"], "scenario_test")
-        self.assertIn("گوشی عکاسی", result["generated_query_choices"])
-        self.assertIn("گوشی", result["generated_query_choices"])
+        # A use case must not become a literal product-name filter.
+        self.assertEqual(result["generated_query_choices"], ["گوشی"])
 
         analysis = result["choices_analysis"]["گوشی"]
         self.assertGreaterEqual(analysis["returned_items_count"], 2)

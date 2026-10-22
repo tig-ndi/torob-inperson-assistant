@@ -21,6 +21,8 @@ import type { OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
 import { Assistant } from './Assistant';
+import { SpecEvidence } from './SpecEvidence';
+import { focusFromNeed, type SpecFocus } from './specEvidenceData';
 import './style.css';
 
 type SearchState =
@@ -43,11 +45,13 @@ function ProductCard({
   isSelected,
   onToggleCompare,
   onViewOffers,
+  specFocus,
 }: {
   product: Product;
   isSelected: boolean;
   onToggleCompare: (product: Product) => void;
   onViewOffers: (product: Product) => void;
+  specFocus: SpecFocus | null;
 }) {
   const summary = product.offer_summary;
   const min = summary.min_price_toman;
@@ -55,7 +59,7 @@ function ProductCard({
   const precisionWarning = max !== null && BigInt(max) > 9007199254740991n;
 
   return (
-    <article className={`product-card ${isSelected ? 'selected' : ''}`}>
+    <article className={`product-card ${isSelected ? 'selected' : ''}`} data-product-id={product.product_id}>
       <div className="card-top">
         <span className="category">{product.category_name?.trim() || 'دسته ثبت نشده'}</span>
         <span className="product-mark" aria-hidden="true">کالا</span>
@@ -89,6 +93,7 @@ function ProductCard({
         )}
       </p>
       <p className="inventory">موجودی تأیید نشده (سابقهٔ کاتالوگ)</p>
+      {specFocus && <SpecEvidence product={product} focus={specFocus} />}
       <div className="card-actions">
         <button
           type="button"
@@ -641,6 +646,7 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [categoryCleared, setCategoryCleared] = useState(false);
   const [assistantContextCategory, setAssistantContextCategory] = useState<string | null>(null);
+  const [specFocus, setSpecFocus] = useState<SpecFocus | null>(null);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -752,6 +758,8 @@ function App() {
         });
         setAssistantContextQuery(trimmed);
         setAssistantContextCategory(resolvedCategory);
+        const hasPhones = resolvedCategory === 'گوشی موبایل' || page.items.some(p => p.category_name === 'گوشی موبایل');
+        setSpecFocus(previous => hasPhones ? focusFromNeed(trimmed) ?? previous : null);
       }
     } catch (error: unknown) {
       if (!controller.signal.aborted) {
@@ -988,7 +996,10 @@ function App() {
           onContext={(query, category, version) => {
             if (version !== undefined && version !== interactionVersion.current) return;
             setAssistantContextQuery(query);
-            if (query === null && version === undefined) setCategoryCleared(false);
+            if (query === null && version === undefined) {
+              setCategoryCleared(false);
+              setSpecFocus(null);
+            }
             if (category !== undefined) {
               setAssistantContextCategory(category);
               setActiveCategory(category);
@@ -1007,12 +1018,14 @@ function App() {
             setState({ kind: 'idle' });
             return ++interactionVersion.current;
           }}
-          onResults={(page, query, budget, version, category) => {
+          onResults={(page, query, budget, version, category, need) => {
             if (version !== interactionVersion.current) return;
             lastCatalogueQuery.current = query;
             setInput(query);
             setAssistantContextQuery(query);
             setAssistantContextCategory(category);
+            const hasPhones = category === 'گوشی موبایل' || page.items.some(p => p.category_name === 'گوشی موبایل');
+            setSpecFocus(previous => hasPhones ? focusFromNeed(need) ?? previous : null);
             setActiveCategory(category);
             const isCleared = category !== null ? false : categoryCleared;
             setCategoryCleared(isCleared);
@@ -1029,8 +1042,10 @@ function App() {
               categoryCleared: isCleared,
             });
           }}
-          onBudget={(budget, version) => {
+          onBudget={(budget, version, need) => {
             if (version !== interactionVersion.current) return;
+            const requestedFocus = focusFromNeed(need);
+            if (requestedFocus) setSpecFocus(requestedFocus);
             setActiveBudget(budget);
             setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
           }}
@@ -1133,6 +1148,20 @@ function App() {
 
           {state.kind === 'success' && (
             <>
+              {(state.categoryName === 'گوشی موبایل' || state.page.items.some(p => p.category_name === 'گوشی موبایل')) && (
+                <fieldset className="spec-focus-controls">
+                  <legend>کدام مشخصات برای بررسی نیاز شما مهم‌تر است؟</legend>
+                  <p className="caption">مشخصات دوربین یا باتری را بررسی کنید؛ عدد مگاپیکسل یا ظرفیت باتری به‌تنهایی کیفیت واقعی را ثابت نمی‌کند.</p>
+                  <p className="caption">این انتخاب نمایش مشخصات را تغییر می‌دهد؛ فیلتر یا رتبه‌بندی بر اساس این ویژگی‌ها اعمال نمی‌شود.</p>
+                  <div className="spec-focus-actions">
+                    {([['camera', 'دوربین'], ['battery', 'باتری'], ['both', 'هر دو']] as const).map(([value, label]) => (
+                      <button key={value} type="button" className="secondary" aria-pressed={specFocus === value}
+                        onClick={() => setSpecFocus(value)}>بررسی {label}</button>
+                    ))}
+                    {specFocus && <button type="button" className="secondary" onClick={() => setSpecFocus(null)}>بستن مشخصات مرتبط</button>}
+                  </div>
+                </fieldset>
+              )}
               <p role="status" className="sr-only">
                 {numbers.format(state.page.items.length)} محصول در این صفحه
               </p>
@@ -1153,6 +1182,7 @@ function App() {
                       <ProductCard
                         key={product.product_id}
                         product={product}
+                        specFocus={specFocus}
                         isSelected={isSelected}
                         onToggleCompare={toggleCompare}
                         onViewOffers={openOffers}

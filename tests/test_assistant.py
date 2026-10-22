@@ -108,6 +108,17 @@ class IntentTests(unittest.TestCase):
             with self.subTest(request=request), self.assertRaises(ValidationError):
                 AssistantRequest.model_validate(request)
 
+    def test_phone_use_case_is_not_a_literal_name_or_an_invented_quality_filter(self):
+        for text in ['گوشی برای عکاسی می‌خواهم؛ بودجه بیست میلیون تومان',
+                     'گوشی با باتری قوی می‌خواهم؛ سقف بودجه پانزده میلیون تومان']:
+            self.assertEqual(query_choices(AssistantRequest.model_validate(body(text))), ['گوشی'])
+        choices = query_choices(AssistantRequest.model_validate(body('گوشی سامسونگ A54 برای عکاسی')))
+        self.assertIn('گوشی سامسونگ a54', choices)
+        self.assertFalse(any('عکاسی' in q for q in choices))
+        self.assertIn('باتری گوشی', query_choices(AssistantRequest.model_validate(body('باتری گوشی می‌خواهم'))))
+        # Explicit numeric constraints are not silently removed by this narrow rule.
+        self.assertTrue(any('5000' in q for q in query_choices(AssistantRequest.model_validate(body('گوشی با باتری ۵۰۰۰')))))
+
 
 class AssistantApiTests(unittest.TestCase):
     def setUp(self):
