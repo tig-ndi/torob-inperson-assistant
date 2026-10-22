@@ -1200,3 +1200,141 @@ class EnvelopeTests(unittest.TestCase):
         asyncio.run(exercise(lambda request: httpx.Response(200, content=b'x' * 65537), 'invalid_output'))
         self.assertIsNone(reported_cost('NaN'))
         self.assertIsNone(reported_cost(True))
+
+
+@unittest.skipUnless(SNAPSHOT.exists(), 'local catalogue snapshot not available')
+class SnapshotAssistantApiTests(unittest.TestCase):
+    """CAT-1 regressions against real category names and products."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.calls = []
+        self.response = completion(proposal())
+        self.settings = AgentSettings(True, 'synthetic-secret-never-log',
+                                      model='gpt-5.6-luna', attempt_limit=10)
+
+        def handler(request):
+            self.calls.append(request)
+            return httpx.Response(200, json=self.response)
+
+        service = AssistantService(
+            Catalogue(SNAPSHOT), self.settings, UsageLedger(Path(temp.name) / 'usage.sqlite3'),
+            BoxProvider(self.settings, httpx.MockTransport(handler)))
+        self.client = TestClient(create_app(SNAPSHOT, assistant=service))
+        self.addCleanup(self.client.close)
+
+    def post_turn(self, text, state, plan):
+        self.response = completion(plan)
+        request = {'request_id': str(uuid4()), 'messages': [{'role': 'user', 'content': text}],
+                   'context_need_state': state}
+        response = self.client.post('/api/assistant/turn', json=request)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    @staticmethod
+    def laptop_state(**changes):
+        state = {
+            'version': 1, 'topic_query': 'لپ تاپ', 'category_name': 'لپ تاپ و نوت بوک',
+            'category_cleared': False, 'max_price_toman': None, 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'unspecified', 'minimum_mah': None},
+            'review_topics': [], 'pending_requirements': [],
+        }
+        state.update(changes)
+        return state
+
+    def test_recorded_s13_switch_searches_laptop_category_not_accessories(self):
+        result = self.post_turn(
+            'حالا لپ تاپ می‌خوام',
+            phone_battery_state(battery_requirement={'status': 'minimum', 'minimum_mah': 6000}),
+            {'action': 'clarify', 'query': 'لپ تاپ', 'budget_text': None, 'question': 'battery_scope'})
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'لپ تاپ')
+        self.assertEqual(result['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertIsNone(result['question_code'])
+        self.assertIsNone(result['max_price_toman'])
+        items = result['products']['items']
+        self.assertEqual(len(items), 12)
+        self.assertEqual({item['category_name'] for item in items}, {'لپ تاپ و نوت بوک'})
+        self.assertEqual(result['products']['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertEqual(result['need_state']['topic_query'], 'لپ تاپ')
+        self.assertEqual(result['need_state']['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertEqual(result['need_state']['battery_requirement'],
+                         {'status': 'unspecified', 'minimum_mah': None})
+        self.assertEqual(result['need_state']['review_topics'], [])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_second_explicit_switch_replaces_category_and_keeps_valid_budget(self):
+        result = self.post_turn(
+            'حالا تبلت می‌خوام',
+            self.laptop_state(max_price_toman='100000000'),
+            {'action': 'clarify', 'query': 'تبلت', 'budget_text': None, 'question': 'battery_scope'})
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'تبلت')
+        self.assertEqual(result['category_name'], 'تبلت')
+        self.assertEqual(result['max_price_toman'], '100000000')
+        items = result['products']['items']
+        self.assertEqual(len(items), 12)
+        self.assertEqual({item['category_name'] for item in items}, {'تبلت'})
+        self.assertEqual(result['need_state']['topic_query'], 'تبلت')
+        self.assertEqual(result['need_state']['category_name'], 'تبلت')
+        self.assertEqual(result['need_state']['battery_requirement'],
+                         {'status': 'unspecified', 'minimum_mah': None})
+        self.assertEqual(len(self.calls), 1)
+
+    def test_category_cleared_same_product_does_not_reimpose_removed_filter(self):
+        result = self.post_turn(
+            'همون گوشی رو می‌خوام',
+            phone_battery_state(category_cleared=True,
+                                battery_requirement={'status': 'unspecified', 'minimum_mah': None}),
+            {'action': 'clarify', 'query': 'گوشی', 'budget_text': None, 'question': 'battery_scope'})
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'گوشی')
+        self.assertIsNone(result['category_name'])
+        self.assertIsNone(result['products']['category_name'])
+        categories = {item['category_name'] for item in result['products']['items']}
+        self.assertIn('گوشی موبایل', categories)
+        self.assertTrue(categories - {'گوشی موبایل'})
+        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertTrue(result['need_state']['category_cleared'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_category_cleared_new_product_reintroduces_only_the_new_category(self):
+        result = self.post_turn(
+            'حالا لپ تاپ می‌خوام',
+            phone_battery_state(category_cleared=True,
+                                battery_requirement={'status': 'unspecified', 'minimum_mah': None}),
+            {'action': 'clarify', 'query': 'لپ تاپ', 'budget_text': None, 'question': 'battery_scope'})
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['category_name'], 'لپ تاپ و نوت بوک')
+        items = result['products']['items']
+        self.assertEqual({item['category_name'] for item in items}, {'لپ تاپ و نوت بوک'})
+        self.assertEqual(result['need_state']['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertFalse(result['need_state']['category_cleared'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_same_product_continuation_keeps_its_grounded_category(self):
+        result = self.post_turn(
+            'همون لپ تاپ رو می‌خوام', self.laptop_state(),
+            {'action': 'clarify', 'query': 'لپ تاپ', 'budget_text': None, 'question': 'battery_scope'})
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['query'], 'لپ تاپ')
+        self.assertEqual(result['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertEqual({item['category_name'] for item in result['products']['items']},
+                         {'لپ تاپ و نوت بوک'})
+        self.assertEqual(result['need_state']['category_name'], 'لپ تاپ و نوت بوک')
+        self.assertFalse(result['need_state']['category_cleared'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_multi_product_switch_never_becomes_one_category_search(self):
+        result = self.post_turn(
+            'حالا گوشی و لپ تاپ می‌خوام', phone_battery_state(),
+            {'action': 'search', 'query': 'گوشی', 'budget_text': None, 'question': None})
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'product_kind')
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['category_name'])
+        self.assertIsNone(result['products'])
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی')
+        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertEqual(len(self.calls), 1)

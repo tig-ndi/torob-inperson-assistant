@@ -406,8 +406,14 @@ class AssistantService:
             if not budget_uncertain and sort_uncertain:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='priority')
             if plan.action == 'clarify' and effective_category is None and plan.query:
-                # A clarification about a grounded product keeps its category in state.
-                effective_category = detect_category_intent(plan.query)
+                # A clarification about a grounded product keeps its category in state,
+                # unless the user explicitly removed that same filter earlier.
+                candidate = detect_category_intent(plan.query)
+                if candidate is not None:
+                    prior_category = request.context_category or detect_category_intent(request.context_query or '')
+                    if not request.category_cleared or (
+                            prior_category is not None and candidate != prior_category):
+                        effective_category = candidate
             fallback = (request.messages[-3].content if len(request.messages) >= 3
                         and matches_question(request.messages[-2].content, 'unsupported_filter') else None)
             if coordinated:
@@ -429,10 +435,10 @@ class AssistantService:
                 if question:
                     plan = IntentPlan(action='clarify', query=needs.state.topic_query,
                                       budget_text=None, question=question)
-                    effective_category = None if request.category_cleared else needs.state.category_name
+                    effective_category = None if needs.state.category_cleared else needs.state.category_name
                 elif needs.controlled and plan.question == 'unsupported_filter':
                     plan = IntentPlan(action='search', query=needs.state.topic_query, budget_text=None, question=None)
-                    effective_category = None if request.category_cleared else needs.state.category_name
+                    effective_category = None if needs.state.category_cleared else needs.state.category_name
             if (plan.action == 'clarify' and plan.question == 'battery_scope'
                     and not (not battery_phone and latest_has_capacity_unit)):
                 # A model-supplied scope question has no standing after a clear product
@@ -456,7 +462,7 @@ class AssistantService:
                         and not scope_ambiguous):
                     plan = IntentPlan(action='search', query=needs.state.topic_query,
                                       budget_text=None, question=None)
-                    effective_category = needs.state.category_name
+                    effective_category = None if needs.state.category_cleared else needs.state.category_name
             if plan.action == 'search' and requirement.status == 'awaiting_minimum':
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
             if plan.action == 'search' and offer_sort == 'nearest' and request.user_lat is None:

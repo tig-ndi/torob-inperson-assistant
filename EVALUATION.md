@@ -1,5 +1,11 @@
 # ارزیابی و شواهد
 
+## تازه‌ترین شواهد — CAT-1: دستهٔ نهایی در تغییر روشن کالا
+
+۸۸ تست assistant و ۲۵۷ تست کل backend بدون skip موفق‌اند (شش تست snapshot تازه). تست‌ها فقط status را نمی‌سنجند: برای S13 همهٔ ۱۲ محصول باید در «لپ تاپ و نوت بوک» باشند؛ تغییر دوم باید ۱۲ تبلت با بودجهٔ حفظ‌شده بدهد؛ `category_cleared` همان کالا باید بدون فیلتر تحمیلی و با flag true بماند؛ کالای جدید باید فقط دستهٔ جدید را بگیرد؛ ادامهٔ همان کالا دسته را حفظ کند؛ و چندکالایی باید `needs_input/product_kind` بدون query/category/products باشد.
+
+`.local/qa/cat1_replay.py` شش حالت را با `MockTransport` و ledger موقت، بدون درخواست واقعی provider، اجرا کرد: هر شش check موفق، snapshot hash ثابت و هیچ محصول لوازم جانبی در نتایج S13/تبلت. چهار live پیش‌ثبت‌شدهٔ تازه روی همان مدل و بدون retry نیز موفق شدند: S13 با ۱۲ لپ‌تاپ، تغییر دوم با ۱۲ تبلت و بودجهٔ حفظ‌شده، حذف دستی دسته با `category_cleared=true` و بدون بازتحمیل، و چندکالایی بدون جست‌وجو. این شاهد real-model/ASGI است، نه مرورگر، deployed journey یا موجودی زنده.
+
 ## تازه‌ترین شواهد — smoke زنجیرهٔ P2→P3 و تطبیق شکست تاریخی
 
 هیچ آزمون یکپارچهٔ موجودی کل زنجیره را پوشش نمی‌داد: `tests/test_need_state.py` گذارهای state، `tests/test_assistant.py` تغییر بودجه/کالا، و `tests/test_followups.py` همراه `tools/smoke_followups.py` فقط دو endpoint پیگیری را می‌سنجند. `tools/smoke_chain.py` روی snapshot واقعی و ASGI درون‌پردازه‌ای با دو طرح provider مصنوعی و ledger موقت اجرا شد و نیاز → ویرایش بودجه با `context_need_state` → آفر واقعی محصول → `prepare` → outcome simulated/no_answer → `alternatives` را از endpointهای واقعی پاس کرد.
