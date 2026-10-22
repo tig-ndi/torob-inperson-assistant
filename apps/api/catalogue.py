@@ -128,13 +128,18 @@ class Catalogue:
                 "brand_name": row["brand_name"], "model": row["model"],
                 "category_name": row["category_name"],
                 "image_urls": decode_list(row["image_urls"]), "specs": specs, 'battery_capacity': capacity.as_dict(),
+                'nearest_offer': None,
                 "offer_summary": {"offer_count": summary[0],
                                   "min_price_toman": str(summary[1]) if summary[1] is not None else None,
                                   "max_price_toman": str(summary[2]) if summary[2] is not None else None,
                                   "missing_price_count": summary[3] or 0}}
 
     def search(self, query: str, limit: int, offset: int, max_price: int | None,
-               category_name: str | None = None, min_battery_capacity_mah: int | None = None) -> dict:
+               category_name: str | None = None, min_battery_capacity_mah: int | None = None,
+               *, user_lat: float | None = None, user_lon: float | None = None,
+               sort_by: str = 'relevance') -> dict:
+        if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
+            raise InvalidQuery('nearest ordering requires coordinates')
         expression = search_expression(query)
         with self.connect() as connection:
             provenance = self.provenance(connection)
@@ -143,18 +148,37 @@ class Catalogue:
                 return assess_capacity(category, decode_list(raw))
             connection.create_function('battery_capacity_mah', 2, lambda category, raw: capacity(category, raw).capacity_mah, deterministic=True)
             battery_clause = 'AND p.category_name=? AND battery_capacity_mah(p.category_name,p.specs)>=? ' if min_battery_capacity_mah is not None else ''
-            params = [expression, category_name, category_name, max_price, max_price]
+            nearest_select = ''
+            params = []
+            if sort_by == 'nearest':
+                nearest_select = (', (SELECT min(haversine_m(?,?,s.lat,s.lon)) FROM offers o '
+                                  'JOIN shops s ON s.shop_id=o.shop_id WHERE o.product_id=p.product_id '
+                                  'AND (? IS NULL OR o.price_toman<=?)) AS nearest_distance')
+                params.extend([user_lat, user_lon, max_price, max_price])
+            params.extend([expression, category_name, category_name, max_price, max_price])
             if min_battery_capacity_mah is not None:
                 params.extend(['گوشی موبایل', min_battery_capacity_mah])
             params.extend([limit + 1, offset])
+            nearest_clause = 'AND nearest_distance IS NOT NULL ' if sort_by == 'nearest' else ''
+            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'product_search.rank,p.product_id'
             rows = connection.execute(
-                "SELECT p.* FROM product_search JOIN products p "
+                "SELECT p.* " + nearest_select + " FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
                 "AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
-                "AND o.price_toman<=?)) " + battery_clause + "ORDER BY product_search.rank,p.product_id LIMIT ? OFFSET ?",
+                "AND o.price_toman<=?)) " + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",
                 params).fetchall()
-            return {"items": [self.product(connection, row, capacity(row['category_name'], row['specs'])) for row in rows[:limit]],
+            items = [self.product(connection, row, capacity(row['category_name'], row['specs'])) for row in rows[:limit]]
+            if sort_by == 'nearest':
+                for item in items:
+                    offers = self.offers(item['product_id'], 1, 0, max_price, user_lat, user_lon, sort_by='nearest')
+                    if offers is None or not offers['items']:
+                        raise CatalogueUnavailable()
+                    witness = offers['items'][0]
+                    item['nearest_offer'] = {key: witness[key] for key in (
+                        'offer_id', 'product_id', 'shop_id', 'price_toman',
+                        'last_price_changed_at', 'direct_distance_meters', 'inventory_status')}
+            return {"items": items,
                     "has_more": len(rows) > limit, "limit": limit, "offset": offset,
                     "category_name": category_name,
                     'min_battery_capacity_mah': min_battery_capacity_mah,
@@ -187,7 +211,10 @@ class Catalogue:
     def offers(self, product_id: str, limit: int, offset: int, max_price: int | None,
                user_lat: float | None = None, user_lon: float | None = None,
                max_distance_km: float | None = None, open_now_only: bool = False,
-               evaluated_at: datetime | None = None, in_person_credit_only: bool = False) -> dict | None:
+               evaluated_at: datetime | None = None, in_person_credit_only: bool = False,
+               *, sort_by: str = 'price') -> dict | None:
+        if sort_by not in {'price', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
+            raise InvalidQuery('nearest ordering requires coordinates')
         checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
 
         @lru_cache(maxsize=1024)
@@ -239,7 +266,11 @@ class Catalogue:
                 query += "AND haversine_m(?, ?, s.lat, s.lon) IS NOT NULL AND haversine_m(?, ?, s.lat, s.lon) <= ? "
                 params.extend([user_lat, user_lon, user_lat, user_lon, max_dist_m])
 
-            query += "ORDER BY o.price_toman IS NULL,o.price_toman,o.offer_id LIMIT ? OFFSET ?"
+            if sort_by == 'nearest':
+                # Unknown positions cannot win; sort full precision before pagination.
+                query += 'AND dist_m IS NOT NULL ORDER BY dist_m,o.price_toman IS NULL,o.price_toman,o.offer_id LIMIT ? OFFSET ?'
+            else:
+                query += "ORDER BY o.price_toman IS NULL,o.price_toman,o.offer_id LIMIT ? OFFSET ?"
             params.extend([limit + 1, offset])
 
             rows = connection.execute(query, params).fetchall()

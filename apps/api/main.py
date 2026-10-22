@@ -6,7 +6,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import ResponseValidationError
@@ -89,7 +89,13 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                offset: Offset = 0, max_price_toman: Budget = None,
                category_name: Annotated[str | None, Query(max_length=120)] = None,
                category_cleared: Annotated[bool, Query()] = False,
-               min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None):
+               min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None,
+               sort_by: Literal['relevance', 'nearest'] = 'relevance',
+               user_lat: float | None = Query(None, ge=-90, le=90, allow_inf_nan=False),
+               user_lon: float | None = Query(None, ge=-180, le=180, allow_inf_nan=False)):
+        validate_coordinates(user_lat, user_lon, None)
+        if sort_by == 'nearest' and user_lat is None:
+            raise HTTPException(422, 'مرتب‌سازی فاصله به مختصات معتبر نیاز دارد.')
         try:
             effective_category = None
             if not category_cleared:
@@ -97,7 +103,8 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             if min_battery_capacity_mah is not None and (effective_category or detect_category_intent(q)) not in {None, 'گوشی موبایل'}:
                 raise HTTPException(422, "فیلتر ظرفیت باتری فقط برای گوشی موبایل پشتیبانی می‌شود.")
             return catalogue.search(q, limit, offset, parse_budget(max_price_toman),
-                                    category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah)
+                                    category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah,
+                                    user_lat=user_lat, user_lon=user_lon, sort_by=sort_by)
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc
 
@@ -121,11 +128,14 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         max_distance_km: float | None = Query(None, gt=0, le=1000, allow_inf_nan=False),
         open_now_only: bool = False,
         in_person_credit_only: bool = False,
+        sort_by: Literal['price', 'nearest'] = 'price',
     ):
         # Hours depend on request time. A refresh must not reuse a cached page.
         response.headers["Cache-Control"] = "no-store"
         validate_id(product_id)
         validate_coordinates(user_lat, user_lon, max_distance_km)
+        if sort_by == 'nearest' and user_lat is None:
+            raise HTTPException(422, 'مرتب‌سازی فاصله به مختصات معتبر نیاز دارد.')
         result = catalogue.offers(
             product_id,
             limit,
@@ -137,6 +147,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             open_now_only=open_now_only,
             evaluated_at=clock() if clock is not None else datetime.now(timezone.utc),
             in_person_credit_only=in_person_credit_only,
+            sort_by=sort_by,
         )
         if result is None:
             raise HTTPException(404, "محصول در این snapshot ثبت نشده است.")

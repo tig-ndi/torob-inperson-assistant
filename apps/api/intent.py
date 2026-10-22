@@ -10,10 +10,13 @@ from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.battery import strip_capacity_clause
 from apps.api.models import BatteryRequirement
+from apps.api.visit_intent import is_constraint_followup, wants_nearest
 from tools.prepare_data import normalize_text
 
 
 QUESTIONS = {
+    "location": "برای یافتن نزدیک‌ترین فروشنده، موقعیت را در بخش محدوده مشخص کنید؛ بدون مختصات معتبر فاصله را حدس نمی‌زنیم.",
+    "unsupported_filter": "این شرط هنوز فیلتر قابل اتکایی در دستیار ندارد؛ مشخصات ثبت‌شده را بررسی کنید یا بگویید «بدون این شرط» ادامه دهیم. شرط اعمال نشده است.",
     "battery_capacity": "برای ظرفیت ثبت‌شدهٔ باتری، حداقل چند میلی‌آمپرساعت می‌خواهید؟ اگر حداقل مشخصی ندارید، بگویید «بدون حداقل». ظرفیت به‌تنهایی دوام واقعی باتری را ثابت نمی‌کند.",
     "battery_scope": "فیلتر ظرفیت ثبت‌شدهٔ باتری فعلاً فقط برای گوشی موبایل پشتیبانی می‌شود. می‌خواهید بدون این شرط جست‌وجو کنیم؟",
     "product_kind": "چه نوع کالایی می‌خواهید و برای چه کاری از آن استفاده می‌کنید؟",
@@ -42,9 +45,14 @@ class AssistantRequest(StrictModel):
     # Review topics are preferences for source evidence, never verified capabilities.
     context_topics: list[Literal['camera', 'battery']] | None = Field(default=None, max_length=2)
     context_battery_requirement: BatteryRequirement | None = None
+    user_lat: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    user_lon: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    context_offer_sort: Literal['price', 'nearest'] = 'price'
 
     @model_validator(mode="after")
     def bounded_history(self):
+        if (self.user_lat is None) != (self.user_lon is None):
+            raise ValueError('coordinates must be supplied together')
         if any(not m.content.strip() for m in self.messages) or sum(len(m.content) for m in self.messages) > 3000:
             raise ValueError("history must contain at most 3000 non-empty characters")
         if [m.role for m in self.messages] != ["user" if i % 2 == 0 else "assistant" for i in range(len(self.messages))] or self.messages[-1].role != "user":
@@ -60,7 +68,7 @@ class IntentPlan(StrictModel):
     action: Literal["clarify", "search"]
     query: str | None = Field(max_length=120)
     budget_text: str | None = Field(max_length=100)
-    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope"] | None
+    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope", "location", "unsupported_filter"] | None
 
     @model_validator(mode="after")
     def valid_action(self):
@@ -244,6 +252,16 @@ def query_choices(request: AssistantRequest) -> list[str]:
     These are lexical candidates, not verified recommendations or semantic matches.
     The model selects among them; the repository determines whether evidence exists.
     """
+    latest = request.messages[-1].content
+    if releases_unsupported(request):
+        return [normalize_text(request.context_query)]
+    # A modifier alone must not displace the current product with words such as
+    # 'colour blue location'. A newly named product category still takes priority.
+    if (request.context_query and is_constraint_followup(latest)
+            and detect_category_intent(latest) is None):
+        return [normalize_text(request.context_query)]
+    if not request.context_query and wants_nearest(latest) and is_constraint_followup(latest) and detect_category_intent(latest) is None:
+        return []
     stop = QUERY_STOPWORDS
     tokens = []
     for message in reversed(request.messages):
@@ -281,6 +299,12 @@ def query_choices(request: AssistantRequest) -> list[str]:
             if query and len(query) <= 120 and query not in candidates:
                 candidates.append(query)
     return candidates[:6]
+
+
+def releases_unsupported(request: AssistantRequest) -> bool:
+    return bool(request.context_query and len(request.messages) > 1
+                and request.messages[-2].content == QUESTIONS['unsupported_filter']
+                and normalize_text(request.messages[-1].content) in {'بدون این شرط', 'بدون این فیلتر'})
 
 
 def clear_product_topic(text: str, category_names) -> str | None:

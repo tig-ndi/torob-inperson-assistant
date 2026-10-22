@@ -66,6 +66,16 @@ class BatteryRequirement(Model):
         return self
 
 
+class NearestOffer(Model):
+    offer_id: str
+    product_id: str
+    shop_id: str
+    price_toman: str | None
+    last_price_changed_at: str | None
+    direct_distance_meters: int = Field(ge=0)
+    inventory_status: Literal['unconfirmed'] = 'unconfirmed'
+
+
 class Product(Model):
     product_id: str
     persian_title: str | None
@@ -76,6 +86,7 @@ class Product(Model):
     specs: list[Spec]
     offer_summary: OfferSummary
     battery_capacity: BatteryCapacity | None = None
+    nearest_offer: NearestOffer | None = None
 
 
 class ProductPage(Model):
@@ -160,6 +171,7 @@ class AssistantResult(Model):
     model: str
     explanation: SearchExplanation | None = None
     battery_requirement: BatteryRequirement = Field(default_factory=BatteryRequirement)
+    offer_sort: Literal['price', 'nearest'] = 'price'
 
 
 class Shop(Model):
