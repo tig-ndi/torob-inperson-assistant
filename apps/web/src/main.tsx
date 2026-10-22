@@ -139,7 +139,7 @@ function ComparisonModal({
   products: Product[];
   onClose: () => void;
   onRemove: (productId: string) => void;
-  onViewOffers: (product: Product) => void;
+  onViewOffers: (product: Product, fromCompare: boolean) => void;
 }) {
   const specKeys = extractAllSpecKeys(products);
 
@@ -161,18 +161,22 @@ function ComparisonModal({
         ) : (
           <div className="comparison-body">
             <div className="comparison-products-row">
-              {products.map(p => {
+              {products.map((p, index) => {
                 const s = p.offer_summary;
+                const columnLetter = String.fromCharCode(65 + index);
                 return (
                   <div key={p.product_id} className="compare-product-col">
-                    <button
-                      type="button"
-                      className="remove-col-btn"
-                      onClick={() => onRemove(p.product_id)}
-                      title="حذف از مقایسه"
-                    >
-                      حذف از مقایسه ✕
-                    </button>
+                    <div className="compare-col-top">
+                      <button
+                        type="button"
+                        className="remove-col-btn"
+                        onClick={() => onRemove(p.product_id)}
+                        title="حذف از مقایسه"
+                      >
+                        حذف از مقایسه ✕
+                      </button>
+                      <span className="compare-col-badge" title={`ستون ${columnLetter}`}>{columnLetter}</span>
+                    </div>
                     <h3 className="compare-product-title">{p.persian_title?.trim() || 'عنوان محصول ثبت نشده'}</h3>
                     <p className="caption">برند: {p.brand_name?.trim() || 'ثبت نشده'}</p>
                     <p className="caption">دسته: {p.category_name?.trim() || 'ثبت نشده'}</p>
@@ -194,7 +198,7 @@ function ComparisonModal({
                       className="secondary-btn small-btn"
                       onClick={() => {
                         onClose();
-                        onViewOffers(p);
+                        onViewOffers(p, true);
                       }}
                     >
                       مشاهدهٔ آفرها
@@ -219,9 +223,12 @@ function ComparisonModal({
                         )}
                       </div>
                       <div className="spec-values">
-                        {products.map(p => (
+                        {products.map((p, index) => (
                           <div key={p.product_id} className="spec-val-item">
-                            <span className="product-tag">{p.persian_title?.slice(0, 20) || 'کالا'}</span>
+                            <div className="spec-val-top">
+                              <span className="compare-col-badge" title={`ستون ${String.fromCharCode(65 + index)}`}>{String.fromCharCode(65 + index)}</span>
+                              <span className="product-tag" title={p.persian_title?.trim() || 'کالا'}>{p.persian_title?.trim() || 'کالا'}</span>
+                            </div>
                             <span className="val-text">{getProductSpecValue(p, k.section, k.key)}</span>
                           </div>
                         ))}
@@ -253,6 +260,7 @@ function OffersModal({
   onCreditFilterChange,
   onRefreshHours,
   onRetry,
+  onBackToCompare,
 }: {
   product: Product;
   budget: string | null;
@@ -269,6 +277,7 @@ function OffersModal({
   onCreditFilterChange: (creditOnly: boolean) => void;
   onRefreshHours: () => void;
   onRetry: () => void;
+  onBackToCompare?: (() => void) | null;
 }) {
   const [latInput, setLatInput] = useState(userLat !== null ? String(userLat) : '');
   const [lonInput, setLonInput] = useState(userLon !== null ? String(userLon) : '');
@@ -406,7 +415,19 @@ function OffersModal({
               </p>
             )}
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
+          <div className="modal-header-actions">
+            {onBackToCompare && (
+              <button
+                type="button"
+                className="secondary small-action-btn"
+                onClick={onBackToCompare}
+                title="بازگشت به پنجرهٔ مقایسه (دکمهٔ بازگشت مرورگر بین پنجره‌ها ناوبری نمی‌کند)"
+              >
+                بازگشت به مقایسه
+              </button>
+            )}
+            <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
+          </div>
         </div>
 
         <div className="offers-filter-bar">
@@ -739,6 +760,7 @@ function App() {
   // Offers modal state
   const [activeOffersProduct, setActiveOffersProduct] = useState<Product | null>(null);
   const [offersState, setOffersState] = useState<OffersState>({ kind: 'idle' });
+  const [offersOriginCompare, setOffersOriginCompare] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(null);
@@ -973,8 +995,9 @@ function App() {
     setSelectedForComparison(selectedForComparison.filter(p => p.product_id !== productId));
   }
 
-  function openOffers(product: Product, offset = 0) {
+  function openOffers(product: Product, offset = 0, fromCompare = false) {
     setActiveOffersProduct(product);
+    setOffersOriginCompare(fromCompare);
     loadOffers(product.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm);
   }
 
@@ -1433,7 +1456,7 @@ function App() {
           products={selectedForComparison}
           onClose={() => setShowComparisonView(false)}
           onRemove={removeProductFromComparison}
-          onViewOffers={openOffers}
+          onViewOffers={(product, fromCompare) => openOffers(product, 0, fromCompare)}
         />
       )}
 
@@ -1449,6 +1472,12 @@ function App() {
           inPersonCreditOnly={inPersonCreditOnly}
           state={offersState}
           onClose={() => setActiveOffersProduct(null)}
+          onBackToCompare={offersOriginCompare
+            ? () => {
+                setActiveOffersProduct(null);
+                setShowComparisonView(true);
+              }
+            : null}
           onPageChange={offset => loadOffers(activeOffersProduct.product_id, offset, activeBudget, userLat, userLon, maxDistanceKm)}
           onLocationChange={(newLat, newLon, newRadius) => {
             setUserLat(newLat);

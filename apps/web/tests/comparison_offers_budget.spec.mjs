@@ -517,3 +517,86 @@ test('real UI: floating toast appears in viewport after scroll when selecting 4t
   await toast.locator('.toast-close-btn').click();
   await expect(toast).toHaveCount(0);
 });
+
+test('synthetic fixture: comparison columns carry fixed A/B badges and titles are never blindly sliced', async ({ page }) => {
+  const longTitleA = 'گوشی هوشمند آزمایشی با عنوان بسیار طولانی تر از بیست نویسه برای بررسی عدم برش کورکورانه';
+  const productA = {
+    product_id: 'compare_badge_a', persian_title: longTitleA, brand_name: 'برند آ', model: null,
+    category_name: 'گوشی موبایل',
+    specs: [{ key: 'حافظه داخلی', section: 'حافظه', value: '۱۲۸ گیگابایت' }],
+    image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '2000', missing_price_count: 0 },
+  };
+  const productB = {
+    product_id: 'compare_badge_b', persian_title: 'کالای کوتاه ب', brand_name: 'برند ب', model: null,
+    category_name: 'گوشی موبایل',
+    specs: [{ key: 'حافظه داخلی', section: 'حافظه', value: '۲۵۶ گیگابایت' }],
+    image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '3000', max_price_toman: '3000', missing_price_count: 0 },
+  };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [productA, productB],
+    has_more: false, provenance: { currency: 'toman', inventory_status: 'unconfirmed' } } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('مقایسه');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  const cards = page.locator('.product-card');
+  await cards.nth(0).locator('.compare-btn').click();
+  await cards.nth(1).locator('.compare-btn').click();
+  await page.getByRole('button', { name: 'مشاهدهٔ مقایسهٔ محصولات' }).click();
+  const modal = page.locator('.comparison-modal');
+  await expect(modal).toBeVisible();
+
+  // Fixed column badges in header cards
+  await expect(modal.locator('.compare-product-col .compare-col-badge')).toHaveText(['A', 'B']);
+  await expect(modal.locator('.compare-product-col .compare-col-badge').first()).toHaveAttribute('title', 'ستون A');
+
+  // Full title is present in the DOM (ellipsis is visual only) with a title attribute
+  await expect(modal.locator('.compare-product-title').first()).toHaveText(longTitleA);
+
+  // Spec rows carry the same badges and the full unsliced title
+  const specRow = modal.locator('.spec-row').first();
+  await expect(specRow.locator('.spec-val-item .compare-col-badge')).toHaveText(['A', 'B']);
+  const tag = specRow.locator('.product-tag').first();
+  await expect(tag).toHaveText(longTitleA);
+  await expect(tag).toHaveAttribute('title', longTitleA);
+});
+
+test('synthetic fixture: offers opened from comparison offer explicit return button; direct offers do not', async ({ page }) => {
+  const product = {
+    product_id: 'return_compare_product', persian_title: 'کالای بازگشت مقایسه', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product, { ...product, product_id: 'return_compare_product_2', persian_title: 'کالای دوم بازگشت' }],
+    has_more: false, provenance: source } }));
+  await page.route('**/api/products/*/offers?**', route => route.fulfill({ json: { items: [], has_more: false,
+    limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بازگشت');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  const cards = page.locator('.product-card');
+  await cards.nth(0).locator('.compare-btn').click();
+  await cards.nth(1).locator('.compare-btn').click();
+  await page.getByRole('button', { name: 'مشاهدهٔ مقایسهٔ محصولات' }).click();
+  const compareModal = page.locator('.comparison-modal');
+  await expect(compareModal).toBeVisible();
+
+  // Open offers from the comparison modal: explicit return button appears
+  await compareModal.getByRole('button', { name: 'مشاهدهٔ آفرها' }).first().click();
+  const offersModal = page.locator('.offers-modal');
+  await expect(offersModal).toBeVisible();
+  await expect(compareModal).toHaveCount(0);
+  const backButton = offersModal.getByRole('button', { name: 'بازگشت به مقایسه', exact: true });
+  await expect(backButton).toBeVisible();
+  await backButton.click();
+  await expect(compareModal).toBeVisible();
+  await expect(offersModal).toHaveCount(0);
+  await expect(compareModal.locator('.compare-product-col')).toHaveCount(2);
+
+  // Close comparison and open offers directly from a card: no return button
+  await compareModal.locator('.close-btn').click();
+  await cards.nth(0).locator('.secondary-btn').click();
+  await expect(offersModal).toBeVisible();
+  await expect(offersModal.getByRole('button', { name: 'بازگشت به مقایسه', exact: true })).toHaveCount(0);
+});
