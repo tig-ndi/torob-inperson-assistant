@@ -267,6 +267,12 @@ def resolve_accessory_category(
     if not cleaned or not re.search(rf"\b(?:{AMBIGUOUS_ACCESSORY_REGEX})\b", cleaned):
         return None
 
+    # A stethoscope is not a mobile phone. Do not let the shared word «گوشی»
+    # supply a mobile target, whether the topic comes from a category or query.
+    if any(topic and detect_category_intent(topic) == CAT_STETHOSCOPE
+           for topic in (context_category, context_query)):
+        return None
+
     # Determine context device keyword
     device_word = None
     if context_category:
@@ -318,7 +324,7 @@ def is_ambiguous_product_intent(
     Returns False for:
     - Clear products with identified category (e.g. "گوشی", "شارژر لپ تاپ", "کاور گوشی")
     - Non-accessory products outside snapshot categories (e.g. "کفش ورزشی", "یخچال")
-    - Queries where active context supplies the target device (unless category_cleared=True)
+    - Queries where active context supplies the target device, independently of filter removal
     """
     if not text or not isinstance(text, str):
         return False

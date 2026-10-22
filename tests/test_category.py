@@ -186,6 +186,11 @@ class TestCategoryDetector(unittest.TestCase):
         self.assertTrue(is_ambiguous_product_intent("شارژر", category_cleared=True))
         self.assertTrue(is_ambiguous_product_intent("کاور", context_query="کفش ورزشی"))
 
+    def test_stethoscope_topic_is_not_a_mobile_device_even_without_category(self):
+        for category in [CAT_STETHOSCOPE, None]:
+            self.assertIsNone(resolve_accessory_category('شارژر', context_category=category, context_query='گوشی پزشکی'))
+            self.assertTrue(is_ambiguous_product_intent('شارژر', context_category=category, context_query='گوشی پزشکی'))
+
 
 if __name__ == "__main__":
     unittest.main()

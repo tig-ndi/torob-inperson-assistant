@@ -142,6 +142,21 @@ class Catalogue:
                     "category_name": category_name,
                     "provenance": provenance}
 
+    def matches_identity(self, query: str, category_name: str) -> bool:
+        """Recognize a literal brand/model refinement of the active category.
+
+        Existence is independent of price: an unaffordable refinement must remain
+        empty in its category, not silently widen to cheaper accessories.
+        """
+        search_expression(query)
+        terms = set(re.findall(r'[^\W_]+', normalize_text(query)))
+        with self.connect() as connection:
+            rows = connection.execute(
+                'SELECT DISTINCT brand_name,model FROM products WHERE category_name=? '
+                'AND (brand_name IS NOT NULL OR model IS NOT NULL)', (category_name,))
+            return any(terms <= set(re.findall(r'[^\W_]+', normalize_text(
+                ' '.join(part for part in row if part)))) for row in rows)
+
     def detail(self, product_id: str) -> dict | None:
         with self.connect() as connection:
             provenance = self.provenance(connection)

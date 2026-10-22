@@ -635,6 +635,7 @@ function App() {
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
   const interactionVersion = useRef(0);
+  const lastCatalogueQuery = useRef<string | null>(null);
   const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
   const [assistantContextQuery, setAssistantContextQuery] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -712,6 +713,7 @@ function App() {
     }
 
     setValidation('');
+    lastCatalogueQuery.current = trimmed;
     interactionVersion.current++;
     setAssistantCancelVersion(version => version + 1);
     setAssistantContextQuery(null);
@@ -769,8 +771,9 @@ function App() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = normalizeBudget(budgetInput);
-    setActiveCategory(null);
-    setCategoryCleared(false);
+    const sameQuery = input.trim() === lastCatalogueQuery.current;
+    const nextCategory = sameQuery ? activeCategory : null;
+    const nextCleared = sameQuery ? categoryCleared : false;
     if (normalized) {
       const check = validateBudget(normalized);
       if (!check.valid) {
@@ -778,10 +781,10 @@ function App() {
         return;
       }
       setActiveBudget(normalized);
-      void search(input, 0, normalized, null, false);
+      void search(input, 0, normalized, nextCategory, nextCleared);
     } else {
       setActiveBudget(null);
-      void search(input, 0, null, null, false);
+      void search(input, 0, null, nextCategory, nextCleared);
     }
   }
 
@@ -985,6 +988,7 @@ function App() {
           onContext={(query, category, version) => {
             if (version !== undefined && version !== interactionVersion.current) return;
             setAssistantContextQuery(query);
+            if (query === null && version === undefined) setCategoryCleared(false);
             if (category !== undefined) {
               setAssistantContextCategory(category);
               setActiveCategory(category);
@@ -1005,6 +1009,7 @@ function App() {
           }}
           onResults={(page, query, budget, version, category) => {
             if (version !== interactionVersion.current) return;
+            lastCatalogueQuery.current = query;
             setInput(query);
             setAssistantContextQuery(query);
             setAssistantContextCategory(category);

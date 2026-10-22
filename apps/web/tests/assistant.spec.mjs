@@ -221,3 +221,30 @@ test('long followups keep complete recent pairs within the API character bound',
   expect(requests[2].messages.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
   expect(requests[2].messages.reduce((size, m) => size + m.content.length, 0)).toBeLessThanOrEqual(3000);
 });
+
+test('new conversation resets removed category while keeping the visible budget', async ({ page }) => {
+  await statusRoute(page);
+  await page.route('**/api/products?**', route => {
+    const cleared = new URL(route.request().url()).searchParams.get('category_cleared') === 'true';
+    return route.fulfill({ json: { ...products, category_name: cleared ? null : 'گوشی موبایل' } });
+  });
+  let captured;
+  await page.route('**/api/assistant/turn', route => {
+    captured = route.request().postDataJSON();
+    return route.fulfill({ json: { ...searchResult(captured), category_name: 'گوشی موبایل' } });
+  });
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('10000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await page.getByRole('button', { name: 'حذف فیلتر دسته', exact: true }).click();
+  await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+  await page.getByRole('button', { name: 'گفت‌وگوی تازه', exact: true }).click();
+  await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
+  await submit(page);
+  await expect(page.getByLabel('نیاز و کاربرد موردنظر')).toHaveValue('');
+  expect(captured.context_query).toBeNull();
+  expect(captured.context_category).toBeNull();
+  expect(captured.category_cleared).toBe(false);
+  expect(captured.max_price_toman).toBe('10000000');
+});

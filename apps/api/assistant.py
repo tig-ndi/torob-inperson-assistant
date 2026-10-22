@@ -18,6 +18,7 @@ from apps.api.category import (
     resolve_accessory_category,
 )
 from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, proposed_budget, query_choices
+from tools.prepare_data import normalize_text
 
 
 ENDPOINT = "https://ai.boxapi.ir/ai/v1/chat/completions"
@@ -201,7 +202,7 @@ class AssistantService:
                 or (
                     plan.query is not None
                     and is_ambiguous_product_intent(
-                        plan.query,
+                        f'{plan.query} {latest_msg}',
                         context_category=request.context_category,
                         context_query=request.context_query,
                         category_cleared=request.category_cleared,
@@ -238,10 +239,17 @@ class AssistantService:
                         )
                         if resolved_accessory is not None:
                             effective_category = resolved_accessory
-                        elif request.context_category is not None:
-                            effective_category = request.context_category
-                        elif plan.query:
+                        else:
                             effective_category = detect_category_intent(plan.query)
+                            if effective_category is None and request.context_category is not None:
+                                same_topic = request.context_query is not None and (
+                                    normalize_text(plan.query) == normalize_text(request.context_query))
+                                identity_refinement = False
+                                if not same_topic:
+                                    identity_refinement = await asyncio.to_thread(
+                                        self.catalogue.matches_identity, plan.query, request.context_category)
+                                if same_topic or identity_refinement:
+                                    effective_category = request.context_category
 
                 page = await asyncio.to_thread(
                     self.catalogue.search,

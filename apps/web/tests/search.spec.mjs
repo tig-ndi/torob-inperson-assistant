@@ -98,6 +98,9 @@ test('synthetic delayed response cannot replace a newer search; loading is visib
 });
 
 test('category filter is auto-detected, preserved across pagination and budget, and can be manually cleared', async ({ page }) => {
+  await page.route('**/api/assistant/status', route => route.fulfill({ json: {
+    ready: true, reason: 'ready', remaining_calls: 3, attempt_limit: 3, model: 'synthetic' } }));
+  await page.route('**/api/assistant/turn', route => route.fulfill({ status: 503, json: { code: 'provider_failed' } }));
   await page.goto('/');
   await search(page, 'گوشی');
   const catBadge = page.locator('.active-category-badge').getByText('دسته: گوشی موبایل');
@@ -122,8 +125,27 @@ test('category filter is auto-detected, preserved across pagination and budget, 
   await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
   await expect(catBadge).toHaveCount(0);
 
+  // Editing only the budget must preserve explicit removal, not restart detection.
+  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۴۰٬۰۰۰٬۰۰۰');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+  await expect(catBadge).toHaveCount(0);
+
   // Pagination after clearing category stays unfiltered
   await page.getByRole('button', { name: 'صفحهٔ بعد', exact: true }).click();
   await expect(page.getByText('صفحهٔ ۲', { exact: true })).toBeVisible();
   await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+
+  // A failed assistant turn must not erase the last catalogue query or make a
+  // later direct budget edit silently reinstate the removed category.
+  await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
+  await page.getByRole('button', { name: 'بررسی نیاز', exact: true }).click();
+  await expect(page.locator('.assistant-panel [role="alert"]')).toBeVisible();
+  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۳۰٬۰۰۰٬۰۰۰');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
+
+  // A genuinely new query should detect its own category normally.
+  await search(page, 'لپ تاپ');
+  await expect(page.locator('.active-category-badge')).toContainText('لپ تاپ و نوت بوک');
 });

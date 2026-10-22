@@ -61,15 +61,34 @@ def smoke(database: Path) -> dict:
             offset += 50
         assert seen == expected and len(seen) == count
         checks += 1
-        response = client.get("/api/products", params={"q": "گوشی", "max_price_toman": "1000000", "limit": 3})
-        assert response.status_code == 200 and response.json()["items"]
-        for product in response.json()["items"]:
-            assert connection.execute(
-                "SELECT 1 FROM offers WHERE product_id=? AND price_toman<=1000000",
-                (product["product_id"],)).fetchone() is not None
-        checks += 1
+        # The source, not an assumption about market prices, defines the oracle.
+        # Category names are independently specified here, not inferred by the
+        # detector under test. Include an exact source-price boundary as well as
+        # the historical low budget which can legitimately produce no results.
+        phone_category = 'گوشی موبایل'
+        minimum = connection.execute(
+            'SELECT min(o.price_toman) FROM offers o JOIN products p ON p.product_id=o.product_id '
+            'WHERE p.category_name=?', (phone_category,)).fetchone()[0]
+        assert minimum is not None, 'source has no priced mobile phones'
+        budget_pages = {}
+        for budget in sorted({0, 1000000, 10000000, minimum}):
+            expected = {r[0] for r in connection.execute(
+                'SELECT p.product_id FROM products p WHERE p.category_name=? '
+                'AND EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id AND o.price_toman<=?)',
+                (phone_category, budget))}
+            response = client.get('/api/products', params={
+                'q': 'گوشی', 'max_price_toman': str(budget), 'limit': 3})
+            assert response.status_code == 200
+            page = response.json()
+            actual = {p['product_id'] for p in page['items']}
+            assert page['category_name'] == phone_category
+            assert actual <= expected and len(page['items']) == len(actual) == min(3, len(expected))
+            assert page['has_more'] == (len(expected) > 3)
+            assert all(p['category_name'] == phone_category for p in page['items'])
+            budget_pages[str(budget)] = {'source_eligible': len(expected), 'returned': len(actual)}
+            checks += 1
     assert before == sha256(database), "snapshot changed"
-    return {"checks": checks, "search_pages": search_counts, "snapshot_unchanged": True,
+    return {"checks": checks, "search_pages": search_counts, "phone_budget_pages": budget_pages, "snapshot_unchanged": True,
             "elapsed_seconds": round(time.monotonic() - started, 3), "evidence": "real dataset + in-process ASGI; no model or browser"}
 
 

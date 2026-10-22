@@ -345,6 +345,47 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(res1['query'], 'شارژر')
         self.assertEqual(len(self.calls), 1)
 
+    def test_new_unmapped_product_drops_old_category_instead_of_hiding_source_results(self):
+        self.response = completion(proposal(query='کفش کتانی'))
+        result = self.post(body('حالا کفش کتانی می‌خواهم', context_query='گوشی',
+                                context_category='گوشی موبایل', max_price_toman='8000000')).json()
+        self.assertEqual(result['status'], 'results')
+        self.assertIsNone(result['category_name'])
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(result['max_price_toman'], '8000000')
+
+    def test_explicit_target_is_not_lost_when_model_selects_short_accessory_query(self):
+        for text, query, category in [('شارژر گوشی می‌خواهم', 'شارژر', 'شارژر گوشی'),
+                                      ('کاور گوشی می‌خواهم', 'کاور', 'کیف و کاور گوشی')]:
+            self.response = completion(proposal(query=query))
+            result = self.post(body(text)).json()
+            self.assertIn(result['status'], {'results', 'no_evidence'})
+            self.assertIsNone(result['question'])
+            self.assertEqual(result['category_name'], category)
+
+    def test_medical_context_never_supplies_mobile_phone_for_an_accessory(self):
+        self.response = completion(proposal(query='شارژر'))
+        result = self.post(body('شارژر می‌خواهم', context_query='گوشی پزشکی', context_category='گوشی پزشکی')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertIsNone(result['products'])
+        self.assertIsNone(result['category_name'])
+
+    def test_brand_or_model_refinement_keeps_topic_category_without_matching_accessories(self):
+        for text, query in [('سامسونگ می‌خواهم', 'سامسونگ'), ('A12', 'a12')]:
+            self.response = completion(proposal(query=query))
+            result = self.post(body(text, context_query='گوشی', context_category='گوشی موبایل')).json()
+            self.assertEqual(result['status'], 'results')
+            self.assertEqual(result['category_name'], 'گوشی موبایل')
+            self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_one'])
+
+        # The brand exists in this category but is unaffordable. A cheaper case
+        # of the same brand must not be substituted by widening the search.
+        self.response = completion(proposal(query='سامسونگ'))
+        result = self.post(body('سامسونگ', context_query='گوشی', context_category='گوشی موبایل',
+                                max_price_toman='70000')).json()
+        self.assertEqual(result['status'], 'no_evidence')
+        self.assertEqual(result['category_name'], 'گوشی موبایل')
+
     def test_clear_request_with_category_cleared_searches_without_reimposing_filter(self):
         # Clear request ("گوشی می‌خواهم") with category_cleared=True:
         # Filter is NOT re-applied; search executes cleanly with category_name=None without clarification

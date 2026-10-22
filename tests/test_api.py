@@ -32,11 +32,12 @@ class CatalogueApiTests(unittest.TestCase):
                 {"shop_id": "shop_category_only", "category_names": '["گوشی"]'},
             ],
             "products": [
-                {"product_id": "product_one", "persian_title": "گوشي مدل ۱۲", "category_name": "گوشی موبایل", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "product_one", "persian_title": "گوشي مدل ۱۲", "brand_name": "سامسونگ", "model": "A12", "category_name": "گوشی موبایل", "specs": "[]", "image_urls": "[]"},
                 {"product_id": "product_two", "persian_title": "گوشی دوم", "category_name": "گوشی موبایل", "specs": "[]", "image_urls": "[]"},
                 {"product_id": "no_offer", "persian_title": "گوشی بی آفر", "category_name": "گوشی موبایل"},
-                {"product_id": "product_case", "persian_title": "کاور گوشی سیلیکونی", "category_name": "کیف و کاور گوشی", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "product_case", "persian_title": "کاور گوشی سیلیکونی", "brand_name": "سامسونگ", "category_name": "کیف و کاور گوشی", "specs": "[]", "image_urls": "[]"},
                 {"product_id": "product_steth", "persian_title": "گوشی پزشکی لیتمن", "category_name": "گوشی پزشکی", "specs": "[]", "image_urls": "[]"},
+                {"product_id": "product_shoe", "persian_title": "کفش کتانی آزمایشی", "category_name": "کفش ورزشی", "specs": "[]", "image_urls": "[]"},
             ],
             "offers": [
                 {"offer_id": "offer_a", "product_id": "product_one", "shop_id": "shop_one", "price_toman": "120000",
@@ -52,6 +53,7 @@ class CatalogueApiTests(unittest.TestCase):
                 {"offer_id": "other_product", "product_id": "product_two", "shop_id": "shop_one", "price_toman": "2"},
                 {"offer_id": "offer_case", "product_id": "product_case", "shop_id": "shop_one", "price_toman": "50000"},
                 {"offer_id": "offer_steth", "product_id": "product_steth", "shop_id": "shop_one", "price_toman": "5000000"},
+                {"offer_id": "offer_shoe", "product_id": "product_shoe", "shop_id": "shop_one", "price_toman": "5000000"},
             ],
         }
         for table, schema in SCHEMAS.items():
