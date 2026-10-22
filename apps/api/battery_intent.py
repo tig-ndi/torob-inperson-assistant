@@ -4,7 +4,7 @@ import re
 
 from apps.api.battery import MAX_CAPACITY_MAH, UNIT, capacity_clause, quantity_mah
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
-from apps.api.intent import AMOUNT, AssistantRequest, QUESTIONS, parse_toman
+from apps.api.intent import AMOUNT, NUMBER_WORDS, AssistantRequest, QUESTIONS, _strip_budget_phrases, parse_toman
 from apps.api.models import BatteryRequirement
 from tools.prepare_data import normalize_text
 
@@ -13,18 +13,39 @@ def phone_topic(query: str | None, category: str | None) -> bool:
     return category == CAT_MOBILE_PHONE or (category is None and detect_category_intent(query or '') == CAT_MOBILE_PHONE)
 
 
-def capacity_update(text: str, current: BatteryRequirement) -> BatteryRequirement:
-    text = normalize_text(text).strip(' .،؛؟!')
+BATTERY_LABEL = r'(?:باتری|باطری)'
+REMOVAL_LABEL = rf'(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?{BATTERY_LABEL}(?:\s+(?:را|رو))?\s+'
+
+
+def _capacity_clauses(text: str) -> list[str]:
+    """Bound local edits without splitting decimal/grouped digits or number words.
+
+    This is a conservative clause boundary, not general Persian negation parsing.
+    """
+    separator = (r'(?<![0-9])[،,.]|[،,.](?![0-9])|[؛;\n!?؟]|'
+                 r'\b(?:اما|ولی|فقط)\b|'
+                 rf'\s+و\s+(?!(?:[0-9]|(?:{NUMBER_WORDS})(?!\w)))')
+    return [part.strip() for part in re.split(separator, text) if part.strip()]
+
+
+def _clause_update(text: str, current: BatteryRequirement, allow_bare: bool) -> BatteryRequirement | None:
+    text = _strip_budget_phrases(text).strip()
     mentioned = bool(re.search(r'باتری|باطری|' + UNIT + r'\b', text))
     waiting = current.status == 'awaiting_minimum'
-    if (waiting and re.fullmatch(r'(?:بدون حداقل|حداقلی ندارم|حداقل ندارم)', text)) or re.search(
-            r'(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?(?:باتری|باطری).*حذف|(?:باتری|باطری).*مهم نیست', text):
-        return BatteryRequirement(status='no_minimum')
-    if not mentioned and not waiting:
+    keep = re.search(REMOVAL_LABEL + r'حذف\s+(?:نکن(?:ید)?|نشود|نشه)\b', text)
+    remove = re.search(REMOVAL_LABEL + r'حذف\s+(?:بکن(?:ید)?|کن(?:ید)?|شود|بشه)\b', text)
+    unimportant = re.search(rf'(?:ظرفیت\s+)?{BATTERY_LABEL}\s+(?:(?:دیگه|دیگر|اصلا|برای من)\s+)*(?:مهم نیست|اهمیتی ندارد)\b', text)
+    if (keep or remove or unimportant) and re.search(rf'\bحداقل\s+{AMOUNT}', text):
+        return BatteryRequirement(status='awaiting_minimum')
+    if keep:
         return current
+    if (allow_bare and re.fullmatch(r'(?:بدون حداقل|حداقلی ندارم|حداقل ندارم)', text)) or remove or unimportant:
+        return BatteryRequirement(status='no_minimum')
+    if not mentioned and not allow_bare:
+        return None
     capacity_intent = bool(re.search(r'ظرفیت\s+(?:باتری|باطری)|(?:باتری|باطری)\s+(?:حداقل|حداکثر|قوی|خوب|مناسب|با\s*کیفیت|بین|[0-9])|(?<!\w)' + UNIT + r'(?!\w)', text))
     if not waiting and not capacity_intent:
-        return current  # Replaceability/charging features are not a capacity request.
+        return None  # Replaceability/charging features are not a capacity request.
     # Explicit units are required except for an answer to this exact capacity question.
     matches = list(re.finditer(rf'(?<![\w+−.\-])(?P<number>{AMOUNT})\s*(?P<unit>{UNIT})(?!\w)', text))
     try:
@@ -45,7 +66,7 @@ def capacity_update(text: str, current: BatteryRequirement) -> BatteryRequiremen
             if re.search(r'[0-9].*\bتا\b', prefix):
                 raise ValueError('ambiguous range')
             return BatteryRequirement(status='minimum', minimum_mah=value)
-        if waiting and re.fullmatch(AMOUNT, text):
+        if allow_bare and re.fullmatch(AMOUNT, text):
             value = parse_toman(text)
             if value > MAX_CAPACITY_MAH:
                 raise ValueError('unsupported capacity')
@@ -54,7 +75,20 @@ def capacity_update(text: str, current: BatteryRequirement) -> BatteryRequiremen
         return BatteryRequirement(status='awaiting_minimum')
     if mentioned:
         return BatteryRequirement(status='awaiting_minimum')
-    return current
+    return None
+
+
+def capacity_update(text: str, current: BatteryRequirement) -> BatteryRequirement:
+    text = normalize_text(text).strip(' .،؛؟!')
+    allow_bare = current.status == 'awaiting_minimum'
+    updates = [update for clause in _capacity_clauses(text)
+               if (update := _clause_update(clause, current, allow_bare)) is not None]
+    if not updates:
+        return current
+    if any(update != updates[0] for update in updates[1:]):
+        # Conflicting edits must never produce a silently unfiltered search.
+        return BatteryRequirement(status='awaiting_minimum')
+    return updates[0]
 
 
 def resolve_requirement(request: AssistantRequest, is_phone: bool) -> BatteryRequirement:

@@ -1,6 +1,6 @@
 """Validate model proposals; compute money and catalogue operations on the host."""
 
-from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 import re
 from typing import Literal
 
@@ -152,7 +152,9 @@ def parse_toman(quote: str) -> int:
     tokens = text.split()
     if not tokens:
         raise ValueError("missing amount")
-    total, group, last_scale = Decimal(0), Decimal(0), 10**12
+    # Rational arithmetic preserves every decimal digit; Decimal context precision
+    # must not round a fractional toman into an accepted integer before validation.
+    total, group, last_scale = Fraction(0), Fraction(0), 10**12
     previous_number, last_rank = False, 4
     for token in tokens:
         if token == "و":
@@ -164,26 +166,26 @@ def parse_toman(quote: str) -> int:
             if group <= 0 or scale >= last_scale:
                 raise ValueError("invalid amount scale")
             total += group * scale
-            group, last_scale = Decimal(0), scale
+            group, last_scale = Fraction(0), scale
             last_rank = 4
             previous_number = True
         elif token in ONES or token in TENS or token in HUNDREDS:
             rank = 3 if token in HUNDREDS else 2 if token in TENS else 1
             if previous_number or rank >= last_rank:
                 raise ValueError("ambiguous number words")
-            group += Decimal({**ONES, **TENS, **HUNDREDS}[token])
+            group += {**ONES, **TENS, **HUNDREDS}[token]
             last_rank = rank
             previous_number = True
         elif re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", token) and not previous_number:
             if group:
                 raise ValueError('ambiguous mixed number')
-            group += Decimal(token)
+            group += Fraction(token)
             last_rank = 0
             previous_number = True
         else:
             raise ValueError("unsupported amount")
     total += group
-    if not previous_number or total != total.to_integral_value() or not 0 <= total <= 2**63 - 1:
+    if not previous_number or total.denominator != 1 or not 0 <= total <= 2**63 - 1:
         raise ValueError("amount must be a supported integer")
     return int(total)
 
@@ -191,6 +193,13 @@ def parse_toman(quote: str) -> int:
 def explicit_budget(message: str) -> str | None:
     """Only explicit, unambiguous maximum-budget phrases, never arbitrary numbers."""
     text = normalize_text(message)
+    # An unsupported signed amount is an explicit invalid budget, not absence
+    # of a budget. Physical units without a currency are not money phrases.
+    sign = r'(?:[-−–+]\s*|(?:منفی|مثبت)\s+)'
+    signed_money = rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){sign}{AMOUNT}\s*(?:تومان|تومن)(?!\w)'
+    signed_edit = rf'(?:سقف\s+)?{BUDGET_PREFIX}{sign}{AMOUNT}(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر\s+بده|$|[.،؛؟!]))'
+    if re.search(signed_money, text) or re.search(signed_edit, text):
+        raise ValueError('invalid signed budget')
     pattern = rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX})(?P<amount>{AMOUNT}\s*(?:تومان|تومن))'
     # The explicit budget field establishes toman, even in a short edit command.
     unitless = rf'(?:سقف\s+)?{BUDGET_PREFIX}(?P<amount>{AMOUNT})(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر\s+بده|$|[.،؛؟!]))'
@@ -225,7 +234,7 @@ def proposed_budget(plan: IntentPlan, request: AssistantRequest) -> str | None:
         raise ValueError("budget quote is not from the latest user message")
     try:
         return str(parse_toman(plan.budget_text))
-    except (InvalidOperation, ArithmeticError) as exc:
+    except ArithmeticError as exc:
         raise ValueError("unsupported amount") from exc
 
 
