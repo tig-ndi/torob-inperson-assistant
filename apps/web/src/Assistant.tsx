@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type ProductPage, type AssistantBatteryRequirement, type AssistantExplanation } from './api';
+import { AssistantActivity } from './presentation/icons-motion/AssistantActivity';
+import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from './presentation/icons-motion/icons';
 
 type Props = {
   budget: string | null;
@@ -202,26 +204,39 @@ export function Assistant({
         onChange={event => setInput(event.target.value)} placeholder="مثلاً گوشی برای عکاسی می‌خواهم؛ بودجه‌ام ده میلیون تومان است."
         aria-describedby="assistant-help" />
       <div className="assistant-actions">
-        <button type="submit" disabled={pending || status !== 'ready' || !input.trim()}>بررسی نیاز</button>
-        {pending && <button type="button" className="secondary" onClick={cancel}>لغو درخواست</button>}
-        {(history.length > 0 || contextQuery !== null) && !pending && <button type="button" className="secondary" onClick={() => {
-          setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null, null);
-        }}>گفت‌وگوی تازه</button>}
+        <button type="submit" className="tia-motion-press" disabled={pending || status !== 'ready' || !input.trim()}>
+          <SparklesIcon />
+          بررسی نیاز
+        </button>
+        {pending && (
+          <button type="button" className="secondary tia-motion-press" onClick={cancel}>
+            <StopCircleIcon />
+            لغو درخواست
+          </button>
+        )}
+        {(history.length > 0 || contextQuery !== null) && !pending && (
+          <button type="button" className="secondary tia-motion-press" onClick={() => {
+            setHistory([]); setInput(''); setError(''); setNotice('موضوع گفت‌وگو پاک شد؛ بودجهٔ کادر بالا حفظ شده است.'); onContext(null, null);
+          }}>
+            <RestartIcon />
+            گفت‌وگوی تازه
+          </button>
+        )}
       </div>
     </form>
     <p id="assistant-help" className="caption">موضوع فعلی و چند پیام اخیر تا بازبودن این صفحه حفظ می‌شوند. فقط هنگام زدن «بررسی نیاز» درخواست ارسال می‌شود. بودجه را می‌توانید در کادر بالا هم تغییر دهید؛ اطلاعات تماس و شخصی ننویسید.</p>
-    {status === 'checking' && <p role="status">در حال بررسی دسترسی دستیار…</p>}
+    <AssistantActivity phase={pending ? 'pending' : status === 'checking' ? 'checking' : 'idle'} />
     {status === 'ready' && <p className="caption">درخواست باقی‌مانده در سقف تنظیم‌شده: {numbers.format(remaining)}</p>}
     {status === 'unavailable' && <div>
       <p className="caption">{unavailableReason === 'attempt_limit'
         ? failures.attempt_limit : 'دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.'}</p>
       {unavailableReason !== 'attempt_limit' && (
-        <button type="button" className="secondary small-action-btn" onClick={checkStatus}>
+        <button type="button" className="secondary small-action-btn tia-motion-press" onClick={checkStatus}>
+          <RefreshIcon />
           بررسی مجدد وضعیت دستیار
         </button>
       )}
     </div>}
-    {pending && <p role="status">در حال بررسی نیاز؛ لطفاً صبر کنید…</p>}
     {notice && <p className="assistant-notice" role="status">{notice}</p>}
     {error && <div role="alert" className="error-text"><p>{error}</p>
       <p className="caption">ارسال دوباره یک درخواست تازه است و ممکن است اعتبار مصرف کند.</p></div>}

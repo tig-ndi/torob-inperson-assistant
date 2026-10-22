@@ -1462,7 +1462,9 @@ h3 {
 }
 .spec-focus-controls { margin: .75rem 0; padding: .75rem; border: 1px solid var(--line, #dbe1ea); border-radius: 14px; min-width: 0; background: #fff; }
 .spec-focus-controls legend { font-weight: 700; font-size: 14px; }
-.spec-focus-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+.spec-focus-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: .25rem; }
+.spec-focus-actions .small-action-btn { padding: 4px 5px; }
+.spec-focus-actions .tia-icon { width: 16px; height: 16px; }
 .spec-focus-actions [aria-pressed="true"] { border: 2px solid #b91c32; background: #fff0f2; color: #9f1239; }
 .spec-focus-help { margin-top: .5rem; }
 .spec-focus-help summary { cursor: pointer; font-size: 13px; color: var(--muted); }

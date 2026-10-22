@@ -167,7 +167,7 @@ test('synthetic assistant processing keeps previous successful results visible (
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   // While the assistant processes, the previous results stay visible and processing is shown separately
-  await expect(page.getByText('در حال بررسی نیاز؛ لطفاً صبر کنید…')).toBeVisible();
+  await expect(page.getByText('در حال بررسی درخواست…')).toBeVisible();
   await expect(page.locator('.product-card')).toHaveCount(1);
   await expect(page.locator('.product-card')).toContainText('گوشی آزمایشی');
   release();

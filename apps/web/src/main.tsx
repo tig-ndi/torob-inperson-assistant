@@ -22,6 +22,11 @@ import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
 import { Assistant } from './Assistant';
 import { Modal } from './Modal';
+import {
+  BatteryIcon, CameraIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon,
+  CompareIcon, CrosshairIcon, MapPinIcon, PlusIcon, RefreshIcon, SearchIcon, StoreIcon,
+} from './presentation/icons-motion/icons';
+import './presentation/icons-motion/motion.css';
 import { SpecEvidence } from './SpecEvidence';
 import { focusFromNeed, type SpecFocus } from './specEvidenceData';
 import { tehranDistricts } from './tehranNeighborhoods';
@@ -118,18 +123,29 @@ function ProductCard({
       <div className="card-actions">
         <button
           type="button"
-          className="secondary-btn"
+          className="secondary-btn tia-motion-press"
           onClick={() => onViewOffers(product)}
         >
+          <StoreIcon />
           مشاهدهٔ آفرها ({numbers.format(summary.offer_count)})
         </button>
         <button
           type="button"
-          className={`compare-btn ${isSelected ? 'active' : ''}`}
+          className={`compare-btn tia-motion-press ${isSelected ? 'active' : ''}`}
           onClick={() => onToggleCompare(product)}
           aria-pressed={isSelected}
         >
-          {isSelected ? '✓ در مقایسه' : '+ انتخاب برای مقایسه'}
+          {isSelected ? (
+            <>
+              <CheckIcon />
+              در مقایسه
+            </>
+          ) : (
+            <>
+              <PlusIcon />
+              انتخاب برای مقایسه
+            </>
+          )}
         </button>
       </div>
     </article>
@@ -156,7 +172,7 @@ function ComparisonModal({
             <h2 id="compare-modal-title">مقایسهٔ ۲ تا ۳ محصول</h2>
             <p className="caption">مشخصات بر اساس کلید و بخش منبع تطبیق داده شده‌اند؛ اطلاعات ناموجود به‌طور صریح مشخص‌اند.</p>
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="بستن پنجرهٔ مقایسه">✕</button>
+          <button type="button" className="close-btn tia-motion-press" onClick={onClose} aria-label="بستن پنجرهٔ مقایسه"><CloseIcon size={16} /></button>
         </div>
 
         {products.length < 2 ? (
@@ -179,7 +195,8 @@ function ComparisonModal({
                         onClick={() => onRemove(p.product_id)}
                         title="حذف از مقایسه"
                       >
-                        حذف از مقایسه ✕
+                        <CloseIcon size={14} />
+                        حذف از مقایسه
                       </button>
                       <span className="compare-col-badge" title={`ستون ${columnLetter}`}>{columnLetter}</span>
                     </div>
@@ -201,12 +218,13 @@ function ComparisonModal({
                     </p>
                     <button
                       type="button"
-                      className="secondary-btn small-btn"
+                      className="secondary-btn small-btn tia-motion-press"
                       onClick={() => {
                         onClose();
                         onViewOffers(p, true);
                       }}
                     >
+                      <StoreIcon />
                       مشاهدهٔ آفرها
                     </button>
                   </div>
@@ -438,14 +456,15 @@ function OffersModal({
             {onBackToCompare && (
               <button
                 type="button"
-                className="secondary small-action-btn"
+                className="secondary small-action-btn tia-motion-press"
                 onClick={onBackToCompare}
                 title="بازگشت به پنجرهٔ مقایسه (دکمهٔ بازگشت مرورگر بین پنجره‌ها ناوبری نمی‌کند)"
               >
+                <CompareIcon />
                 بازگشت به مقایسه
               </button>
             )}
-            <button type="button" className="close-btn" onClick={onClose} aria-label="بستن لیست آفرها">✕</button>
+            <button type="button" className="close-btn tia-motion-press" onClick={onClose} aria-label="بستن لیست آفرها"><CloseIcon size={16} /></button>
           </div>
         </div>
 
@@ -467,8 +486,11 @@ function OffersModal({
                 {state.kind === 'success' && <p className="caption hours-checked-at">
                   زمان بررسی ساعات: {formatTehranDateTime(state.page.hours_evaluated_at, true)} (به وقت تهران)
                 </p>}
-                <button type="button" className="secondary small-action-btn" disabled={state.kind === 'loading'}
-                  onClick={onRefreshHours}>به‌روزرسانی وضعیت ساعت</button>
+                <button type="button" className="secondary small-action-btn tia-motion-press" disabled={state.kind === 'loading'}
+                  onClick={onRefreshHours}>
+                  <RefreshIcon />
+                  به‌روزرسانی وضعیت ساعت
+                </button>
               </div>
 
               <div className="credit-filter-box">
@@ -543,13 +565,17 @@ function OffersModal({
                   </div>
 
                   <div className="location-actions-row">
-                    <button type="submit" className="small-action-btn">اعمال فیلتر محدوده</button>
+                    <button type="submit" className="small-action-btn tia-motion-press">
+                      <MapPinIcon />
+                      اعمال فیلتر محدوده
+                    </button>
                     <button
                       type="button"
-                      className="secondary small-action-btn"
+                      className="secondary small-action-btn tia-motion-press"
                       onClick={handleLocateMe}
                       disabled={isLocating}
                     >
+                      <CrosshairIcon />
                       {isLocating ? 'در حال دریافت…' : 'دریافت موقعیت از مرورگر'}
                     </button>
                     {hasLocationFilter && (
@@ -600,7 +626,10 @@ function OffersModal({
           <div className="state-panel error-panel" role="alert">
             <h3>خطا در دریافت آفرها</h3>
             <p>{state.message}</p>
-            <button type="button" className="secondary" onClick={onRetry}>تلاش مجدد</button>
+            <button type="button" className="secondary tia-motion-press" onClick={onRetry}>
+              <RefreshIcon />
+              تلاش مجدد
+            </button>
           </div>
         )}
 
@@ -623,17 +652,20 @@ function OffersModal({
                 {(openNowOnly || inPersonCreditOnly || hasLocationFilter) && (
                   <div className="empty-actions">
                     {openNowOnly && (
-                      <button type="button" className="secondary small-action-btn" onClick={() => onHoursFilterChange(false)}>
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => onHoursFilterChange(false)}>
+                        <CloseIcon />
                         حذف فیلتر ساعت
                       </button>
                     )}
                     {inPersonCreditOnly && (
-                      <button type="button" className="secondary small-action-btn" onClick={() => onCreditFilterChange(false)}>
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => onCreditFilterChange(false)}>
+                        <CloseIcon />
                         حذف فیلتر اعتبار حضوری
                       </button>
                     )}
                     {hasLocationFilter && (
-                      <button type="button" className="secondary small-action-btn" onClick={handleClearLocation}>
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={handleClearLocation}>
+                        <CloseIcon />
                         حذف محدودهٔ فاصله
                       </button>
                     )}
@@ -745,19 +777,21 @@ function OffersModal({
                   <nav className="pagination" aria-label="صفحه‌های آفرها">
                     <button
                       type="button"
-                      className="secondary"
+                      className="secondary tia-motion-press"
                       disabled={state.offset === 0}
                       onClick={() => onPageChange(Math.max(0, state.offset - OFFERS_PAGE_SIZE))}
                     >
+                      <ChevronRightIcon />
                       صفحهٔ قبل
                     </button>
                     <button
                       type="button"
-                      className="secondary"
+                      className="secondary tia-motion-press"
                       disabled={!state.page.has_more}
                       onClick={() => onPageChange(state.offset + OFFERS_PAGE_SIZE)}
                     >
                       صفحهٔ بعد
+                      <ChevronLeftIcon />
                     </button>
                   </nav>
                 )}
@@ -781,6 +815,7 @@ function App() {
   const [selectedForComparison, setSelectedForComparison] = useState<Product[]>([]);
   const [showComparisonView, setShowComparisonView] = useState(false);
   const [comparisonWarning, setComparisonWarning] = useState('');
+  const lastCompareToggle = useRef<{ id: string; time: number } | null>(null);
 
   // Offers modal state
   const [activeOffersProduct, setActiveOffersProduct] = useState<Product | null>(null);
@@ -1004,6 +1039,10 @@ function App() {
 
   function toggleCompare(product: Product) {
     setComparisonWarning('');
+    const now = Date.now();
+    const last = lastCompareToggle.current;
+    if (last && last.id === product.product_id && now - last.time < 350) return;
+    lastCompareToggle.current = { id: product.product_id, time: now };
     const exists = selectedForComparison.some(p => p.product_id === product.product_id);
     if (exists) {
       setSelectedForComparison(selectedForComparison.filter(p => p.product_id !== product.product_id));
@@ -1125,7 +1164,10 @@ function App() {
             </div>
 
             <div className="form-actions">
-              <button type="submit">جست‌وجو</button>
+              <button type="submit" className="tia-motion-press">
+                <SearchIcon />
+                جست‌وجو
+              </button>
             </div>
 
             <p id="search-help" className="caption">
@@ -1139,7 +1181,7 @@ function App() {
               <button
                 key={query}
                 type="button"
-                className="chip"
+                className="chip tia-motion-press"
                 onClick={() => {
                   setInput(query);
                   setActiveCategory(null);
@@ -1160,38 +1202,6 @@ function App() {
               </button>
             ))}
           </div>
-
-          <details className="journey-steps">
-            <summary>مسیر خرید حضوری: ۶ گام</summary>
-            <ol className="journey-steps-list">
-              <li aria-current="step" className="journey-step-current">
-                <span className="journey-step-num" aria-hidden="true">۱</span>
-                <span>جست‌وجوی کالا در کاتالوگ</span>
-              </li>
-              <li>
-                <span className="journey-step-num" aria-hidden="true">۲</span>
-                <span>انتخاب ۲ تا ۳ کالا برای مقایسه</span>
-              </li>
-              <li>
-                <span className="journey-step-num" aria-hidden="true">۳</span>
-                <span>بررسی آفرها و قیمت هر فروشگاه</span>
-              </li>
-              <li>
-                <span className="journey-step-num" aria-hidden="true">۴</span>
-                <span>ساعت باز بودن و فاصلهٔ هوایی</span>
-              </li>
-              <li>
-                <span className="journey-step-num" aria-hidden="true">۵</span>
-                <span>اعتبار خرید حضوری فروشنده</span>
-              </li>
-              <li>
-                <span className="journey-step-num" aria-hidden="true">۶</span>
-                <span>مراجعه و خرید حضوری</span>
-                <span className="journey-future-badge">آینده</span>
-              </li>
-            </ol>
-            <p className="journey-note">گام ۶ رویداد فیزیکی است و در این نسخهٔ پروژه پیاده‌سازی نمی‌شود؛ اطلاعات تا پایان گام ۵ همین‌جاست.</p>
-          </details>
 
           {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName))) || (activeBatteryMah !== null && batteryRequirement?.status === 'minimum')) && (
             <div className="active-filters-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
@@ -1241,7 +1251,7 @@ function App() {
         </section>
 
         {comparisonWarning && (
-          <aside className="toast-notification warning-notice" role="alert" aria-live="assertive">
+          <aside className="toast-notification warning-notice tia-motion-fade" role="alert" aria-live="assertive">
             <div className="toast-message">
               <span className="toast-icon" aria-hidden="true">⚠️</span>
               <div>
@@ -1255,7 +1265,7 @@ function App() {
               onClick={() => setComparisonWarning('')}
               aria-label="بستن پیام"
             >
-              ✕
+              <CloseIcon size={14} />
             </button>
           </aside>
         )}
@@ -1269,10 +1279,11 @@ function App() {
             <div className="compare-bar-actions">
               <button
                 type="button"
-                className="secondary"
+                className="secondary tia-motion-press"
                 disabled={selectedForComparison.length < 2}
                 onClick={() => setShowComparisonView(true)}
               >
+                <CompareIcon />
                 مشاهدهٔ مقایسهٔ محصولات
               </button>
               <button
@@ -1320,9 +1331,10 @@ function App() {
               <p>{state.message}</p>
               <button
                 type="button"
-                className="secondary"
+                className="secondary tia-motion-press"
                 onClick={() => void search(state.query, state.offset, state.budget, activeCategory, categoryCleared)}
               >
+                <RefreshIcon />
                 تلاش مجدد
               </button>
             </div>
@@ -1335,10 +1347,18 @@ function App() {
                   <legend>کدام مشخصات برای بررسی نیاز شما مهم‌تر است؟</legend>
                   <div className="spec-focus-actions">
                     {([['camera', 'دوربین'], ['battery', 'باتری'], ['both', 'هر دو']] as const).map(([value, label]) => (
-                      <button key={value} type="button" className="secondary small-action-btn" aria-pressed={specFocus === value}
-                        onClick={() => setSpecFocus(value)}>بررسی {label}</button>
+                      <button key={value} type="button" className="secondary small-action-btn tia-motion-press" aria-pressed={specFocus === value}
+                        onClick={() => setSpecFocus(value)}>
+                        {value === 'camera' ? <CameraIcon /> : value === 'battery' ? <BatteryIcon /> : <CheckIcon />}
+                        بررسی {label}
+                      </button>
                     ))}
-                    {specFocus && <button type="button" className="secondary small-action-btn" onClick={() => setSpecFocus(null)}>بستن مشخصات مرتبط</button>}
+                    {specFocus && (
+                      <button type="button" className="secondary small-action-btn tia-motion-press" onClick={() => setSpecFocus(null)}>
+                        <CloseIcon />
+                        بستن مشخصات مرتبط
+                      </button>
+                    )}
                   </div>
                   <details className="spec-focus-help">
                     <summary>این گزینه چه کاری انجام می‌دهد؟</summary>
@@ -1360,7 +1380,7 @@ function App() {
                   </p>
                 </div>
               ) : (
-                <div className="product-grid">
+                <div className="product-grid tia-motion-enter" key={`results-${state.query}-${state.offset}`}>
                   {state.page.items.map(product => {
                     const isSelected = selectedForComparison.some(p => p.product_id === product.product_id);
                     return (
@@ -1382,7 +1402,7 @@ function App() {
                 <nav className="pagination" aria-label="صفحه‌های نتایج">
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary tia-motion-press"
                     disabled={state.offset === 0}
                     onClick={() =>
                       void search(
@@ -1394,11 +1414,12 @@ function App() {
                       )
                     }
                   >
+                    <ChevronRightIcon />
                     صفحهٔ قبل
                   </button>
                   <button
                     type="button"
-                    className="secondary"
+                    className="secondary tia-motion-press"
                     disabled={!state.page.has_more}
                     onClick={() =>
                       void search(
@@ -1411,12 +1432,45 @@ function App() {
                     }
                   >
                     صفحهٔ بعد
+                    <ChevronLeftIcon />
                   </button>
                 </nav>
               )}
             </>
           )}
         </section>
+
+        <details className="journey-steps">
+          <summary>مسیر خرید حضوری: ۶ گام</summary>
+          <ol className="journey-steps-list">
+            <li aria-current="step" className="journey-step-current">
+              <span className="journey-step-num" aria-hidden="true">۱</span>
+              <span>جست‌وجوی کالا در کاتالوگ</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۲</span>
+              <span>انتخاب ۲ تا ۳ کالا برای مقایسه</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۳</span>
+              <span>بررسی آفرها و قیمت هر فروشگاه</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۴</span>
+              <span>ساعت باز بودن و فاصلهٔ هوایی</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۵</span>
+              <span>اعتبار خرید حضوری فروشنده</span>
+            </li>
+            <li>
+              <span className="journey-step-num" aria-hidden="true">۶</span>
+              <span>مراجعه و خرید حضوری</span>
+              <span className="journey-future-badge">آینده</span>
+            </li>
+          </ol>
+          <p className="journey-note">گام ۶ رویداد فیزیکی است و در این نسخهٔ پروژه پیاده‌سازی نمی‌شود؛ اطلاعات تا پایان گام ۵ همین‌جاست.</p>
+        </details>
 
         <aside className="notice">
           <strong>قبل از مراجعه، قیمت و موجودی را تأیید کنید.</strong>

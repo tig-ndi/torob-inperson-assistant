@@ -125,7 +125,7 @@ export function Modal({ isOpen, onClose, titleId, ariaLabel, className = '', chi
         }
       }}
     >
-      <div ref={contentRef} className={`modal-content ${className}`} tabIndex={-1}>
+      <div ref={contentRef} className={`modal-content ${className} tia-motion-enter`} tabIndex={-1}>
         {children}
       </div>
     </div>
