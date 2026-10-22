@@ -12,9 +12,14 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import ResponseValidationError
 from fastapi.responses import JSONResponse
 
-from apps.api.catalogue import Catalogue, CatalogueUnavailable, InvalidQuery
+from apps.api.catalogue import Catalogue, CatalogueUnavailable, FollowupSelectionError, InvalidQuery
 from apps.api.category import detect_category_intent
-from apps.api.models import OfferPage, ProductDetail, ProductPage, AssistantResult, AssistantStatus
+from apps.api.followup import alternatives_limitations, draft_text, prepare_limitations
+from apps.api.models import (
+    OfferPage, ProductDetail, ProductPage, AssistantResult, AssistantStatus,
+    FollowupAlternativesRequest, FollowupAlternativesResponse, FollowupPrepareRequest,
+    FollowupPrepareResponse,
+)
 from apps.api.assistant import AssistantService
 from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
@@ -47,6 +52,19 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     async def agent_error(request: Request, exc: AgentError):
         return JSONResponse(status_code=exc.status, content={'code': exc.code,
             'detail': 'دستیار نتوانست این درخواست را کامل کند؛ جست‌وجوی مستقیم همچنان در دسترس است.'})
+
+    @application.exception_handler(FollowupSelectionError)
+    async def followup_selection_error(request: Request, exc: FollowupSelectionError):
+        if exc.code == 'offer_shop_mismatch':
+            status = 409
+            detail = 'آفر انتخاب‌شده به این فروشگاه تعلق ندارد.'
+        elif exc.code == 'offer_not_found':
+            status = 404
+            detail = 'آفر انتخاب‌شده برای این محصول در snapshot ثبت نشده است.'
+        else:
+            status = 404
+            detail = 'محصول انتخاب‌شده در snapshot ثبت نشده است.'
+        return JSONResponse(status_code=status, content={'code': exc.code, 'detail': detail})
 
     @application.get('/api/assistant/status', response_model=AssistantStatus)
     def assistant_status(response: Response):
@@ -152,6 +170,73 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         if result is None:
             raise HTTPException(404, "محصول در این snapshot ثبت نشده است.")
         return result
+
+    @application.post('/api/followups/prepare', response_model=FollowupPrepareResponse)
+    def followup_prepare(body: FollowupPrepareRequest, response: Response):
+        response.headers['Cache-Control'] = 'no-store'
+        instant = clock() if clock is not None else datetime.now(timezone.utc)
+        selection = catalogue.followup_selection(
+            body.product_id, body.offer_id, body.shop_id,
+            body.user_lat, body.user_lon, instant)
+        return {
+            'status': 'prepared',
+            'product': selection['product'],
+            'selected_offer': selection['offer'],
+            'draft': {
+                'delivery_status': 'draft_not_sent',
+                'text': draft_text(selection['product'], selection['offer']),
+                'contact_channel_available': False,
+                'external_contact_attempted': False,
+            },
+            'limitations': prepare_limitations(),
+            'provenance': selection['provenance'],
+            'hours_evaluated_at': selection['hours_evaluated_at'],
+        }
+
+    @application.post('/api/followups/alternatives', response_model=FollowupAlternativesResponse)
+    def followup_alternatives(body: FollowupAlternativesRequest, response: Response):
+        response.headers['Cache-Control'] = 'no-store'
+        instant = clock() if clock is not None else datetime.now(timezone.utc)
+        selection = catalogue.followup_selection(
+            body.product_id, body.offer_id, body.shop_id,
+            body.user_lat, body.user_lon, instant)
+        budget = int(body.max_price_toman) if body.max_price_toman is not None else None
+
+        def offer_page(limit: int, offset: int):
+            return catalogue.offers(
+                body.product_id, limit, offset, budget,
+                body.user_lat, body.user_lon, body.max_distance_km,
+                open_now_only=body.open_now_only,
+                evaluated_at=instant,
+                in_person_credit_only=body.in_person_credit_only,
+                sort_by=body.sort_by,
+                exclude_shop_id=body.shop_id,
+            )
+
+        page = offer_page(body.limit, body.offset)
+        if page is None:
+            raise CatalogueUnavailable('product disappeared during follow-up')
+        has_alternatives = bool(page['items'])
+        if not has_alternatives and body.offset > 0:
+            first = offer_page(1, 0)
+            has_alternatives = bool(first and first['items'])
+        return {
+            'status': 'alternatives_available' if has_alternatives else 'no_alternatives',
+            'product_id': body.product_id,
+            'reported_offer_id': body.offer_id,
+            'reported_shop_id': body.shop_id,
+            'excluded_offer_count': selection['shop_offer_count'],
+            'outcome': {
+                'kind': body.outcome,
+                'source': body.outcome_source,
+                'received_at': selection['hours_evaluated_at'],
+                'verified_externally': False,
+                'seller_confirmation': False,
+            },
+            'alternatives': page,
+            'limitations': alternatives_limitations(
+                body.outcome_source, selection['shop_offer_count'], has_alternatives),
+        }
 
     return application
 

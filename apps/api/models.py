@@ -272,3 +272,90 @@ class OfferPage(Model):
     offset: int
     provenance: Provenance
     hours_evaluated_at: str
+
+
+class FollowupSelection(Model):
+    product_id: str = Field(min_length=1, max_length=200)
+    offer_id: str = Field(min_length=1, max_length=200)
+    shop_id: str = Field(min_length=1, max_length=200)
+    user_lat: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    user_lon: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+
+    @model_validator(mode='after')
+    def valid_selection(self):
+        for value in (self.product_id, self.offer_id, self.shop_id):
+            if value.strip() != value or any(ord(character) < 32 for character in value):
+                raise ValueError('identifiers must be nonempty, trimmed and free of control characters')
+        if (self.user_lat is None) != (self.user_lon is None):
+            raise ValueError('coordinates must be supplied together')
+        return self
+
+
+class FollowupPrepareRequest(FollowupSelection):
+    pass
+
+
+class FollowupAlternativesRequest(FollowupSelection):
+    outcome: Literal['no_answer', 'closed', 'out_of_stock']
+    outcome_source: Literal['simulated', 'user_report']
+    max_price_toman: str | None = Field(default=None, pattern=r'^[0-9]{1,19}$')
+    max_distance_km: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
+    open_now_only: bool = False
+    in_person_credit_only: bool = False
+    sort_by: Literal['price', 'nearest'] = 'price'
+    limit: int = Field(default=20, ge=1, le=50)
+    offset: int = Field(default=0, ge=0, le=1000000)
+
+    @model_validator(mode='after')
+    def valid_filters(self):
+        if self.max_price_toman is not None and int(self.max_price_toman) > 2**63 - 1:
+            raise ValueError('budget exceeds supported integer range')
+        if self.max_distance_km is not None and (self.user_lat is None or self.user_lon is None):
+            raise ValueError('radius requires coordinates')
+        if self.sort_by == 'nearest' and self.user_lat is None:
+            raise ValueError('nearest ordering requires coordinates')
+        return self
+
+
+class FollowupProduct(Model):
+    product_id: str
+    persian_title: str | None
+    brand_name: str | None
+    model: str | None
+    category_name: str | None
+
+
+class FollowupDraft(Model):
+    delivery_status: Literal['draft_not_sent'] = 'draft_not_sent'
+    text: str = Field(min_length=1, max_length=1200)
+    contact_channel_available: Literal[False] = False
+    external_contact_attempted: Literal[False] = False
+
+
+class FollowupPrepareResponse(Model):
+    status: Literal['prepared'] = 'prepared'
+    product: FollowupProduct
+    selected_offer: Offer
+    draft: FollowupDraft
+    limitations: list[str] = Field(max_length=8)
+    provenance: Provenance
+    hours_evaluated_at: str
+
+
+class FollowupOutcome(Model):
+    kind: Literal['no_answer', 'closed', 'out_of_stock']
+    source: Literal['simulated', 'user_report']
+    received_at: str
+    verified_externally: Literal[False] = False
+    seller_confirmation: Literal[False] = False
+
+
+class FollowupAlternativesResponse(Model):
+    status: Literal['alternatives_available', 'no_alternatives']
+    product_id: str
+    reported_offer_id: str
+    reported_shop_id: str
+    excluded_offer_count: int = Field(ge=0)
+    outcome: FollowupOutcome
+    alternatives: OfferPage
+    limitations: list[str] = Field(max_length=8)

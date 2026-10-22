@@ -49,6 +49,14 @@ class CatalogueUnavailable(Exception):
     """A missing, incompatible or invalid snapshot is a service failure."""
 
 
+class FollowupSelectionError(Exception):
+    """The selected product/offer/shop triple is absent or inconsistent."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 class InvalidQuery(ValueError):
     pass
 
@@ -208,11 +216,79 @@ class Catalogue:
             return {"product": self.product(connection, row),
                     "provenance": provenance}
 
+    @staticmethod
+    def offer_item(row: sqlite3.Row, hours, credit) -> dict:
+        price = row["price_toman"]
+        # This is a precision-risk flag, not a claim of market-price validity.
+        quality = "missing" if price is None else (
+            "above_js_safe_integer" if price > 9007199254740991 else "not_assessed")
+        dist_m = row["dist_m"]
+        direct_distance_meters = round(dist_m) if dist_m is not None else None
+        return {
+            "offer_id": row["offer_id"], "product_id": row["product_id"],
+            "shop_id": row["shop_id"], "price_toman": str(price) if price is not None else None,
+            "price_quality": quality, "last_price_changed_at": row["last_price_changed_at"],
+            "seller_title": row["seller_title"], "description": row["description"],
+            "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
+            "inventory_status": "unconfirmed",
+            "opening_hours": hours.as_dict(),
+            "in_person_credit": credit.as_dict(),
+            "direct_distance_meters": direct_distance_meters,
+            "shop": {"name": row["shop_name"], "address": row["address"],
+                     "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}}
+
+    def followup_selection(self, product_id: str, offer_id: str, shop_id: str,
+                           user_lat: float | None = None, user_lon: float | None = None,
+                           evaluated_at: datetime | None = None) -> dict:
+        """Validate one source offer triple and return its historical evidence."""
+        if (user_lat is None) != (user_lon is None):
+            raise InvalidQuery('coordinates must be supplied together')
+        checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
+        with self.connect() as connection:
+            connection.create_function("haversine_m", 4, safe_haversine_m, deterministic=True)
+            provenance = self.provenance(connection)
+            product = connection.execute(
+                "SELECT product_id,persian_title,brand_name,model,category_name "
+                "FROM products WHERE product_id=?", (product_id,)).fetchone()
+            if product is None:
+                raise FollowupSelectionError('product_not_found')
+            query = ("SELECT o.*,s.shop_id AS resolved_shop_id,s.name AS shop_name,s.address,"
+                     "s.location_label,s.lat,s.lon,s.weekly_hours,s.payment_options,"
+                     "p.category_name AS product_category_name")
+            params: list = []
+            if user_lat is not None:
+                query += ",haversine_m(?, ?, s.lat, s.lon) AS dist_m"
+                params.extend([user_lat, user_lon])
+            else:
+                query += ",NULL AS dist_m"
+            query += (" FROM offers o LEFT JOIN shops s ON s.shop_id=o.shop_id "
+                      "JOIN products p ON p.product_id=o.product_id "
+                      "WHERE o.offer_id=? AND o.product_id=?")
+            params.extend([offer_id, product_id])
+            row = connection.execute(query, params).fetchone()
+            if row is None:
+                raise FollowupSelectionError('offer_not_found')
+            if row["shop_id"] != shop_id:
+                raise FollowupSelectionError('offer_shop_mismatch')
+            if row["resolved_shop_id"] is None:
+                raise CatalogueUnavailable('offer references a missing shop')
+            shop_offer_count = connection.execute(
+                "SELECT count(*) FROM offers WHERE product_id=? AND shop_id=?",
+                (product_id, shop_id)).fetchone()[0]
+            offer = self.offer_item(
+                row, evaluate_hours(row["weekly_hours"], checked_at),
+                evaluate_credit(row["payment_options"], row["price_toman"],
+                                row["product_category_name"]))
+            return {"product": {key: product[key] for key in (
+                        'product_id', 'persian_title', 'brand_name', 'model', 'category_name')},
+                    "offer": offer, "shop_offer_count": shop_offer_count,
+                    "provenance": provenance, "hours_evaluated_at": checked_at.isoformat()}
+
     def offers(self, product_id: str, limit: int, offset: int, max_price: int | None,
                user_lat: float | None = None, user_lon: float | None = None,
                max_distance_km: float | None = None, open_now_only: bool = False,
                evaluated_at: datetime | None = None, in_person_credit_only: bool = False,
-               *, sort_by: str = 'price') -> dict | None:
+               *, sort_by: str = 'price', exclude_shop_id: str | None = None) -> dict | None:
         if sort_by not in {'price', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
         checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
@@ -251,8 +327,9 @@ class Catalogue:
                 " FROM offers o JOIN shops s ON s.shop_id=o.shop_id "
                 "JOIN products p ON p.product_id=o.product_id WHERE o.product_id=? "
                 "AND (? IS NULL OR o.price_toman<=?) "
+                "AND (? IS NULL OR o.shop_id<>?) "
             )
-            params.extend([product_id, max_price, max_price])
+            params.extend([product_id, max_price, max_price, exclude_shop_id, exclude_shop_id])
 
             if open_now_only:
                 query += "AND declared_open_now(s.weekly_hours)=1 "
@@ -274,25 +351,9 @@ class Catalogue:
             params.extend([limit + 1, offset])
 
             rows = connection.execute(query, params).fetchall()
-            items = []
-            for row in rows[:limit]:
-                price = row["price_toman"]
-                # This is a precision-risk flag, not a claim of market-price validity.
-                quality = "missing" if price is None else (
-                    "above_js_safe_integer" if price > 9007199254740991 else "not_assessed")
-                dist_m = row["dist_m"]
-                direct_distance_meters = round(dist_m) if dist_m is not None else None
-                items.append({
-                    "offer_id": row["offer_id"], "product_id": row["product_id"],
-                    "shop_id": row["shop_id"], "price_toman": str(price) if price is not None else None,
-                    "price_quality": quality, "last_price_changed_at": row["last_price_changed_at"],
-                    "seller_title": row["seller_title"], "description": row["description"],
-                    "warranty": json.loads(row["warranty"]) if row["warranty"] is not None else None,
-                    "inventory_status": "unconfirmed",
-                    "opening_hours": hours(row["weekly_hours"]).as_dict(),
-                    "in_person_credit": credit(row["payment_options"], price, row["product_category_name"]).as_dict(),
-                    "direct_distance_meters": direct_distance_meters,
-                    "shop": {"name": row["shop_name"], "address": row["address"],
-                             "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}})
+            items = [self.offer_item(
+                row, hours(row["weekly_hours"]),
+                credit(row["payment_options"], row["price_toman"], row["product_category_name"]))
+                for row in rows[:limit]]
             return {"items": items, "has_more": len(rows) > limit, "limit": limit, "offset": offset,
                     "provenance": provenance, "hours_evaluated_at": checked_at.isoformat()}
