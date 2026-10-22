@@ -1,0 +1,122 @@
+import { useState } from 'react';
+import { useWorkspace } from '../../base/state/Workspace.tsx';
+import { useSellerFollowup } from '../../base/state/hooks.ts';
+import type { FollowupOutcome, Offer } from '../../base/domain/contracts.ts';
+import { formatDistance, formatTehranDateTime } from '../../../api.ts';
+import { Badge, Button, CreditBadge, Empty, ErrorCard, FreshTag, OpenBadge, Price, SimBadge, Skeleton } from '../../base/ui/primitives.tsx';
+import { formatCount, OUTCOME_LABEL, SOURCE_LABEL, shopFacts } from './model.ts';
+import { ReviewNotice } from './ReviewNotice.tsx';
+
+const outcomes: FollowupOutcome[] = ['no_answer', 'closed', 'out_of_stock'];
+
+export function FollowupScreen() {
+  const { state, dispatch } = useWorkspace();
+  const selected = state.selectedOffer;
+  const followup = useSellerFollowup();
+  const [outcome, setOutcome] = useState<FollowupOutcome>('no_answer');
+  const [source, setSource] = useState<'simulated' | 'user_report'>('simulated');
+  if (!selected || !state.product) return <Empty title="آفری انتخاب نشده">
+    <p>برای ساخت پیش‌نویس پیگیری، یک آفر مشخص از فروشندگان را انتخاب کنید.</p>
+    <Button onClick={() => dispatch({ type: 'navigate', screen: 'stores' })}>رفتن به آفری فروشندگان</Button>
+  </Empty>;
+  const saved = state.followups[selected.offer_id];
+  const prepared = saved?.prepared ?? null;
+  const alternatives = saved?.alternatives ?? null;
+  const selection = { product_id: selected.product_id, offer_id: selected.offer_id, shop_id: selected.shop_id };
+  const draftBusy = followup.draft.status === 'loading';
+  const reportBusy = followup.alternatives.status === 'loading';
+
+  return <div className="uv-contact">
+    <header className="uv-contact-head">
+      <div>
+        <h2>پیگیری همین آفر</h2>
+        <p className="ub-meta">{selected.shop.location_label || selected.shop.address || 'موقعیت ثبت نشده'} · {selected.seller_title || 'آفر انتخاب‌شده'}</p>
+      </div>
+      <SimBadge />
+    </header>
+    <p className="uv-note">شماره‌های دیتاست مصنوعی‌اند. این صفحه هیچ شماره، لینک تماس، واتساپ یا کانال پیام نمی‌سازد و هیچ تماس یا پیامی انجام نمی‌دهد. وضعیت بارگذاری و خطا مربوط به درخواست برنامه است، نه تماس با فروشنده.</p>
+    <ReviewNotice />
+
+    <section className="uv-panel-section" aria-labelledby="uv-draft-title">
+      <h3 id="uv-draft-title">پیش‌نویس پیگیری</h3>
+      <p className="ub-meta">پیش‌نویس پرسش موجودی/قیمت روز است و ارسال نمی‌شود. این عملیات هیچ تأیید موجودی یا پاسخ فروشنده‌ای تولید نمی‌کند.</p>
+      {draftBusy && <><Skeleton /><Button tone="ghost" onClick={followup.cancel}>لغو درخواست پیش‌نویس</Button></>}
+      {followup.draft.status === 'error' && <ErrorCard message={followup.draft.error} onRetry={() => void followup.prepare(selection)} />}
+      {!prepared && !draftBusy && <Button onClick={() => void followup.prepare(selection)}>ساخت پیش‌نویس ارسال‌نشده</Button>}
+      {prepared && <article className="uv-draft">
+        <div className="uv-draft-badges"><Badge tone="warning">پیش‌نویس ارسال‌نشده</Badge><Badge>کانال تماس ندارد</Badge>
+          <Badge>ارسال بیرونی انجام نشد</Badge></div>
+        <p className="uv-draft-text">{prepared.draft.text}</p>
+        <ul className="uv-list">{prepared.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul>
+        <p className="ub-meta">زمان ارزیابی ساعت‌ها: <bdi>{formatTehranDateTime(prepared.hours_evaluated_at)}</bdi></p>
+      </article>}
+    </section>
+
+    <section className="uv-panel-section" aria-labelledby="uv-outcome-title">
+      <h3 id="uv-outcome-title">ثبت نتیجه و دیدن جایگزین‌ها</h3>
+      <p className="ub-meta">نتیجه و منبع را انتخاب کنید؛ جایگزین‌ها فقط از سرویس جایگزین‌ها برای همان محصول و با حفظ بودجه/شعاع/ساعت/اعتبار می‌آیند.</p>
+      <fieldset className="uv-fieldset"><legend>نتیجه</legend>
+        {outcomes.map(item => <label key={item} className="uv-check">
+          <input type="radio" name="uv-outcome" checked={outcome === item} onChange={() => setOutcome(item)} />
+          {OUTCOME_LABEL[item]}
+        </label>)}
+      </fieldset>
+      <fieldset className="uv-fieldset"><legend>منبع گزارش</legend>
+        <label className="uv-check"><input type="radio" name="uv-source" checked={source === 'simulated'}
+          onChange={() => setSource('simulated')} />{SOURCE_LABEL.simulated} — بدون تماس واقعی</label>
+        <label className="uv-check"><input type="radio" name="uv-source" checked={source === 'user_report'}
+          onChange={() => setSource('user_report')} />{SOURCE_LABEL.user_report} — تأیید بیرونی نیست</label>
+      </fieldset>
+      <div className="uv-inline-actions">
+        <Button onClick={() => void followup.report(selection, outcome, source)} disabled={reportBusy}>
+          {reportBusy ? 'در حال دریافت جایگزین‌ها…' : 'دیدن جایگزین‌ها با این نتیجه'}
+        </Button>
+        {reportBusy && <Button tone="ghost" onClick={followup.cancel}>لغو درخواست جایگزین</Button>}
+      </div>
+      {followup.alternatives.status === 'error' && <ErrorCard message={followup.alternatives.error}
+        onRetry={() => void followup.report(selection, outcome, source)} />}
+      {alternatives && <div className="uv-alternatives">
+        <div className="uv-alternatives-head">
+          <h4>{alternatives.status === 'alternatives_available' ? 'جایگزین‌های همین محصول' : 'جایگزینی با این شرایط نیست'}</h4>
+          <Badge tone={alternatives.status === 'alternatives_available' ? 'positive' : 'warning'}>
+            {alternatives.status === 'alternatives_available' ? `${formatCount(alternatives.alternatives.items.length)} جایگزین در این صفحه` : 'بدون جایگزین'}
+          </Badge>
+        </div>
+        <div className="uv-draft-badges">
+          <Badge>نتیجه: {OUTCOME_LABEL[alternatives.outcome.kind]}</Badge>
+          <Badge>منبع: {SOURCE_LABEL[alternatives.outcome.source]}</Badge>
+          <Badge>تأیید بیرونی: خیر</Badge>
+          <Badge>زمان ثبت: <bdi>{formatTehranDateTime(alternatives.outcome.received_at)}</bdi></Badge>
+        </div>
+        <p className="ub-meta">{formatCount(alternatives.excluded_offer_count)} آفر ثبت‌شده از فروشگاه گزارش‌شده، کامل کنار گذاشته شد. محصول و شرایط تغییر نکرده‌اند؛ موجودی جایگزین‌ها تأییدنشده است.</p>
+        {alternatives.status === 'no_alternatives' && <p className="uv-warning" role="status">
+          جایگزینی در همین بودجه، شعاع و شرایط ثبت نشده است. بودجه یا شعاع به‌طور خودکار افزایش داده نشد؛ برای تغییر آن‌ها از «شرایط جست‌وجو» در بالای صفحه استفاده کنید.
+        </p>}
+        {alternatives.alternatives.items.map(offer => <AlternativeCard key={offer.offer_id} offer={offer}
+          onChoose={() => {
+            dispatch({ type: 'selectOffer', value: offer });
+            dispatch({ type: 'plan', primary: offer });
+            dispatch({ type: 'navigate', screen: 'trip' });
+          }} />)}
+        {alternatives.alternatives.has_more && <p className="ub-meta">جایگزین‌های بیشتری ثبت شده‌اند؛ این صفحه همهٔ آن‌ها را نشان نمی‌دهد. برای دیدن موارد بیشتر، شرایط را محدودتر کنید یا از صفحهٔ فروشندگان ادامه دهید.</p>}
+        <ul className="uv-list">{alternatives.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul>
+      </div>}
+    </section>
+
+    <p className="uv-note">گزارش شبیه‌سازی یا گزارش شما تأیید بیرونی، موجودی زنده یا پاسخ فروشنده نیست. پس از رفتن به صفحهٔ دیگر و بازگشت، پیش‌نویس و نتیجهٔ همین آفر باقی می‌مانند.</p>
+  </div>;
+}
+
+function AlternativeCard({ offer, onChoose }: { offer: Offer; onChoose: () => void }) {
+  const facts = shopFacts(offer);
+  return <article className="uv-alt-card">
+    <div className="uv-trip-head">
+      <div><h5>{facts.title}</h5><p className="ub-meta">{facts.address || 'آدرس ثبت نشده'}</p></div>
+      <Price value={offer.price_toman} />
+    </div>
+    <div className="uv-draft-badges"><OpenBadge offer={offer} /><CreditBadge offer={offer} />
+      <Badge>{formatDistance(offer.direct_distance_meters)} · هوایی</Badge><Badge>موجودی تأییدنشده</Badge></div>
+    <FreshTag timestamp={offer.last_price_changed_at} />
+    <Button onClick={onChoose}>ثبت این جایگزین به‌عنوان مقصد</Button>
+  </article>;
+}

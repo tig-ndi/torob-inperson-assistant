@@ -1,0 +1,495 @@
+/* The Base placeholder note above A/B outlets is stale once a real B screen renders. */
+.ub-base-note:has(+ :is(.uv-stores, .uv-compare, .uv-contact, .uv-trip)) {
+  display: none;
+}
+
+.uv-stores,
+.uv-compare,
+.uv-contact,
+.uv-trip {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.uv-stores-head,
+.uv-trip > header,
+.uv-compare > header {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.uv-stores-head h2,
+.uv-compare h2,
+.uv-contact h2,
+.uv-trip h2 {
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.uv-toolbar,
+.uv-draft-badges,
+.uv-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.uv-toolbar .ub-badge {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.uv-shop-list {
+  display: grid;
+  gap: 12px;
+}
+
+.uv-shop {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ub-line);
+  border-radius: 16px;
+  background: var(--ub-soft);
+}
+
+.uv-shop.is-focused {
+  border-color: var(--ub-brand);
+  box-shadow: 0 0 0 2px var(--ub-brand-soft);
+}
+
+.uv-shop-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.uv-shop-title {
+  min-width: 0;
+}
+
+.uv-shop-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.uv-shop-title-line .ub-badge {
+  font-size: 10px;
+  padding: 1px 7px;
+}
+
+.uv-shop-head h3 {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.uv-shop-title .ub-meta {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uv-shop-offers,
+.uv-offer-wrap {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.uv-offer-wrap.is-compared {
+  border-radius: var(--ub-radius);
+  outline: 2px solid var(--ub-brand-soft);
+}
+
+.uv-seller,
+.uv-compare-flag {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ub-muted);
+}
+
+.uv-compare-flag {
+  color: var(--ub-brand);
+}
+
+/* Keep name/price and the selection action in the first visible block. */
+.uv-shop-offers .ub-offer {
+  padding: 12px;
+  gap: 6px;
+}
+
+.uv-shop-offers .ub-offer > * {
+  order: 2;
+}
+
+.uv-shop-offers .ub-offer > .ub-card-heading {
+  order: 0;
+}
+
+.uv-shop-offers .ub-offer > .ub-actions {
+  order: 1;
+}
+
+.uv-shop-offers .ub-offer .ub-card-heading {
+  align-items: center;
+}
+
+.uv-shop-offers .ub-offer .ub-price {
+  font-size: 16px;
+}
+
+.uv-shop-offers .ub-offer .ub-meta,
+.uv-shop-offers .ub-offer details {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.uv-shop-offers .ub-offer summary {
+  min-height: 32px;
+}
+
+.uv-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--ub-line);
+}
+
+.uv-next .ub-button {
+  font-size: 12px;
+  padding-inline: 12px;
+}
+
+.uv-review {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--ub-warning);
+  border-radius: 14px;
+  background: var(--ub-warning-soft);
+  color: var(--ub-warning);
+  font-size: 13px;
+}
+
+.uv-review p {
+  font-size: 12px;
+}
+
+.uv-review .ub-button {
+  justify-self: start;
+  background: var(--ub-surface);
+  color: var(--ub-ink);
+  border-color: var(--ub-line);
+}
+
+.uv-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ub-muted);
+}
+
+.uv-small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ub-muted);
+  overflow-wrap: anywhere;
+}
+
+.uv-compare-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--ub-line);
+  border-radius: 14px;
+  background: var(--ub-surface);
+}
+
+.uv-compare-scroll:focus-visible {
+  outline: 3px solid var(--ub-focus);
+  outline-offset: 3px;
+}
+
+.uv-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.uv-table th,
+.uv-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--ub-line);
+  text-align: start;
+  vertical-align: top;
+  min-width: 130px;
+  max-width: 190px;
+  overflow-wrap: anywhere;
+}
+
+.uv-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+  font-weight: 400;
+  min-width: 96px;
+}
+
+.uv-table thead th {
+  background: var(--ub-soft);
+  font-size: 12px;
+}
+
+.uv-table-title {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.uv-table .ub-price {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.uv-table tr:last-child th,
+.uv-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.uv-column-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.uv-column-actions .ub-button {
+  font-size: 11px;
+  padding-inline: 10px;
+}
+
+.uv-contact-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.uv-contact-head > div {
+  min-width: 0;
+}
+
+.uv-panel-section,
+.uv-draft,
+.uv-alternatives,
+.uv-trip-card,
+.uv-candidate {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ub-line);
+  border-radius: 16px;
+  background: var(--ub-surface);
+}
+
+.uv-panel-section h3,
+.uv-alternatives h4,
+.uv-trip-card h3,
+.uv-candidate h3 {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.uv-fieldset {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 12px 8px;
+  border: 1px solid var(--ub-line);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.uv-fieldset legend {
+  padding-inline: 4px;
+  font-size: 12px;
+  color: var(--ub-muted);
+}
+
+.uv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 13px;
+}
+
+.uv-check input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--ub-brand);
+}
+
+.uv-draft-text {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--ub-soft);
+  font-size: 13px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.uv-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ub-muted);
+}
+
+.uv-alternatives-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.uv-alt-add {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--ub-line);
+}
+
+.uv-alt-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ub-line);
+  border-radius: 14px;
+  background: var(--ub-soft);
+}
+
+.uv-alt-card h5 {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.uv-alt-add {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.uv-alt-add > div {
+  min-width: 0;
+}
+
+.uv-trip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.uv-trip-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.uv-evidence {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.uv-evidence dt {
+  font-size: 11px;
+  color: var(--ub-muted);
+}
+
+.uv-evidence dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.uv-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ub-line);
+  border-radius: 12px;
+  background: var(--ub-soft);
+  color: var(--ub-ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.uv-link-button:focus-visible {
+  outline: 3px solid var(--ub-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 959px) {
+  .uv-toolbar .uv-map-all {
+    display: none;
+  }
+}
+
+@media (max-width: 374px) {
+  .uv-shop {
+    padding: 8px;
+  }
+  .uv-shop-offers .ub-offer {
+    padding: 10px;
+  }
+  .uv-panel-section,
+  .uv-draft,
+  .uv-alternatives,
+  .uv-trip-card,
+  .uv-candidate {
+    padding: 10px;
+  }
+  .uv-toolbar .ub-button {
+    font-size: 11px;
+    padding-inline: 10px;
+  }
+  .uv-alt-add {
+    grid-template-columns: 1fr;
+  }
+  .uv-table th,
+  .uv-table td {
+    min-width: 112px;
+    padding: 6px;
+  }
+}
