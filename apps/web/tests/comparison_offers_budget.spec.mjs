@@ -11,7 +11,7 @@ test('real UI: budget filter with Persian digits, active badge and offers modal 
 
   // Search with query and Persian digits budget: ۱۰،۰۰۰،۰۰۰
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۱۰،۰۰۰،۰۰۰');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۱۰،۰۰۰،۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
   // Verify active budget badge
@@ -264,7 +264,7 @@ test('synthetic fixture: validate invalid budget input without network request',
   await page.goto('/');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   // Enter invalid budget (letters)
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('abc');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('abc');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
   await expect(page.getByRole('alert')).toContainText('بودجه باید فقط شامل ارقام عددی باشد');
@@ -360,7 +360,7 @@ test('synthetic fixture: radius without coordinates is rejected before network r
 test('local UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
   await page.goto('/');
 
-  const budgetInput = page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true });
+  const budgetInput = page.getByLabel('سقف بودجه (تومان)', { exact: true });
   const wordsCaption = page.locator('.budget-words-caption');
 
   // Initially words caption is hidden

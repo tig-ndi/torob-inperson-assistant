@@ -115,7 +115,7 @@ test('category filter is auto-detected, preserved across pagination and budget, 
   await expect(catBadge).toBeVisible();
 
   // Budget change preserves category
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۵۰٬۰۰۰٬۰۰۰');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۵۰٬۰۰۰٬۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByText('سقف بودجهٔ فعال:')).toBeVisible();
   await expect(catBadge).toBeVisible();
@@ -126,7 +126,7 @@ test('category filter is auto-detected, preserved across pagination and budget, 
   await expect(catBadge).toHaveCount(0);
 
   // Editing only the budget must preserve explicit removal, not restart detection.
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۴۰٬۰۰۰٬۰۰۰');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۴۰٬۰۰۰٬۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
   await expect(catBadge).toHaveCount(0);
@@ -141,7 +141,7 @@ test('category filter is auto-detected, preserved across pagination and budget, 
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await page.getByRole('button', { name: 'بررسی نیاز', exact: true }).click();
   await expect(page.locator('.assistant-panel [role="alert"]')).toBeVisible();
-  await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۳۰٬۰۰۰٬۰۰۰');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۳۰٬۰۰۰٬۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByText('فیلتر دسته برداشته شد (جست‌وجو در تمام دسته‌ها)')).toBeVisible();
 

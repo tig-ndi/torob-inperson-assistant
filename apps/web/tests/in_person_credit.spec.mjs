@@ -29,7 +29,7 @@ async function openSynthetic(page, budget = false) {
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
   await page.goto('/');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('آزمایشی');
-  if (budget) await page.getByLabel('سقف بودجه (تومان - اختیاری)', { exact: true }).fill('۱۰۰۰۰');
+  if (budget) await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۱۰۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').click();
   return page.getByRole('dialog', { name: 'آفرهای فروشندگان' });

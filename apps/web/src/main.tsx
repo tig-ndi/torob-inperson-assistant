@@ -928,7 +928,7 @@ function App() {
           <p className="eyebrow">از پیدا کردن کالا شروع کنیم</p>
           <h1 id="page-title">دنبال چه کالایی می‌گردید؟</h1>
           <p className="intro-copy">
-            نام کالا را جست‌وجو کنید، سقف بودجه تعیین کنید و ۲ تا ۳ کالا را برای مقایسه مشخصات و آفرها انتخاب کنید.
+            نام کالا را جست‌وجو کنید و برای مقایسه، ۲ تا ۳ کالا را انتخاب کنید.
           </p>
 
           <form onSubmit={submit} className="search-form">
@@ -953,7 +953,7 @@ function App() {
               </div>
 
               <div className="field-group budget-field">
-                <label htmlFor="budget">سقف بودجه (تومان - اختیاری)</label>
+                <label htmlFor="budget" title="سقف بودجه به تومان؛ اختیاری">سقف بودجه (تومان)</label>
                 <input
                   ref={budgetInputRef}
                   id="budget"
