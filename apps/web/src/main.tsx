@@ -24,6 +24,7 @@ import { Assistant } from './Assistant';
 import { Modal } from './Modal';
 import { SpecEvidence } from './SpecEvidence';
 import { focusFromNeed, type SpecFocus } from './specEvidenceData';
+import { tehranDistricts } from './tehranNeighborhoods';
 import './style.css';
 
 type SearchState =
@@ -272,9 +273,24 @@ function OffersModal({
   const [latInput, setLatInput] = useState(userLat !== null ? String(userLat) : '');
   const [lonInput, setLonInput] = useState(userLon !== null ? String(userLon) : '');
   const [radiusInput, setRadiusInput] = useState(maxDistanceKm !== null ? String(maxDistanceKm) : '');
+  const [districtId, setDistrictId] = useState('');
   const [locationError, setLocationError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const filtersRef = useRef<HTMLDetailsElement>(null);
+
+  function handleNeighborhoodChange(districtValue: string) {
+    const district = tehranDistricts.find(d => d.id === districtValue);
+    if (!district) {
+      setDistrictId('');
+      return;
+    }
+    setDistrictId(district.id);
+    setLatInput(district.lat.toFixed(4));
+    setLonInput(district.lon.toFixed(4));
+    setLocationError('');
+    const rad = radiusInput ? Number(radiusInput) : null;
+    onLocationChange(district.lat, district.lon, rad);
+  }
 
   function handleLocateMe() {
     setLocationError('');
@@ -290,6 +306,7 @@ function OffersModal({
         const lon = position.coords.longitude;
         setLatInput(lat.toFixed(5));
         setLonInput(lon.toFixed(5));
+        setDistrictId('');
         const rad = radiusInput ? Number(radiusInput) : null;
         onLocationChange(lat, lon, rad);
       },
@@ -297,6 +314,10 @@ function OffersModal({
         setIsLocating(false);
         if (error.code === 1) {
           setLocationError('اجازهٔ دسترسی به موقعیت مکانی داده نشد؛ می‌توانید مختصات را دستی وارد کنید.');
+        } else if (error.code === 2) {
+          setLocationError('موقعیت مکانی در دسترس نیست؛ شاید GPS یا شبکه خاموش باشد. می‌توانید مختصات را دستی وارد کنید.');
+        } else if (error.code === 3) {
+          setLocationError('دریافت موقعیت در زمان معقول انجام نشد؛ لطفاً دوباره تلاش کنید یا مختصات را دستی وارد کنید.');
         } else {
           setLocationError('دریافت موقعیت مکانی با خطا مواجه شد؛ لطفاً مختصات را دستی وارد کنید.');
         }
@@ -352,6 +373,7 @@ function OffersModal({
     setLatInput('');
     setLonInput('');
     setRadiusInput('');
+    setDistrictId('');
     setLocationError('');
     onLocationChange(null, null, null);
   }
@@ -422,11 +444,25 @@ function OffersModal({
                 <div className="location-filter-header">
                   <strong>موقعیت کاربر و فیلتر شعاع فروشگاه‌ها</strong>
                   <p className="caption">
-                    محاسبهٔ فاصله بر مبنای تقریب کروی هاورسین است و زمان مسیر یا مسافت رانندگی نیست.
+                    فاصلهٔ نمایشی، مستقیم هوایی است؛ مسیر رانندگی یا زمان سفر نیست. مختصات محله‌ها تقریبی (مرکز منطقه) است.
                   </p>
                 </div>
 
                 <form onSubmit={handleApplyLocation} className="location-form">
+                  <div className="loc-field loc-field-wide">
+                    <label htmlFor="district-select">انتخاب سریع محله (مختصات تقریبی)</label>
+                    <select
+                      id="district-select"
+                      value={districtId}
+                      onChange={e => handleNeighborhoodChange(e.target.value)}
+                    >
+                      <option value="">بدون انتخاب محله</option>
+                      {tehranDistricts.map(d => (
+                        <option key={d.id} value={d.id}>{d.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="location-inputs-row">
                     <div className="loc-field">
                       <label htmlFor="user-lat">عرض جغرافیایی (lat)</label>

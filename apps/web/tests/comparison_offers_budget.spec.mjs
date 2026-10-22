@@ -364,6 +364,85 @@ test('synthetic fixture: radius without coordinates is rejected before network r
   await expect(modal.getByRole('alert')).toContainText('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر');
 });
 
+test('synthetic fixture: neighborhood picker fills approximate coords, honest copy and clear reset', async ({ page }) => {
+  const product = {
+    product_id: 'district_synthetic_product', persian_title: 'کالای آزمایشی محله',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  const offersQueryParams = [];
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => {
+    const params = new URL(route.request().url()).searchParams;
+    offersQueryParams.push(params);
+    return route.fulfill({ json: {
+      items: [{
+        offer_id: 'district_offer_1', product_id: product.product_id, shop_id: 'district_shop',
+        price_toman: '1000', price_quality: 'not_assessed', last_price_changed_at: null,
+        seller_title: null, description: null, warranty: null, inventory_status: 'unconfirmed',
+        direct_distance_meters: 1234, opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+        shop: { name: 'فروشگاه محله', address: null, location_label: null, lat: 35.7, lon: 51.4 },
+      }],
+      has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+    } });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('محله');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+
+  // Honest distance copy is visible
+  await expect(modal.getByText(/مسیر رانندگی یا زمان سفر نیست/)).toBeVisible();
+
+  // Picking a district fills approximate coords and applies the filter immediately
+  await modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true }).selectOption('d12');
+  await expect(modal.getByLabel('عرض جغرافیایی (lat)', { exact: true })).toHaveValue('35.6747');
+  await expect(modal.getByLabel('طول جغرافیایی (lon)', { exact: true })).toHaveValue('51.4208');
+  await expect(modal.locator('.active-location-badge')).toContainText('موقعیت فعال');
+  expect(offersQueryParams.at(-1).get('user_lat')).toBe('35.6747');
+  expect(offersQueryParams.at(-1).get('user_lon')).toBe('51.4208');
+
+  // Clearing location also resets the district select
+  await modal.getByRole('button', { name: 'حذف موقعیت', exact: true }).click();
+  await expect(modal.locator('.active-location-badge')).toHaveCount(0);
+  await expect(modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true })).toHaveValue('');
+  expect(offersQueryParams.at(-1).has('user_lat')).toBe(false);
+});
+
+test('synthetic fixture: geolocation unavailable and timeout produce distinct messages', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  await page.locator('.product-card .secondary-btn').first().click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+
+  // Position unavailable (code 2)
+  await page.evaluate(() => {
+    navigator.geolocation.getCurrentPosition = (_success, error) => {
+      error({ code: 2, message: 'Position unavailable' });
+    };
+  });
+  await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
+  await expect(modal.getByRole('alert')).toContainText('موقعیت مکانی در دسترس نیست');
+
+  // Timeout (code 3)
+  await page.evaluate(() => {
+    navigator.geolocation.getCurrentPosition = (_success, error) => {
+      error({ code: 3, message: 'Timeout expired' });
+    };
+  });
+  await modal.getByRole('button', { name: 'دریافت موقعیت از مرورگر', exact: true }).click();
+  await expect(modal.getByRole('alert')).toContainText('دریافت موقعیت در زمان معقول انجام نشد');
+});
+
 test('local UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
   await page.goto('/');
 

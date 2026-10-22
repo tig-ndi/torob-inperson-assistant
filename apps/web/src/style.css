@@ -1115,6 +1115,10 @@ h3 {
   gap: 4px;
 }
 
+.loc-field-wide {
+  margin-bottom: 10px;
+}
+
 .loc-field label {
   font-size: 12px;
   font-weight: 700;
