@@ -1,5 +1,13 @@
+@font-face {
+  font-family: 'IRANYekan';
+  src: url('/fonts/iranyekanwebregular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-family: 'IRANYekan', Tahoma, 'Segoe UI', sans-serif;
   color: #242b35;
   background: #f6f7f9;
   font-synthesis: none;
@@ -518,6 +526,16 @@ h3 {
 .inventory {
   font-size: 11px;
   color: #71481c;
+  margin: 0 0 12px 0;
+}
+
+.battery-capacity-line {
+  font-size: 11px;
+  color: #245b46;
+  background: #f0f9f4;
+  border: 1px solid #cfe7d8;
+  border-radius: 8px;
+  padding: 6px 10px;
   margin: 0 0 12px 0;
 }
 

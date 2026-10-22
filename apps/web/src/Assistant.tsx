@@ -1,17 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type ProductPage } from './api';
+import { parseAssistantResult, fetchAssistantStatus, type AssistantMessage, type ProductPage, type AssistantBatteryRequirement, type AssistantExplanation } from './api';
 
 type Props = {
   budget: string | null;
   contextQuery: string | null;
   contextCategory?: string | null;
   categoryCleared?: boolean;
+  contextBatteryRequirement?: AssistantBatteryRequirement | null;
+  contextTopics?: string[] | null;
   onContext: (query: string | null, category?: string | null, version?: number) => void;
   cancelVersion: number;
   onStart: () => number | null;
-  onBudget: (budget: string | null, version: number, need: string) => void;
-  onResults: (page: ProductPage, query: string, budget: string | null, version: number, category: string | null, need: string) => void;
+  onBudget: (budget: string | null, version: number, need: string, batteryRequirement?: AssistantBatteryRequirement | null) => void;
+  onResults: (
+    page: ProductPage,
+    query: string,
+    budget: string | null,
+    version: number,
+    category: string | null,
+    need: string,
+    batteryRequirement?: AssistantBatteryRequirement | null,
+    explanation?: AssistantExplanation | null
+  ) => void;
 };
 const numbers = new Intl.NumberFormat('fa-IR');
 const failures: Record<string, string> = {
@@ -24,7 +35,19 @@ const failures: Record<string, string> = {
   invalid_output: 'برداشت دستیار قابل استفاده نبود؛ اطلاعات حدسی نمایش داده نشد.',
 };
 
-export function Assistant({ budget, contextQuery, contextCategory = null, categoryCleared = false, onContext, cancelVersion, onStart, onBudget, onResults }: Props) {
+export function Assistant({
+  budget,
+  contextQuery,
+  contextCategory = null,
+  categoryCleared = false,
+  contextBatteryRequirement = null,
+  contextTopics = null,
+  onContext,
+  cancelVersion,
+  onStart,
+  onBudget,
+  onResults,
+}: Props) {
   const [status, setStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [remaining, setRemaining] = useState(0);
   const [unavailableReason, setUnavailableReason] = useState('');
@@ -105,6 +128,8 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
           context_query: contextQuery,
           context_category: contextCategory,
           category_cleared: categoryCleared,
+          context_battery_requirement: contextBatteryRequirement ?? undefined,
+          context_topics: contextTopics ?? undefined,
         }),
       });
       const body: unknown = await response.json();
@@ -116,7 +141,7 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
       if (controller.signal.aborted) return;
       setInput('');
       if (result.status === 'needs_input' && result.question) {
-        onBudget(result.max_price_toman, version, text);
+        onBudget(result.max_price_toman, version, text, result.battery_requirement);
         if (result.query) onContext(result.query, result.category_name ?? contextCategory, version);
         setHistory([...messages, { role: 'assistant', content: result.question }]);
       } else if (result.products && result.query) {
@@ -124,7 +149,16 @@ export function Assistant({ budget, contextQuery, contextCategory = null, catego
           ? `برای «${result.query}» با بودجهٔ انتخابی نتیجه‌ای ثبت نشده؛ عبارت یا بودجه را تغییر دهید.`
           : `نتایج کاتالوگ برای «${result.query}» در ادامه آمده‌اند. برای بررسی تناسب با کاربردتان، مشخصات کالاها را مقایسه کنید.`;
         setHistory([...messages, { role: 'assistant', content: summary }]);
-        onResults(result.products, result.query, result.max_price_toman, version, result.category_name ?? null, text);
+        onResults(
+          result.products,
+          result.query,
+          result.max_price_toman,
+          version,
+          result.category_name ?? null,
+          text,
+          result.battery_requirement,
+          result.explanation
+        );
       }
     } catch (failure: unknown) {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'دریافت پاسخ دستیار ناموفق بود.');

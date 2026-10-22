@@ -13,14 +13,15 @@ import {
   getProductSpecValue,
   normalizeBudget,
   numberToPersianWords,
-  parseCoordinate,
+  parseCoordinateWithValidation,
   searchProducts,
   validateBudget,
 } from './api';
-import type { OfferPage, Product, ProductPage } from './api';
+import type { AssistantBatteryRequirement, OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
 import { Assistant } from './Assistant';
+import { Modal } from './Modal';
 import { SpecEvidence } from './SpecEvidence';
 import { focusFromNeed, type SpecFocus } from './specEvidenceData';
 import './style.css';
@@ -93,6 +94,19 @@ function ProductCard({
         )}
       </p>
       <p className="inventory">موجودی تأیید نشده (سابقهٔ کاتالوگ)</p>
+      {product.battery_capacity && (
+        <p className="battery-capacity-line">
+          {product.battery_capacity.status === 'known' && product.battery_capacity.capacity_mah !== null ? (
+            <>
+              ظرفیت باتری ثبت‌شده: <bdi>{numbers.format(product.battery_capacity.capacity_mah)}</bdi> میلی‌آمپرساعت
+            </>
+          ) : product.battery_capacity.status === 'conflicting' ? (
+            'ظرفیت باتری در منبع به‌صورت متناقض ثبت شده است'
+          ) : (
+            'ظرفیت باتری در منبع ثبت نشده است'
+          )}
+        </p>
+      )}
       {specFocus && <SpecEvidence product={product} focus={specFocus} />}
       <div className="card-actions">
         <button
@@ -129,9 +143,8 @@ function ComparisonModal({
   const specKeys = extractAllSpecKeys(products);
 
   return (
-    <section className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="compare-modal-title">
-      <div className="modal-content comparison-modal">
-        <div className="modal-header">
+    <Modal isOpen onClose={onClose} titleId="compare-modal-title" className="comparison-modal">
+      <div className="modal-header">
           <div>
             <h2 id="compare-modal-title">مقایسهٔ ۲ تا ۳ محصول</h2>
             <p className="caption">مشخصات بر اساس کلید و بخش منبع تطبیق داده شده‌اند؛ اطلاعات ناموجود به‌طور صریح مشخص‌اند.</p>
@@ -219,8 +232,7 @@ function ComparisonModal({
             </div>
           </div>
         )}
-      </div>
-    </section>
+      </Modal>
   );
 }
 
@@ -295,14 +307,27 @@ function OffersModal({
   function handleApplyLocation(e: FormEvent) {
     e.preventDefault();
     setLocationError('');
-    const lat = parseCoordinate(latInput);
-    const lon = parseCoordinate(lonInput);
+    const latRes = parseCoordinateWithValidation(latInput, 'lat');
+    const lonRes = parseCoordinateWithValidation(lonInput, 'lon');
     const rad = radiusInput ? Number(radiusInput) : null;
 
-    if (lat === null && lon === null && rad === null) {
+    if (latRes.status === 'empty' && lonRes.status === 'empty' && rad === null) {
       onLocationChange(null, null, null);
       return;
     }
+
+    if (latRes.status === 'invalid') {
+      setLocationError(latRes.error);
+      return;
+    }
+
+    if (lonRes.status === 'invalid') {
+      setLocationError(lonRes.error);
+      return;
+    }
+
+    const lat = latRes.status === 'valid' ? latRes.value : null;
+    const lon = lonRes.status === 'valid' ? lonRes.value : null;
 
     if ((lat === null) !== (lon === null)) {
       setLocationError('مختصات عرض (lat) و طول (lon) جغرافیایی باید هر دو با هم وارد شوند.');
@@ -311,16 +336,6 @@ function OffersModal({
 
     if (rad !== null && (lat === null || lon === null)) {
       setLocationError('تعیین شعاع فاصله نیازمند ارائهٔ موقعیت معتبر (عرض و طول جغرافیایی) است.');
-      return;
-    }
-
-    if (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
-      setLocationError('عرض جغرافیایی باید عددی بین ۹۰- و ۹۰ باشد.');
-      return;
-    }
-
-    if (lon !== null && (!Number.isFinite(lon) || lon < -180 || lon > 180)) {
-      setLocationError('طول جغرافیایی باید عددی بین ۱۸۰- و ۱۸۰ باشد.');
       return;
     }
 
@@ -346,9 +361,8 @@ function OffersModal({
     : 0;
 
   return (
-    <section className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="offers-modal-title">
-      <div className="modal-content offers-modal">
-        <div className="modal-header">
+    <Modal isOpen onClose={onClose} titleId="offers-modal-title" className="offers-modal">
+      <div className="modal-header">
           <div>
             <h2 id="offers-modal-title">آفرهای فروشندگان</h2>
             <p className="caption">
@@ -406,6 +420,7 @@ function OffersModal({
                   value={latInput}
                   onChange={e => setLatInput(e.target.value)}
                   placeholder="مثلاً ۳۵.۷۰۰"
+                  inputMode="decimal"
                 />
               </div>
 
@@ -416,6 +431,7 @@ function OffersModal({
                   value={lonInput}
                   onChange={e => setLonInput(e.target.value)}
                   placeholder="مثلاً ۵۱.۴۰۰"
+                  inputMode="decimal"
                 />
               </div>
 
@@ -610,8 +626,7 @@ function OffersModal({
             )}
           </div>
         )}
-      </div>
-    </section>
+      </Modal>
   );
 }
 
@@ -619,7 +634,8 @@ function App() {
   const [input, setInput] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
   const [activeBudget, setActiveBudget] = useState<string | null>(null);
-  const [validation, setValidation] = useState('');
+  const [queryError, setQueryError] = useState('');
+  const [budgetError, setBudgetError] = useState('');
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
 
   // Comparison state
@@ -640,6 +656,8 @@ function App() {
   const activeSearch = useRef<AbortController | null>(null);
   const activeOffers = useRef<AbortController | null>(null);
   const interactionVersion = useRef(0);
+  const budgetDraftVersion = useRef(0);
+  const assistantStartDraftVersion = useRef(0);
   const lastCatalogueQuery = useRef<string | null>(null);
   const [assistantCancelVersion, setAssistantCancelVersion] = useState(0);
   const [assistantContextQuery, setAssistantContextQuery] = useState<string | null>(null);
@@ -647,6 +665,8 @@ function App() {
   const [categoryCleared, setCategoryCleared] = useState(false);
   const [assistantContextCategory, setAssistantContextCategory] = useState<string | null>(null);
   const [specFocus, setSpecFocus] = useState<SpecFocus | null>(null);
+  const [batteryRequirement, setBatteryRequirement] = useState<AssistantBatteryRequirement | null>(null);
+  const [activeBatteryMah, setActiveBatteryMah] = useState<number | null>(null);
 
   const budgetWords = numberToPersianWords(budgetInput);
 
@@ -674,6 +694,7 @@ function App() {
 
     const formatted = formatBudgetInput(raw);
     setBudgetInput(formatted);
+    budgetDraftVersion.current++;
 
     requestAnimationFrame(() => {
       if (!budgetInputRef.current) return;
@@ -697,28 +718,40 @@ function App() {
     });
   }
 
+  function readBudgetDraft(): { ok: true; budget: string | null } | { ok: false; error: string } {
+    const normalized = normalizeBudget(budgetInput);
+    if (!normalized) return { ok: true, budget: null };
+    const check = validateBudget(normalized);
+    if (!check.valid) {
+      return { ok: false, error: check.error || 'بودجهٔ واردشده نامعتبر است.' };
+    }
+    return { ok: true, budget: normalized };
+  }
+
   async function search(
     query: string,
     offset = 0,
     budget: string | null = activeBudget,
     categoryName: string | null = activeCategory,
-    isCategoryCleared: boolean = categoryCleared
+    isCategoryCleared: boolean = categoryCleared,
+    batteryMah: number | null = activeBatteryMah
   ) {
     const trimmed = query.trim();
     if (!trimmed || trimmed.length > 120) {
-      setValidation('نام کالا را بین ۱ تا ۱۲۰ نویسه وارد کنید.');
+      setQueryError('نام کالا را بین ۱ تا ۱۲۰ نویسه وارد کنید.');
       return;
     }
 
     if (budget) {
       const budgetCheck = validateBudget(budget);
       if (!budgetCheck.valid) {
-        setValidation(budgetCheck.error || 'بودجهٔ واردشده نامعتبر است.');
+        setBudgetError(budgetCheck.error || 'بودجهٔ واردشده نامعتبر است.');
         return;
       }
     }
 
-    setValidation('');
+    setQueryError('');
+    setBudgetError('');
     lastCatalogueQuery.current = trimmed;
     interactionVersion.current++;
     setAssistantCancelVersion(version => version + 1);
@@ -741,7 +774,8 @@ function App() {
         budget,
         controller.signal,
         categoryName,
-        isCategoryCleared
+        isCategoryCleared,
+        batteryMah
       );
       if (!controller.signal.aborted) {
         const resolvedCategory = isCategoryCleared ? null : (page.category_name ?? categoryName);
@@ -778,22 +812,23 @@ function App() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalized = normalizeBudget(budgetInput);
+    setQueryError('');
+    setBudgetError('');
     const sameQuery = input.trim() === lastCatalogueQuery.current;
     const nextCategory = sameQuery ? activeCategory : null;
     const nextCleared = sameQuery ? categoryCleared : false;
-    if (normalized) {
-      const check = validateBudget(normalized);
-      if (!check.valid) {
-        setValidation(check.error || 'بودجهٔ واردشده نامعتبر است.');
-        return;
-      }
-      setActiveBudget(normalized);
-      void search(input, 0, normalized, nextCategory, nextCleared);
-    } else {
-      setActiveBudget(null);
-      void search(input, 0, null, nextCategory, nextCleared);
+    const nextBatteryMah = sameQuery ? activeBatteryMah : null;
+    if (!sameQuery) {
+      setActiveBatteryMah(null);
+      setBatteryRequirement(null);
     }
+    const draft = readBudgetDraft();
+    if (!draft.ok) {
+      setBudgetError(draft.error);
+      return;
+    }
+    setActiveBudget(draft.budget);
+    void search(input, 0, draft.budget, nextCategory, nextCleared, nextBatteryMah);
   }
 
   function clearBudget() {
@@ -808,8 +843,18 @@ function App() {
     setActiveCategory(null);
     setCategoryCleared(true);
     setAssistantContextCategory(null);
+    setActiveBatteryMah(null);
+    setBatteryRequirement(null);
     if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
-      void search(state.query, 0, activeBudget, null, true);
+      void search(state.query, 0, activeBudget, null, true, null);
+    }
+  }
+
+  function handleClearBattery() {
+    setActiveBatteryMah(null);
+    setBatteryRequirement(null);
+    if (state.kind === 'success' || state.kind === 'loading' || state.kind === 'error') {
+      void search(state.query, 0, activeBudget, activeCategory, categoryCleared, null);
     }
   }
 
@@ -897,9 +942,14 @@ function App() {
                   onChange={e => setInput(e.target.value)}
                   placeholder="مثلاً گوشی، کفش یا سونی"
                   autoComplete="off"
-                  aria-describedby={validation ? 'validation' : 'search-help'}
-                  aria-invalid={Boolean(validation)}
+                  aria-describedby={queryError ? 'query-validation' : 'search-help'}
+                  aria-invalid={Boolean(queryError)}
                 />
+                {queryError && (
+                  <p id="query-validation" className="error-text" role="alert">
+                    {queryError}
+                  </p>
+                )}
               </div>
 
               <div className="field-group budget-field">
@@ -912,10 +962,18 @@ function App() {
                   onChange={handleBudgetChange}
                   placeholder="مثلاً ۱۰٬۰۰۰٬۰۰۰ یا خالی"
                   autoComplete="off"
+                  inputMode="numeric"
+                  aria-describedby={budgetError ? 'validation' : undefined}
+                  aria-invalid={Boolean(budgetError)}
                 />
                 {budgetWords && (
                   <p className="budget-words-caption" aria-live="polite">
                     <span className="words-label">معادل به حروف:</span> <strong>{budgetWords}</strong>
+                  </p>
+                )}
+                {budgetError && (
+                  <p id="validation" className="error-text" role="alert">
+                    {budgetError}
                   </p>
                 )}
               </div>
@@ -928,11 +986,6 @@ function App() {
             <p id="search-help" className="caption">
               جست‌وجو به اطلاعات ثبت‌شده در کاتالوگ محدود است. ارقام بودجه می‌توانند فارسی یا انگلیسی باشند.
             </p>
-            {validation && (
-              <p id="validation" className="error-text" role="alert">
-                {validation}
-              </p>
-            )}
           </form>
 
           <div className="examples">
@@ -946,7 +999,16 @@ function App() {
                   setInput(query);
                   setActiveCategory(null);
                   setCategoryCleared(false);
-                  void search(query, 0, activeBudget, null, false);
+                  setActiveBatteryMah(null);
+                  setBatteryRequirement(null);
+                  const draft = readBudgetDraft();
+                  if (!draft.ok) {
+                    setBudgetError(draft.error);
+                    return;
+                  }
+                  setBudgetError('');
+                  setActiveBudget(draft.budget);
+                  void search(query, 0, draft.budget, null, false, null);
                 }}
               >
                 {query}
@@ -954,13 +1016,27 @@ function App() {
             ))}
           </div>
 
-          {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName)))) && (
+          {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName))) || (activeBatteryMah !== null && batteryRequirement?.status === 'minimum')) && (
             <div className="active-filters-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
               {activeBudget && (
                 <div className="active-filter-badge">
                   <span>سقف بودجهٔ فعال: <strong>{formatMoney(activeBudget)} تومان</strong></span>
                   <button type="button" className="clear-filter-btn" onClick={clearBudget} title="حذف فیلتر بودجه">
                     حذف بودجه ✕
+                  </button>
+                </div>
+              )}
+              {activeBatteryMah !== null && batteryRequirement?.status === 'minimum' && (
+                <div className="active-filter-badge">
+                  <span>حداقل ظرفیت باتری: <strong>{numbers.format(activeBatteryMah)} میلی‌آمپرساعت</strong></span>
+                  <button
+                    type="button"
+                    className="clear-filter-btn"
+                    onClick={handleClearBattery}
+                    title="حذف شرط ظرفیت باتری"
+                    aria-label="حذف شرط ظرفیت باتری"
+                  >
+                    حذف شرط ✕
                   </button>
                 </div>
               )}
@@ -993,12 +1069,24 @@ function App() {
           contextQuery={assistantContextQuery}
           contextCategory={assistantContextCategory}
           categoryCleared={categoryCleared}
+          contextBatteryRequirement={batteryRequirement}
+          contextTopics={
+            specFocus === 'camera'
+              ? ['camera']
+              : specFocus === 'battery'
+              ? ['battery']
+              : specFocus === 'both'
+              ? ['camera', 'battery']
+              : null
+          }
           onContext={(query, category, version) => {
             if (version !== undefined && version !== interactionVersion.current) return;
             setAssistantContextQuery(query);
             if (query === null && version === undefined) {
               setCategoryCleared(false);
               setSpecFocus(null);
+              setBatteryRequirement(null);
+              setActiveBatteryMah(null);
             }
             if (category !== undefined) {
               setAssistantContextCategory(category);
@@ -1006,32 +1094,36 @@ function App() {
             }
           }}
           onStart={() => {
-            const budget = budgetInput ? normalizeBudget(budgetInput) : null;
-            const check = budget === null ? { valid: true } : validateBudget(budget);
-            if (!check.valid) {
-              setValidation('error' in check ? check.error || 'بودجهٔ واردشده نامعتبر است.' : 'بودجهٔ واردشده نامعتبر است.');
+            const draft = readBudgetDraft();
+            if (!draft.ok) {
+              setBudgetError(draft.error);
               return null;
             }
-            setActiveBudget(budget);
-            setValidation('');
+            setActiveBudget(draft.budget);
+            assistantStartDraftVersion.current = budgetDraftVersion.current;
+            setBudgetError('');
+            setQueryError('');
             activeSearch.current?.abort();
             setState({ kind: 'idle' });
             return ++interactionVersion.current;
           }}
-          onResults={(page, query, budget, version, category, need) => {
+          onResults={(page, query, budget, version, category, need, batteryReq) => {
             if (version !== interactionVersion.current) return;
             lastCatalogueQuery.current = query;
             setInput(query);
             setAssistantContextQuery(query);
             setAssistantContextCategory(category);
+            setBatteryRequirement(batteryReq ?? null);
+            setActiveBatteryMah(batteryReq?.status === 'minimum' && batteryReq.minimum_mah !== null ? batteryReq.minimum_mah : null);
             const hasPhones = category === 'گوشی موبایل' || page.items.some(p => p.category_name === 'گوشی موبایل');
             setSpecFocus(previous => hasPhones ? focusFromNeed(need) ?? previous : null);
             setActiveCategory(category);
             const isCleared = category !== null ? false : categoryCleared;
             setCategoryCleared(isCleared);
             setActiveBudget(budget);
-            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
-            setValidation('');
+            if (budgetDraftVersion.current === assistantStartDraftVersion.current) {
+              setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            }
             setState({
               kind: 'success',
               query,
@@ -1042,12 +1134,16 @@ function App() {
               categoryCleared: isCleared,
             });
           }}
-          onBudget={(budget, version, need) => {
+          onBudget={(budget, version, need, batteryReq) => {
             if (version !== interactionVersion.current) return;
             const requestedFocus = focusFromNeed(need);
             if (requestedFocus) setSpecFocus(requestedFocus);
+            setBatteryRequirement(batteryReq ?? null);
+            setActiveBatteryMah(batteryReq?.status === 'minimum' && batteryReq.minimum_mah !== null ? batteryReq.minimum_mah : null);
             setActiveBudget(budget);
-            setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            if (budgetDraftVersion.current === assistantStartDraftVersion.current) {
+              setBudgetInput(budget === null ? '' : formatBudgetInput(budget));
+            }
           }}
         />
 
