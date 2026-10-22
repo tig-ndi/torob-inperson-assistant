@@ -125,6 +125,11 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
                 raise CatalogueUnavailable('source category mismatch')
             reasons.append(f'دستهٔ منبع با فیلتر «{page.category_name}» مطابقت دارد.')
         budget_offer = None
+        if page.min_battery_capacity_mah is not None:
+            capacity = product.battery_capacity
+            if capacity is None or capacity.status != 'known' or capacity.capacity_mah is None or capacity.capacity_mah < page.min_battery_capacity_mah:
+                raise CatalogueUnavailable('source capacity mismatch')
+            reasons.append(f'ظرفیت ثبت‌شدهٔ باتری {capacity.capacity_mah} میلی‌آمپرساعت، حداقل {page.min_battery_capacity_mah} را دارد؛ دوام واقعی باتری تأیید نمی‌شود.')
         if budget is not None:
             offers = catalogue.offers(product.product_id, 1, 0, int(budget))
             if offers is None:
@@ -144,7 +149,8 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
             budget_offer['selection_basis'] = 'lowest_recorded_qualifying_price_then_offer_id'
             reasons.append(f'یک آفر تاریخی با قیمت ثبت‌شدهٔ {offer["price_toman"]} تومان، زیر یا برابر سقف {budget} تومان است؛ موجودی تأیید نشده است.')
         products.append({'product_id': product.product_id, 'reasons': reasons, 'budget_offer': budget_offer,
-                         'topics': [topic_explanation(product, topic) for topic in topics], 'suitability': 'not_verified'})
+                         'topics': [topic_explanation(product, topic) for topic in topics], 'suitability': 'not_verified',
+                         'battery_capacity': product.battery_capacity.model_dump() if product.battery_capacity else None})
     result = {'query': query, 'category_name': page.category_name, 'max_price_toman': budget,
               'ranking_basis': 'lexical_match_then_product_id', 'topics': topics,
               'summary': 'دلیل بازیابی و شواهد ثبت‌شده برای بررسی آمده‌اند؛ ترتیب نتایج بر اساس تطابق لفظی و شناسهٔ کالا است.',
@@ -152,6 +158,9 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
                               'بررسی موضوعی فعلی به فیلدهای شناخته‌شدهٔ دوربین و باتری گوشی محدود است؛ سایر نیازها ارزیابی نشده‌اند.',
                               'قیمت و آفر تاریخی‌اند؛ موجودی و پذیرش فروشنده برای مراجعه هنوز باید تأیید شوند.'],
               'products': products, 'provenance': page.provenance.model_dump()}
+    result['min_battery_capacity_mah'] = page.min_battery_capacity_mah
+    if page.min_battery_capacity_mah is not None:
+        result['limitations'].append('فیلتر ظرفیت فقط بر ظرفیت دقیق ثبت‌شدهٔ گوشی اعمال شده؛ داده‌های نامعلوم، ناسازگار و بدون واحد کنار گذاشته شده‌اند.')
     try:
         return SearchExplanation.model_validate(result).model_dump()
     except ValidationError as exc:

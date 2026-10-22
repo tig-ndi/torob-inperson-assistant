@@ -35,6 +35,8 @@ class Case:
     context: dict = field(default_factory=dict)
     after: str | None = None
     topics: tuple[str, ...] | None = None
+    battery_status: str | None = None
+    minimum_mah: int | None = None
 
 
 PHONE_CONTEXT = {'context_query': 'گوشی', 'context_category': 'گوشی موبایل', 'max_price_toman': '12000000'}
@@ -58,8 +60,16 @@ CASES = (
     Case('explain_camera', 'گوشی برای عکاسی می‌خواهم؛ بودجه بیست میلیون تومان.', 'results', '20000000', 'گوشی موبایل', ('گوشی',), topics=('camera',)),
     Case('explain_budget', 'بودجه را هشت میلیون کن.', 'results', '8000000', 'گوشی موبایل', ('گوشی',), after='explain_camera', topics=('camera',)),
     Case('explain_shoes', 'حالا کفش کتانی می‌خواهم.', 'results', '8000000', None, ('کفش کتانی', 'کفش', 'کتانی'), after='explain_budget', topics=()),
-    Case('explain_battery', 'گوشی با باتری قوی می‌خواهم؛ سقف بودجه پانزده میلیون تومان.', 'results', '15000000', 'گوشی موبایل', ('گوشی',), topics=('battery',)),
+    Case('explain_battery', 'گوشی با باتری قوی می‌خواهم؛ سقف بودجه پانزده میلیون تومان.', 'needs_input', '15000000', 'گوشی موبایل', ('گوشی',), question='battery_capacity', battery_status='awaiting_minimum'),
     Case('fresh_budget', 'یه گوشی می‌خوام؛ بودجه م ١١٫٥ میلیون تومنه.', 'results', '11500000', 'گوشی موبایل', ('گوشی',), topics=()),
+    Case('capacity_vague', 'گوشی با باتری قوی می‌خواهم؛ حداکثر ده میلیون تومان.', 'needs_input', '10000000', 'گوشی موبایل', ('گوشی',), question='battery_capacity', battery_status='awaiting_minimum'),
+    Case('capacity_answer', '۵۰۰۰', 'results', '10000000', 'گوشی موبایل', ('گوشی',), after='capacity_vague', battery_status='minimum', minimum_mah=5000),
+    Case('capacity_budget', 'بودجه را هشت میلیون کن.', 'results', '8000000', 'گوشی موبایل', ('گوشی',), after='capacity_answer', battery_status='minimum', minimum_mah=5000),
+    Case('capacity_remove', 'فیلتر ظرفیت باتری را حذف کن', 'results', '8000000', 'گوشی موبایل', ('گوشی',), after='capacity_budget', battery_status='no_minimum'),
+    Case('capacity_ampere', 'گوشی با باتری حداقل ۵ آمپرساعت میخواهم', 'results', context={'category_cleared': True}, queries=('گوشی',), battery_status='minimum', minimum_mah=5000),
+    Case('capacity_switch', 'حالا کفش کتانی میخواهم', 'results', None, None, ('کفش کتانی', 'کفش', 'کتانی'), after='capacity_ampere', battery_status='unspecified'),
+    Case('capacity_switch_budget', 'حالا کفش کتانی میخواهم', 'results', '8000000', None, ('کفش کتانی', 'کفش', 'کتانی'),
+         context={**PHONE_CONTEXT, 'max_price_toman': '8000000', 'context_battery_requirement': {'status': 'minimum', 'minimum_mah': 5000}}, battery_status='unspecified'),
 )
 
 
@@ -71,6 +81,8 @@ def check_result(result: dict, case: Case, connection: sqlite3.Connection) -> in
     assert result['status'] == case.status, 'wrong semantic status'
     assert result['max_price_toman'] == case.budget, 'wrong exact budget'
     assert result['category_name'] == case.category, 'wrong category or stale topic'
+    if case.battery_status is not None:
+        assert result['battery_requirement'] == {'status': case.battery_status, 'minimum_mah': case.minimum_mah}, 'wrong capacity requirement'
     if case.status == 'needs_input':
         assert result['question'] == QUESTIONS[case.question], 'wrong clarification'
         assert result['products'] is None, 'clarification leaked search results'
@@ -80,6 +92,8 @@ def check_result(result: dict, case: Case, connection: sqlite3.Connection) -> in
     assert normalize_text(result['query']) in case.queries, 'wrong product/query meaning'
     assert result['question'] is None, 'unnecessary clarification'
     page = result['products']
+    if case.battery_status is not None:
+        assert page['min_battery_capacity_mah'] == case.minimum_mah, 'wrong capacity filter'
     assert page['provenance']['currency'] == 'toman', 'wrong money unit'
     assert page['provenance']['inventory_status'] == 'unconfirmed', 'invented live stock'
     assert page['category_name'] == case.category, 'page/category mismatch'
@@ -94,6 +108,13 @@ def check_result(result: dict, case: Case, connection: sqlite3.Connection) -> in
         row = connection.execute('SELECT persian_title,category_name,specs FROM products WHERE product_id=?', (product['product_id'],)).fetchone()
         assert row is not None and product['persian_title'] == row[0], 'invented/reattributed product'
         assert product['specs'] == json.loads(row[2]), 'source specs changed'
+        if case.minimum_mah is not None:
+            from tools.smoke_battery import source_integer_capacity
+            covered, value = source_integer_capacity(json.loads(row[2]))
+            assert covered and value is not None and value >= case.minimum_mah, 'missing independent capacity evidence'
+            assert product['battery_capacity']['capacity_mah'] == value, 'wrong declared capacity'
+            assert result['explanation']['min_battery_capacity_mah'] == case.minimum_mah
+            assert all(p['suitability'] == 'not_verified' for p in result['explanation']['products'])
         if case.category is not None:
             assert row[1] == case.category, 'wrong source category'
         if case.budget is not None:
@@ -137,11 +158,13 @@ def request_body(case: Case, successes: dict) -> dict:
     if case.after:
         prior = successes[case.after]
         body.update(context_query=prior['query'], context_category=prior['category_name'], max_price_toman=prior['max_price_toman'])
+        if prior.get('battery_requirement') is not None:
+            body['context_battery_requirement'] = prior['battery_requirement']
         if prior.get('explanation') is not None:
             body['context_topics'] = prior['explanation']['topics']
         previous = next(c for c in CASES if c.id == case.after)
         body['messages'] = [{'role': 'user', 'content': previous.text},
-                            {'role': 'assistant', 'content': 'نتایج ثبت‌شده در کاتالوگ نمایش داده شد؛ موجودی تأیید نشده است.'},
+                            {'role': 'assistant', 'content': prior.get('question') or 'نتایج ثبت‌شده در کاتالوگ نمایش داده شد؛ موجودی تأیید نشده است.'},
                             {'role': 'user', 'content': case.text}]
     return body
 
@@ -165,7 +188,7 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
     assert not target.exists(), 'Use a fresh label; never overwrite an earlier run.'
     report = {'model': service.settings.model, 'reasoning_effort': 'low', 'evidence': 'in-process public HTTP API + real provider + source SQLite; no UI/deployment',
               'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-              'source_hashes': {name: sha256(ROOT / name) for name in ['apps/api/assistant.py', 'apps/api/intent.py', 'apps/api/models.py', 'apps/api/explanations.py', 'tools/eval_dialogue.py']},
+              'source_hashes': {name: sha256(ROOT / name) for name in ['apps/api/assistant.py', 'apps/api/intent.py', 'apps/api/models.py', 'apps/api/explanations.py', 'apps/api/battery.py', 'apps/api/battery_intent.py', 'apps/api/catalogue.py', 'tools/eval_dialogue.py', 'tools/smoke_battery.py']},
               'snapshot_before': sha256(database), 'cases_hash': hashlib.sha256(json.dumps([asdict(c) for c in CASES], ensure_ascii=False, sort_keys=True).encode()).hexdigest(), 'turns': []}
     successes = {}
     total_cost = Decimal(0)

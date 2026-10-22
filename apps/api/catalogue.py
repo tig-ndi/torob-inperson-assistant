@@ -13,6 +13,7 @@ import sqlite3
 from tools.prepare_data import normalize_text
 from apps.api.hours import evaluate_hours, tehran_time
 from apps.api.credit import evaluate_credit
+from apps.api.battery import assess_capacity
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -112,34 +113,46 @@ class Catalogue:
                 "currency": "toman", "inventory_status": "unconfirmed"}
 
     @staticmethod
-    def product(connection: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    def product(connection: sqlite3.Connection, row: sqlite3.Row, capacity=None) -> dict:
         summary = connection.execute(
             "SELECT count(*),min(price_toman),max(price_toman),sum(price_toman IS NULL) "
             "FROM offers WHERE product_id=?", (row["product_id"],)).fetchone()
+        specs = decode_list(row['specs'])
+        capacity = capacity if capacity is not None else assess_capacity(row['category_name'], specs)
         return {"product_id": row["product_id"], "persian_title": row["persian_title"],
                 "brand_name": row["brand_name"], "model": row["model"],
                 "category_name": row["category_name"],
-                "image_urls": decode_list(row["image_urls"]), "specs": decode_list(row["specs"]),
+                "image_urls": decode_list(row["image_urls"]), "specs": specs, 'battery_capacity': capacity.as_dict(),
                 "offer_summary": {"offer_count": summary[0],
                                   "min_price_toman": str(summary[1]) if summary[1] is not None else None,
                                   "max_price_toman": str(summary[2]) if summary[2] is not None else None,
                                   "missing_price_count": summary[3] or 0}}
 
     def search(self, query: str, limit: int, offset: int, max_price: int | None,
-               category_name: str | None = None) -> dict:
+               category_name: str | None = None, min_battery_capacity_mah: int | None = None) -> dict:
         expression = search_expression(query)
         with self.connect() as connection:
             provenance = self.provenance(connection)
+            @lru_cache(maxsize=1024)
+            def capacity(category, raw):
+                return assess_capacity(category, decode_list(raw))
+            connection.create_function('battery_capacity_mah', 2, lambda category, raw: capacity(category, raw).capacity_mah, deterministic=True)
+            battery_clause = 'AND p.category_name=? AND battery_capacity_mah(p.category_name,p.specs)>=? ' if min_battery_capacity_mah is not None else ''
+            params = [expression, category_name, category_name, max_price, max_price]
+            if min_battery_capacity_mah is not None:
+                params.extend(['گوشی موبایل', min_battery_capacity_mah])
+            params.extend([limit + 1, offset])
             rows = connection.execute(
                 "SELECT p.* FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
                 "AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
-                "AND o.price_toman<=?)) ORDER BY product_search.rank,p.product_id LIMIT ? OFFSET ?",
-                (expression, category_name, category_name, max_price, max_price, limit + 1, offset)).fetchall()
-            return {"items": [self.product(connection, row) for row in rows[:limit]],
+                "AND o.price_toman<=?)) " + battery_clause + "ORDER BY product_search.rank,p.product_id LIMIT ? OFFSET ?",
+                params).fetchall()
+            return {"items": [self.product(connection, row, capacity(row['category_name'], row['specs'])) for row in rows[:limit]],
                     "has_more": len(rows) > limit, "limit": limit, "offset": offset,
                     "category_name": category_name,
+                    'min_battery_capacity_mah': min_battery_capacity_mah,
                     "provenance": provenance}
 
     def matches_identity(self, query: str, category_name: str) -> bool:

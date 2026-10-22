@@ -18,6 +18,7 @@ from apps.api.models import OfferPage, ProductDetail, ProductPage, AssistantResu
 from apps.api.assistant import AssistantService
 from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
+from apps.api.battery import MAX_CAPACITY_MAH
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -87,13 +88,16 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     def search(q: Annotated[str, Query(min_length=1, max_length=120)], limit: Limit = 20,
                offset: Offset = 0, max_price_toman: Budget = None,
                category_name: Annotated[str | None, Query(max_length=120)] = None,
-               category_cleared: Annotated[bool, Query()] = False):
+               category_cleared: Annotated[bool, Query()] = False,
+               min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None):
         try:
             effective_category = None
             if not category_cleared:
                 effective_category = category_name if category_name else detect_category_intent(q)
+            if min_battery_capacity_mah is not None and (effective_category or detect_category_intent(q)) not in {None, 'گوشی موبایل'}:
+                raise HTTPException(422, "فیلتر ظرفیت باتری فقط برای گوشی موبایل پشتیبانی می‌شود.")
             return catalogue.search(q, limit, offset, parse_budget(max_price_toman),
-                                    category_name=effective_category)
+                                    category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah)
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc
 

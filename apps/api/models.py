@@ -2,9 +2,10 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from apps.api.hours import HoursReason, HoursStatus
 from apps.api.credit import CreditReason, CreditStatus, OptionReason
+from apps.api.battery import MAX_CAPACITY_MAH
 
 
 class Model(BaseModel):
@@ -32,6 +33,39 @@ class OfferSummary(Model):
     missing_price_count: int
 
 
+class CapacityReference(Model):
+    source_index: int = Field(ge=0)
+    section: str | None
+    key: str | None
+    value: str | None
+    parsed_mah: int | None = Field(ge=0, le=MAX_CAPACITY_MAH)
+
+
+class BatteryCapacity(Model):
+    status: Literal['known', 'unknown', 'conflicting', 'not_applicable']
+    capacity_mah: int | None = Field(ge=0, le=MAX_CAPACITY_MAH)
+    reason: Literal['not_phone', 'conflicting_values', 'unsupported_source_value', 'exact_source_value', 'missing_or_absent_capacity', 'no_capacity_field']
+    evidence_count: int = Field(ge=0)
+    evidence: list[CapacityReference] = Field(max_length=4)
+
+    @model_validator(mode='after')
+    def consistent(self):
+        if (self.status == 'known') != (self.capacity_mah is not None):
+            raise ValueError('only known source capacity may have a numeric value')
+        return self
+
+
+class BatteryRequirement(Model):
+    status: Literal['unspecified', 'awaiting_minimum', 'no_minimum', 'minimum'] = 'unspecified'
+    minimum_mah: int | None = Field(default=None, ge=0, le=MAX_CAPACITY_MAH)
+
+    @model_validator(mode='after')
+    def consistent(self):
+        if (self.status == 'minimum') != (self.minimum_mah is not None):
+            raise ValueError('minimum state requires exactly one minimum capacity')
+        return self
+
+
 class Product(Model):
     product_id: str
     persian_title: str | None
@@ -41,6 +75,7 @@ class Product(Model):
     image_urls: list[str]
     specs: list[Spec]
     offer_summary: OfferSummary
+    battery_capacity: BatteryCapacity | None = None
 
 
 class ProductPage(Model):
@@ -49,6 +84,7 @@ class ProductPage(Model):
     limit: int
     offset: int
     category_name: str | None = None
+    min_battery_capacity_mah: int | None = Field(default=None, ge=0, le=MAX_CAPACITY_MAH)
     provenance: Provenance
 
 
@@ -97,6 +133,7 @@ class ProductExplanation(Model):
     budget_offer: BudgetEvidence | None
     topics: list[TopicExplanation] = Field(max_length=2)
     suitability: Literal['not_verified']
+    battery_capacity: BatteryCapacity | None = None
 
 
 class SearchExplanation(Model):
@@ -109,6 +146,7 @@ class SearchExplanation(Model):
     limitations: list[str]
     products: list[ProductExplanation] = Field(max_length=12)
     provenance: Provenance
+    min_battery_capacity_mah: int | None = Field(default=None, ge=0, le=MAX_CAPACITY_MAH)
 
 
 class AssistantResult(Model):
@@ -121,6 +159,7 @@ class AssistantResult(Model):
     products: ProductPage | None
     model: str
     explanation: SearchExplanation | None = None
+    battery_requirement: BatteryRequirement = Field(default_factory=BatteryRequirement)
 
 
 class Shop(Model):

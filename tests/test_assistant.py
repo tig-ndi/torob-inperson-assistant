@@ -130,8 +130,9 @@ class IntentTests(unittest.TestCase):
         self.assertIn('گوشی سامسونگ a54', choices)
         self.assertFalse(any('عکاسی' in q for q in choices))
         self.assertIn('باتری گوشی', query_choices(AssistantRequest.model_validate(body('باتری گوشی می‌خواهم'))))
-        # Explicit numeric constraints are not silently removed by this narrow rule.
-        self.assertTrue(any('5000' in q for q in query_choices(AssistantRequest.model_validate(body('گوشی با باتری ۵۰۰۰')))))
+        # Capacity is a separate criterion; missing units require a host question,
+        # not a literal feature number in the product query.
+        self.assertEqual(query_choices(AssistantRequest.model_validate(body('گوشی با باتری ۵۰۰۰'))), ['گوشی'])
 
 
 class AssistantApiTests(unittest.TestCase):

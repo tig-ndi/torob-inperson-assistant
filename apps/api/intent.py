@@ -8,10 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
+from apps.api.battery import strip_capacity_clause
+from apps.api.models import BatteryRequirement
 from tools.prepare_data import normalize_text
 
 
 QUESTIONS = {
+    "battery_capacity": "برای ظرفیت ثبت‌شدهٔ باتری، حداقل چند میلی‌آمپرساعت می‌خواهید؟ اگر حداقل مشخصی ندارید، بگویید «بدون حداقل». ظرفیت به‌تنهایی دوام واقعی باتری را ثابت نمی‌کند.",
+    "battery_scope": "فیلتر ظرفیت ثبت‌شدهٔ باتری فعلاً فقط برای گوشی موبایل پشتیبانی می‌شود. می‌خواهید بدون این شرط جست‌وجو کنیم؟",
     "product_kind": "چه نوع کالایی می‌خواهید و برای چه کاری از آن استفاده می‌کنید؟",
     "budget": "سقف بودجه‌تان چند تومان است؟ می‌توانید آن را در کادر بودجه هم وارد کنید.",
     "priority": "مهم‌ترین کاربرد یا ویژگی موردنظرتان چیست؟",
@@ -37,6 +41,7 @@ class AssistantRequest(StrictModel):
     category_cleared: bool = False
     # Review topics are preferences for source evidence, never verified capabilities.
     context_topics: list[Literal['camera', 'battery']] | None = Field(default=None, max_length=2)
+    context_battery_requirement: BatteryRequirement | None = None
 
     @model_validator(mode="after")
     def bounded_history(self):
@@ -55,7 +60,7 @@ class IntentPlan(StrictModel):
     action: Literal["clarify", "search"]
     query: str | None = Field(max_length=120)
     budget_text: str | None = Field(max_length=100)
-    question: Literal["product_kind", "budget", "priority", "specific_model"] | None
+    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope"] | None
 
     @model_validator(mode="after")
     def valid_action(self):
@@ -180,6 +185,10 @@ def query_choices(request: AssistantRequest) -> list[str]:
         if message.role != 'user':
             continue
         text = normalize_text(message.content)
+        if detect_category_intent(message.content) == CAT_MOBILE_PHONE or (
+                request.context_query is not None and detect_category_intent(request.context_query) == CAT_MOBILE_PHONE
+                and re.match(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب|حداقل|[0-9])|^حداقل\s+', text)):
+            text = strip_capacity_clause(text, AMOUNT)
         text = re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?:\s*(?:تومان|تومن|ریال)(?:ه)?)?', ' ', text)
         text = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', text)
         if detect_category_intent(message.content) == CAT_MOBILE_PHONE:
