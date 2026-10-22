@@ -28,6 +28,23 @@ QUESTIONS = {
     "specific_model": "نام دقیق‌تر کالا یا مدل موردنظرتان چیست؟",
 }
 
+CONTACT_LIMITATION = (
+    'درخواست تماس شما اجرا نشد: اطلاعات تماس قابل‌استفاده‌ای نداریم و شماره‌های ثبت‌شده در دیتاست مصنوعی‌اند؛ '
+    'تماس واقعی با فروشنده انجام نشده است.'
+)
+CONTACT_RESULT_LIMITATION = (
+    CONTACT_LIMITATION + ' نتایج زیر فقط نتیجهٔ جست‌وجوی کالا هستند و انجام درخواست تماس محسوب نمی‌شوند.'
+)
+
+
+def question_prompt(code: str, contact: bool = False) -> str:
+    return f'{CONTACT_LIMITATION} {QUESTIONS[code]}' if contact else QUESTIONS[code]
+
+
+def matches_question(content: str, code: str) -> bool:
+    """Recognize a stored question even when a contact limitation preceded it."""
+    return content == QUESTIONS[code] or content == question_prompt(code, True)
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -166,20 +183,69 @@ def _category_sequences(category_names):
     return sequences
 
 
-def _mention_signature(tokens, start, sequences, identity_words):
-    head = tokens[start]
-    matched, prefix = 1, (head,)
+CONTACT_HEADS = frozenset({'شماره', 'اطلاعات', 'راه', 'لینک', 'آیدی', 'نشانی', 'آدرس'})
+CONTACT_OBJECTS = frozenset(
+    'تماس تلفن همراه فروشگاه فروشنده فروشندگان پشتیبانی ارتباط ارتباطی '
+    'واتساپ تلگرام اینستاگرام آیدی نشانی آدرس'.split())
+CONTACT_REQUEST_WORDS = frozenset(
+    'بده بدید بفرست بفرستید بگو بگید لیست نمایش ارسال بگیر بگیرید دارید داره چیه چیست'.split())
+CONTACT_FILLERS = frozenset({'ی', 'ای', 'را', 'رو', 'هم', 'ها', 'های'})
+
+
+def _category_prefix_length(tokens, start, sequences):
+    longest = 1
     for words in sequences:
-        if words[0] != head:
+        if words[0] != tokens[start]:
             continue
         limit = min(len(words), len(tokens) - start)
         size = 0
         while size < limit and words[size] == tokens[start + size]:
             size += 1
-        if size > matched:
-            matched, prefix = size, words[:size]
+        longest = max(longest, size)
+    return longest
+
+
+def is_contact_request(text: str, category_names=None) -> bool:
+    """Distinguish a request for contact information from a dialer product.
+
+    A contact phrase starts with a communication head and then a contact object
+    or request verb ('شماره تماس‌ها را بده', 'شماره را بده'). A real catalogue
+    phrase such as 'شماره زن' or 'شماره گیر تلفن' wins because it matches a
+    category prefix; no single-sentence exception and no generic word deletion.
+    """
+    if not text or not isinstance(text, str):
+        return False
+    tokens = re.findall(r'[^\W_]+', normalize_text(text), flags=re.UNICODE)
+    sequences = _category_sequences(category_names)
+    for index, token in enumerate(tokens):
+        if token not in CONTACT_HEADS:
+            continue
+        if _category_prefix_length(tokens, index, sequences) >= 2:
+            continue
+        following = None
+        for candidate in tokens[index + 1:index + 5]:
+            if candidate in CONTACT_FILLERS:
+                continue
+            following = candidate
+            break
+        if following is None:
+            if token == 'شماره':
+                return True
+            continue
+        if following in CONTACT_OBJECTS or following in CONTACT_REQUEST_WORDS:
+            return True
+    return False
+
+
+def _mention_signature(tokens, start, sequences, identity_words):
+    head = tokens[start]
+    matched = _category_prefix_length(tokens, start, sequences)
+    if head == 'شماره' and matched < 2:
+        # 'شماره' is both a contact-information word and the prefix of real
+        # dialer products; only a catalogue-backed phrase identifies a product.
+        return None
     if matched >= 2:
-        return ' '.join(prefix)
+        return ' '.join(tokens[start:start + matched])
     follower = tokens[start + 1] if start + 1 < len(tokens) else None
     if follower is None or follower in QUERY_STOPWORDS:
         return head
@@ -381,7 +447,7 @@ def query_choices(request: AssistantRequest) -> list[str]:
 
 def releases_unsupported(request: AssistantRequest) -> bool:
     return bool(request.context_query and len(request.messages) > 1
-                and request.messages[-2].content == QUESTIONS['unsupported_filter']
+                and matches_question(request.messages[-2].content, 'unsupported_filter')
                 and normalize_text(request.messages[-1].content) in {'بدون این شرط', 'بدون این فیلتر'})
 
 
@@ -401,10 +467,13 @@ def clear_product_topic(text: str, category_names) -> str | None:
     categories, heads = _catalogue_words(category_names)
     if not categories:
         return None
+    tokens = _content_tokens(cleaned)
+    if tokens and tokens[0] == 'شماره' and _category_prefix_length(
+            tokens, 0, _category_sequences(category_names)) < 2:
+        return None
     segment_heads = _topic_heads(cleaned, heads)
     if len(segment_heads) > 1 and len(set().union(*segment_heads)) > 1:
         return None
-    tokens = _content_tokens(cleaned)
     if not 1 <= len(tokens) <= MAX_TOPIC_WORDS:
         return None
     if tokens[0] not in heads or not any(
@@ -430,31 +499,35 @@ def product_span(text: str, category_names, identity_words) -> str | None:
         cleaned = strip_capacity_clause(cleaned, AMOUNT)
     cleaned = _strip_budget_phrases(cleaned)
     _, heads = _catalogue_words(category_names)
+    sequences = _category_sequences(category_names)
     if not heads:
         return None
     for segment in re.split(r'[.!?؟؛;\n،,]+', cleaned):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
-        start = next((index for index, token in enumerate(tokens) if token in heads), None)
-        if start is None:
-            continue
-        head = tokens[start]
-        # A brand/model written before its head noun still belongs to the phrase.
-        while start and tokens[start - 1] in identity_words:
-            start -= 1
-        span = []
-        grounded = False
-        for token in tokens[start:]:
-            if span and token in QUERY_STOPWORDS:
-                break
-            if token == head:
-                span.append(token)
+        for start in (index for index, token in enumerate(tokens) if token in heads):
+            if tokens[start] == 'شماره' and _category_prefix_length(tokens, start, sequences) < 2:
+                # A bare or contact-style 'شماره' is not a catalogue product;
+                # keep looking for a later real product in the same clause.
                 continue
-            identity = token in identity_words or any(character.isdigit() for character in token) or token.isascii()
-            if grounded and not identity:
-                # A verified brand/model already identifies the product; a later
-                # unmatched token is a use-case/constraint, not part of its name.
-                break
-            span.append(token)
-            grounded = grounded or identity
-        return ' '.join(span) if 1 <= len(span) <= 12 else None
+            head = tokens[start]
+            # A brand/model written before its head noun still belongs to the phrase.
+            while (start and tokens[start - 1] in identity_words
+                   and tokens[start - 1] not in QUERY_STOPWORDS):
+                start -= 1
+            span = []
+            grounded = False
+            for token in tokens[start:]:
+                if span and token in QUERY_STOPWORDS:
+                    break
+                if token == head:
+                    span.append(token)
+                    continue
+                identity = token in identity_words or any(character.isdigit() for character in token) or token.isascii()
+                if grounded and not identity:
+                    # A verified brand/model already identifies the product; a later
+                    # unmatched token is a use-case/constraint, not part of its name.
+                    break
+                span.append(token)
+                grounded = grounded or identity
+            return ' '.join(span) if 1 <= len(span) <= 12 else None
     return None

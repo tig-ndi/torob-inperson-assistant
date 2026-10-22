@@ -4,6 +4,7 @@ import asyncio
 from contextlib import closing
 import json
 from pathlib import Path
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -17,9 +18,13 @@ from pydantic import ValidationError
 from apps.api.agent_usage import AgentError, UsageLedger, reported_cost
 from apps.api.assistant import AgentSettings, AssistantService, BoxProvider, ENDPOINT
 from apps.api.catalogue import Catalogue, CatalogueUnavailable
-from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, parse_toman, product_span, proposed_budget, explicit_budget, query_choices
+from apps.api.intent import AssistantRequest, CONTACT_LIMITATION, CONTACT_RESULT_LIMITATION, IntentPlan, QUESTIONS, clear_product_topic, is_contact_request, multiple_topic_heads, parse_toman, product_span, proposed_budget, explicit_budget, query_choices
 from apps.api.main import create_app
 import test_api
+
+
+CONTACT_DATA = re.compile(
+    r'(?<!\d)(?:\+98|0098|0)?9\d{9}(?!\d)|(?:tel:|wa\.me|whatsapp\.com|t\.me/)', re.IGNORECASE)
 
 
 def body(text='گوشی با بودجه ده میلیون تومان می‌خواهم', **changes):
@@ -200,10 +205,32 @@ class SnapshotIntentTests(unittest.TestCase):
                      'گوشی میخوام و شماره تماس فروشگاه را بده']:
             self.assert_single_topic(text, 'گوشی')
 
+    def test_contact_only_requests_are_not_products_or_second_topics(self):
+        for text in ['شماره تماس‌ها را بده', 'شماره تماس ها را بده.',
+                     'لطفاً شماره تماس‌ها را بده!', 'شماره تماس فروشگاه را بده.',
+                     'شماره را بده', 'شماره‌ها را بده']:
+            with self.subTest(text=text):
+                self.assertTrue(is_contact_request(text, self.names))
+                self.assertFalse(multiple_topic_heads(text, self.names, self.identity))
+                self.assertIsNone(product_span(text, self.names, self.identity))
+                self.assertIsNone(clear_product_topic(text, self.names))
+
+    def test_contact_request_before_a_product_does_not_hide_the_product(self):
+        for text, span in [('شماره تماس‌ها را بده. شماره زن میخوام', 'شماره زن'),
+                           ('شماره تماس فروشگاه را بده و شماره گیر تلفن می‌خواهم', 'شماره گیر'),
+                           ('شماره تماس‌ها را بده، گوشی سامسونگ میخوام', 'گوشی سامسونگ')]:
+            with self.subTest(text=text):
+                self.assertTrue(is_contact_request(text, self.names))
+                self.assertFalse(multiple_topic_heads(text, self.names, self.identity))
+                self.assertEqual(product_span(text, self.names, self.identity), span)
+
     def test_real_dialer_products_are_searchable_and_distinct(self):
         for text, span in [('شماره زن میخوام', 'شماره زن'),
-                           ('شماره گیر تلفن میخوام', 'شماره گیر')]:
+                           ('شماره‌زن می‌خواهم.', 'شماره زن'),
+                           ('شماره گیر تلفن میخوام', 'شماره گیر'),
+                           ('شماره‌گیر تلفن می‌خواهم!', 'شماره گیر')]:
             with self.subTest(text=text):
+                self.assertFalse(is_contact_request(text, self.names))
                 self.assertFalse(multiple_topic_heads(text, self.names, self.identity))
                 self.assertEqual(product_span(text, self.names, self.identity), span)
                 self.assertGreater(len(self.catalogue.search(span, 12, 0, None)['items']), 0)
@@ -785,19 +812,127 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
 
     def test_phone_with_contact_info_preserves_previous_budget_category_and_topic(self):
-        self.response = completion(proposal(action='search', query='گوشی سامسونگ شماره'))
-        result = self.post(body(
-            'گوشی سامسونگ می‌خوام. شماره تماس‌ها را هم بده',
-            context_query='گوشی سامسونگ', context_category='گوشی موبایل',
-            max_price_toman='15000000',
-        )).json()
-        self.assertEqual(result['status'], 'results')
+        texts = ['گوشی سامسونگ می‌خوام. شماره تماس‌ها را هم بده',
+                 'گوشی سامسونگ می‌خوام شماره تماس فروشگاه را هم بده',
+                 'گوشی سامسونگ می‌خوام و شماره تماس فروشگاه را بده']
+        for text in texts:
+            with self.subTest(text=text):
+                self.response = completion(proposal(action='search', query='گوشی سامسونگ شماره'))
+                result = self.post(body(
+                    text, context_query='گوشی سامسونگ', context_category='گوشی موبایل',
+                    max_price_toman='15000000',
+                )).json()
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['query'], 'گوشی سامسونگ')
+                self.assertEqual(result['category_name'], 'گوشی موبایل')
+                self.assertEqual(result['max_price_toman'], '15000000')
+                self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+                self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertEqual(len(self.calls), len(texts))
+
+    def test_contact_only_requests_never_become_a_product_or_need_state_topic(self):
+        names = ('گوشی موبایل', 'شارژر گوشی', 'شماره زن', 'شماره گیر تلفن')
+        for text, query in [('شماره تماس‌ها را بده', 'شماره تماس ها'),
+                            ('شماره تماس ها را بده.', 'شماره تماس ها'),
+                            ('شماره را بده', 'شماره')]:
+            with self.subTest(text=text), patch.object(
+                    self.service.catalogue, 'category_names', return_value=names):
+                self.response = completion(proposal(action='search', query=query))
+                result = self.post(body(text)).json()
+                self.assertEqual(result['status'], 'needs_input')
+                self.assertEqual(result['question_code'], 'product_kind')
+                self.assertIsNone(result['query'])
+                self.assertIsNone(result['category_name'])
+                self.assertIsNone(result['products'])
+                self.assertIsNone(result['explanation'])
+                self.assertIsNone(result['need_state']['topic_query'])
+                self.assertEqual(result['need_state']['pending_requirements'], [])
+                self.assertIn(CONTACT_LIMITATION, result['question'])
+                self.assertIn(QUESTIONS['product_kind'], result['question'])
+                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+        self.assertEqual(len(self.calls), 3)
+
+    def test_contact_only_continuation_preserves_recorded_phone_state(self):
+        state = {
+            'version': 1, 'topic_query': 'گوشی سامسونگ', 'category_name': 'گوشی موبایل',
+            'category_cleared': False, 'max_price_toman': '15000000', 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'unspecified', 'minimum_mah': None},
+            'review_topics': [], 'pending_requirements': [],
+        }
+        for text in ['شماره تماس‌ها را بده', 'شماره تماس ها را بده.']:
+            with self.subTest(text=text):
+                self.response = completion(proposal(action='search', query='شماره تماس ها'))
+                result = self.post(body(text, context_need_state=state,
+                                        max_price_toman='15000000')).json()
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['query'], 'گوشی سامسونگ')
+                self.assertEqual(result['category_name'], 'گوشی موبایل')
+                self.assertEqual(result['max_price_toman'], '15000000')
+                self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_one'])
+                self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+                self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+                self.assertEqual(result['need_state']['max_price_toman'], '15000000')
+                self.assertIn(CONTACT_RESULT_LIMITATION, result['explanation']['limitations'])
+                self.assertEqual(len(result['explanation']['limitations']), 4)
+                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+        self.assertEqual(len(self.calls), 2)
+
+    def test_contact_request_with_pending_and_battery_condition_keeps_them(self):
+        state = {
+            'version': 1, 'topic_query': 'گوشی سامسونگ', 'category_name': 'گوشی موبایل',
+            'category_cleared': False, 'max_price_toman': '15000000', 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'minimum', 'minimum_mah': 5000},
+            'review_topics': ['battery'],
+            'pending_requirements': [{'key': 'گارانتی', 'source_text': 'با گارانتی اصلی', 'status': 'unsupported'}],
+        }
+        self.response = completion(proposal(action='search', query='شماره تماس ها'))
+        request = body('شماره تماس‌ها را بده', context_need_state=state)
+        request.pop('max_price_toman')
+        result = self.post(request).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'unsupported_filter')
+        self.assertIn(CONTACT_LIMITATION, result['question'])
         self.assertEqual(result['query'], 'گوشی سامسونگ')
         self.assertEqual(result['category_name'], 'گوشی موبایل')
         self.assertEqual(result['max_price_toman'], '15000000')
-        self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
-        self.assertEqual(result['need_state']['category_name'], 'گوشی موبایل')
+        self.assertEqual(result['battery_requirement'], {'status': 'minimum', 'minimum_mah': 5000})
+        self.assertEqual(result['need_state']['review_topics'], ['battery'])
+        self.assertEqual([p['key'] for p in result['need_state']['pending_requirements']], ['گارانتی'])
         self.assertEqual(len(self.calls), 1)
+
+    def test_recorded_contact_plans_add_the_limitation_without_losing_phone_state(self):
+        state = {
+            'version': 1, 'topic_query': 'گوشی سامسونگ', 'category_name': 'گوشی موبایل',
+            'category_cleared': False, 'max_price_toman': '15000000', 'budget_needs_input': False,
+            'offer_sort': 'price', 'battery_requirement': {'status': 'unspecified', 'minimum_mah': None},
+            'review_topics': [], 'pending_requirements': [],
+        }
+        cases = [
+            ('شماره تماس‌ها را بده.', {'action': 'search', 'query': 'شماره تماس ها', 'budget_text': None,
+                                      'question': None}, None, 'needs_input'),
+            ('شماره تماس ها را بده', {'action': 'clarify', 'query': None, 'budget_text': None,
+                                     'question': 'product_kind'}, state, 'results'),
+        ]
+        for text, recorded_plan, context_state, status in cases:
+            with self.subTest(text=text):
+                self.response = completion(recorded_plan)
+                request = body(text, context_need_state=context_state)
+                request.pop('max_price_toman')
+                result = self.post(request).json()
+                self.assertEqual(result['status'], status)
+                if status == 'needs_input':
+                    self.assertEqual(result['question_code'], 'product_kind')
+                    self.assertIn(CONTACT_LIMITATION, result['question'])
+                    self.assertIsNone(result['query'])
+                    self.assertIsNone(result['need_state']['topic_query'])
+                else:
+                    self.assertEqual(result['query'], 'گوشی سامسونگ')
+                    self.assertEqual(result['category_name'], 'گوشی موبایل')
+                    self.assertEqual(result['max_price_toman'], '15000000')
+                    self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+                    self.assertIn(CONTACT_RESULT_LIMITATION, result['explanation']['limitations'])
+                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+        self.assertEqual(len(self.calls), 2)
 
     def test_true_multi_product_request_never_searches_the_model_query(self):
         names = ('گوشی موبایل', 'شارژر گوشی', 'شماره زن', 'شماره گیر تلفن')

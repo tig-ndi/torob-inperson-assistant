@@ -17,7 +17,7 @@ from apps.api.category import (
     is_ambiguous_product_intent,
     resolve_accessory_category,
 )
-from apps.api.intent import AssistantRequest, IntentPlan, QUESTIONS, clear_product_topic, multiple_topic_heads, product_span, proposed_budget, explicit_budget, query_choices, releases_unsupported
+from apps.api.intent import AssistantRequest, CONTACT_RESULT_LIMITATION, IntentPlan, QUESTIONS, clear_product_topic, is_contact_request, matches_question, multiple_topic_heads, product_span, proposed_budget, explicit_budget, query_choices, question_prompt, releases_unsupported
 from apps.api.explanations import explain_search
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
@@ -208,6 +208,7 @@ class AssistantService:
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
             latest_span = product_span(latest_msg, category_names, identity_words)
             coordinated = multiple_topic_heads(latest_msg, category_names, identity_words)
+            contact_requested = is_contact_request(latest_msg, category_names)
             # The active product is the latest grounded span. If the stored topic
             # itself is polluted and the new message only refines it, recover the
             # last explicit product span instead of searching the polluted text.
@@ -220,6 +221,16 @@ class AssistantService:
                                          for span in [product_span(message.content, category_names, identity_words)]
                                          if span is not None), None)
                     authoritative = history_span or context_span
+            if contact_requested and latest_span is None:
+                # A pure contact-information request names no product. Preserve a
+                # valid prior product instead of projecting the contact phrase
+                # into the query or need state; without one, ask for a product.
+                if request.context_query is not None:
+                    plan = IntentPlan(action='search', query=normalize_text(request.context_query),
+                                      budget_text=plan.budget_text, question=None)
+                else:
+                    plan = IntentPlan(action='clarify', query=None, budget_text=plan.budget_text,
+                                      question='product_kind')
             topic_questions = {'location', 'unsupported_filter', 'battery_capacity',
                                'battery_scope', 'requirement_choice', 'requirement_limit'}
             if authoritative is not None and (plan.action == 'search' or plan.question in topic_questions):
@@ -266,7 +277,7 @@ class AssistantService:
             if capacity_reply and latest_category is None and has_phone_context and request.context_query is not None:
                 plan = IntentPlan(action='search', query=authoritative or request.context_query,
                                   budget_text=plan.budget_text, question=None)
-            scope_release = (len(request.messages) > 1 and request.messages[-2].content == QUESTIONS['battery_scope']
+            scope_release = (len(request.messages) > 1 and matches_question(request.messages[-2].content, 'battery_scope')
                              and normalize_text(latest_msg) in {'بدون حداقل', 'بدون این شرط', 'بله', 'آره', 'اره'}
                              and request.context_query is not None)
             if scope_release:
@@ -398,7 +409,7 @@ class AssistantService:
                 # A clarification about a grounded product keeps its category in state.
                 effective_category = detect_category_intent(plan.query)
             fallback = (request.messages[-3].content if len(request.messages) >= 3
-                        and request.messages[-2].content == QUESTIONS['unsupported_filter'] else None)
+                        and matches_question(request.messages[-2].content, 'unsupported_filter') else None)
             if coordinated:
                 # A true multi-product request has no single topic. Never project
                 # the model's lexical fragment into a search or the need state.
@@ -466,20 +477,24 @@ class AssistantService:
                     **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
                        if offer_sort == 'nearest' else {}),
                 )
+            explanation = await asyncio.to_thread(
+                explain_search, self.catalogue, page, plan.query, budget, request) if page is not None else None
+            if explanation is not None and contact_requested:
+                explanation['limitations'].append(CONTACT_RESULT_LIMITATION)
             result = {
                 'request_id': request.request_id,
                 'status': 'needs_input' if plan.action == 'clarify' else 'results' if page['items'] else 'no_evidence',
                 'query': plan.query,
                 'category_name': effective_category,
                 'max_price_toman': budget,
-                'question': QUESTIONS[plan.question] if plan.question else None,
+                'question': question_prompt(plan.question, contact_requested) if plan.question else None,
                 'products': page,
                 'model': self.settings.model,
                 'battery_requirement': requirement.model_dump(),
                 'offer_sort': offer_sort,
                 'need_state': needs.state.model_dump(),
                 'question_code': plan.question,
-                'explanation': await asyncio.to_thread(explain_search, self.catalogue, page, plan.query, budget, request) if page is not None else None,
+                'explanation': explanation,
             }
             self.ledger.finish(request.request_id, 'completed', usage, cost, reported_model=reported_model)
             return result

@@ -4,7 +4,7 @@ import re
 
 from apps.api.battery import MAX_CAPACITY_MAH, UNIT, capacity_clause, quantity_mah
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
-from apps.api.intent import AMOUNT, NUMBER_WORDS, AssistantRequest, QUESTIONS, _strip_budget_phrases, parse_toman
+from apps.api.intent import AMOUNT, NUMBER_WORDS, AssistantRequest, _strip_budget_phrases, matches_question, parse_toman
 from apps.api.models import BatteryRequirement
 from tools.prepare_data import normalize_text
 
@@ -98,7 +98,7 @@ def resolve_requirement(request: AssistantRequest, is_phone: bool) -> BatteryReq
     messages = request.messages[-1:] if request.context_battery_requirement is not None else request.messages
     for message in messages:
         if message.role == 'assistant':
-            if message.content == QUESTIONS['battery_capacity']:
+            if matches_question(message.content, 'battery_capacity'):
                 current = BatteryRequirement(status='awaiting_minimum')
             continue
         category = detect_category_intent(message.content)
@@ -115,7 +115,7 @@ def capacity_followup(request: AssistantRequest) -> bool:
     if request.context_battery_requirement is not None and request.context_battery_requirement.status == 'awaiting_minimum':
         if re.fullmatch(rf'{AMOUNT}(?:\s*{UNIT})?[ .،؛؟!]*|بدون حداقل', latest):
             return True
-    if len(request.messages) > 1 and request.messages[-2].content == QUESTIONS['battery_capacity']:
+    if len(request.messages) > 1 and matches_question(request.messages[-2].content, 'battery_capacity'):
         if re.fullmatch(rf'{AMOUNT}(?:\s*{UNIT})?[ .،؛؟!]*|بدون حداقل', latest):
             return True
     return bool(re.search(capacity_clause(AMOUNT), latest) or re.search(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب)|^(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?(?:باتری|باطری).*حذف', latest))
