@@ -35,6 +35,17 @@ def completion(plan, **changes):
             'usage': {'prompt_tokens': 410, 'completion_tokens': 120}, 'cost': 0.0002, **changes}
 
 
+def phone_battery_state(**changes):
+    state = {
+        'version': 1, 'topic_query': 'گوشی', 'category_name': 'گوشی موبایل',
+        'category_cleared': False, 'max_price_toman': None, 'budget_needs_input': False,
+        'offer_sort': 'price', 'battery_requirement': {'status': 'minimum', 'minimum_mah': 5000},
+        'review_topics': ['battery'], 'pending_requirements': [],
+    }
+    state.update(changes)
+    return state
+
+
 class IntentTests(unittest.TestCase):
     def test_colloquial_possessive_budget_keeps_decimal_amount_and_clean_product_query(self):
         for message in ['یه گوشی میخوام؛ سقف بودجه‌م ۱۲٫۵ میلیون تومنه.',
@@ -392,6 +403,63 @@ class AssistantApiTests(unittest.TestCase):
         self.assertIsNone(result['products'])
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(self.calls), 1)
+
+    def test_ungrounded_scope_question_after_clear_switch_searches_with_cleared_state(self):
+        state = phone_battery_state()
+        self.response = completion(proposal(action='clarify', query='کفش کتانی', question='battery_scope'))
+        result = self.post(body('حالا کفش کتانی می‌خواهم', context_need_state=state)).json()
+        self.assertEqual(result['status'], 'results', result)
+        self.assertEqual(result['query'], 'کفش کتانی')
+        self.assertIsNone(result['question'])
+        self.assertIsNone(result['max_price_toman'])
+        self.assertEqual(result['battery_requirement'], {'status': 'unspecified', 'minimum_mah': None})
+        self.assertIsNone(result['products']['min_battery_capacity_mah'])
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_shoe'])
+        self.assertEqual(result['need_state']['topic_query'], 'کفش کتانی')
+        self.assertEqual(result['need_state']['battery_requirement'], {'status': 'unspecified', 'minimum_mah': None})
+        self.assertEqual(result['need_state']['review_topics'], [])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_ungrounded_scope_question_after_second_clear_switch_searches(self):
+        self.response = completion(proposal(action='clarify', query='گوشی پزشکی', question='battery_scope'))
+        result = self.post(body('گوشی پزشکی می‌خواهم', context_need_state=phone_battery_state())).json()
+        self.assertEqual(result['status'], 'results', result)
+        self.assertEqual(result['query'], 'گوشی پزشکی')
+        self.assertIsNone(result['question'])
+        self.assertEqual(result['battery_requirement'], {'status': 'unspecified', 'minimum_mah': None})
+        self.assertIsNone(result['products']['min_battery_capacity_mah'])
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_steth'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_explicit_capacity_scope_for_unsupported_product_keeps_clarification(self):
+        self.response = completion(proposal(action='clarify', query='لپ تاپ', question='battery_scope'))
+        result = self.post(body('لپ تاپ با باتری حداقل ۵۰۰۰ mAh')).json()
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question'], QUESTIONS['battery_scope'])
+        self.assertEqual(result['question_code'], 'battery_scope')
+        self.assertIsNone(result['products'])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_ungrounded_scope_question_stays_blocked_for_ambiguity_budget_and_location(self):
+        self.response = completion(proposal(action='clarify', query='شارژر', question='battery_scope'))
+        ambiguous = self.post(body('شارژر می‌خواهم')).json()
+        self.assertEqual(ambiguous['status'], 'needs_input')
+        self.assertEqual(ambiguous['question'], QUESTIONS['product_kind'])
+        self.assertIsNone(ambiguous['products'])
+
+        self.response = completion(proposal(action='clarify', query='کفش کتانی', question='battery_scope'))
+        invalid_budget = self.post(body('حالا کفش کتانی می‌خواهم؛ تا ده میلیون تومان یا تا بیست میلیون تومان')).json()
+        self.assertEqual(invalid_budget['status'], 'needs_input')
+        self.assertEqual(invalid_budget['question'], QUESTIONS['budget'])
+        self.assertIsNone(invalid_budget['products'])
+
+        self.response = completion(proposal(action='clarify', query='کفش کتانی', question='battery_scope'))
+        location = self.post(body('حالا کفش کتانی می‌خواهم',
+                                  context_need_state=phone_battery_state(offer_sort='nearest'))).json()
+        self.assertEqual(location['status'], 'needs_input')
+        self.assertEqual(location['question'], QUESTIONS['location'])
+        self.assertIsNone(location['products'])
+        self.assertEqual(len(self.calls), 3)
 
     def test_genuine_absence_of_evidence_is_not_replaced_by_a_nearby_match(self):
         self.response = completion(proposal(query='کفش ناموجود'))

@@ -161,6 +161,17 @@ class CapacityDialogueTests(unittest.TestCase):
         fresh = self.post(test_assistant.body('گوشی میخواهم')).json()
         self.assertEqual(fresh['battery_requirement']['status'], 'unspecified')
 
+    def test_phone_followup_keeps_valid_minimum(self):
+        self.response = test_assistant.completion(test_assistant.proposal(query='گوشی'))
+        result = self.post(test_assistant.body(
+            'بودجه را هشت میلیون کن',
+            context_need_state=test_assistant.phone_battery_state())).json()
+        self.assertEqual(result['status'], 'results', result)
+        self.assertEqual(result['max_price_toman'], '8000000')
+        self.assertEqual(result['battery_requirement'], {'status': 'minimum', 'minimum_mah': 5000})
+        self.assertEqual(result['products']['min_battery_capacity_mah'], 5000)
+        self.assertEqual([p['product_id'] for p in result['products']['items']], ['product_one'])
+
     def test_invalid_capacity_clarifies_and_unsupported_type_does_not_ignore_constraint(self):
         invalid = self.post(test_assistant.body('گوشی با باتری حداقل ۵,۰۰ mAh')).json()
         self.assertEqual(invalid['question'], QUESTIONS['battery_capacity'])

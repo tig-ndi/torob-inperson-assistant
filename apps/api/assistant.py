@@ -201,6 +201,7 @@ class AssistantService:
             except (KeyError, IndexError, TypeError, AttributeError, ValueError, ValidationError) as exc:
                 raise AgentError('invalid_output', 502) from exc
             latest_msg = request.messages[-1].content
+            latest_has_capacity_unit = bool(re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)))
             capacity_reply = capacity_followup(request)
             latest_category = detect_category_intent(latest_msg)
             if request.context_query and is_need_control(latest_msg, include_ack=bool(request.context_need_state and (
@@ -351,7 +352,7 @@ class AssistantService:
 
                 if requirement.status == 'awaiting_minimum':
                     plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
-                elif not battery_phone and re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)):
+                elif not battery_phone and latest_has_capacity_unit:
                     plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_scope')
             offer_sort, sort_uncertain = visit_sort(latest_msg, request.context_offer_sort)
             if plan.action == 'search' and offer_sort == 'nearest' and request.user_lat is None:
@@ -374,6 +375,30 @@ class AssistantService:
                 elif needs.controlled and plan.question == 'unsupported_filter':
                     plan = IntentPlan(action='search', query=needs.state.topic_query, budget_text=None, question=None)
                     effective_category = None if request.category_cleared else needs.state.category_name
+            if (plan.action == 'clarify' and plan.question == 'battery_scope'
+                    and not (not battery_phone and latest_has_capacity_unit)):
+                # A model-supplied scope question has no standing after a clear product
+                # switch cleared the capacity criterion; the final state is authoritative.
+                scope_ambiguous = is_ambiguous_product_intent(
+                    latest_msg,
+                    context_category=request.context_category,
+                    context_query=request.context_query,
+                    category_cleared=request.category_cleared,
+                ) or (plan.query is not None and is_ambiguous_product_intent(
+                    f'{plan.query} {latest_msg}',
+                    context_category=request.context_category,
+                    context_query=request.context_query,
+                    category_cleared=request.category_cleared,
+                ))
+                if (plan.query is not None and needs.state.topic_query is not None
+                        and needs.state.battery_requirement.status == 'unspecified'
+                        and not needs.state.budget_needs_input
+                        and not budget_uncertain
+                        and not needs.state.pending_requirements
+                        and not scope_ambiguous):
+                    plan = IntentPlan(action='search', query=needs.state.topic_query,
+                                      budget_text=None, question=None)
+                    effective_category = needs.state.category_name
             if plan.action == 'search' and requirement.status == 'awaiting_minimum':
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
             if plan.action == 'search' and offer_sort == 'nearest' and request.user_lat is None:
