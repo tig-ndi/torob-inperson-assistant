@@ -3,6 +3,18 @@ import { HOURS_CHECKED_AT, syntheticHours } from './fixtures/hours.mjs';
 import { unknownCredit } from './fixtures/credit.mjs';
 import path from 'node:path';
 
+function rgbToLuminance(rgb) {
+  const channels = rgb.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number)
+    .map(v => v / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(fgRgb, bgRgb) {
+  const [lighter, darker] = [rgbToLuminance(fgRgb), rgbToLuminance(bgRgb)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 test('real UI: budget filter with Persian digits, active badge and offers modal with real dataset', async ({ page }) => {
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
@@ -678,4 +690,83 @@ test('synthetic fixture: product card shows budget-qualified badge only when an 
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.product-card').filter({ hasText: 'کالای ارزان' })
     .getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toHaveCount(0);
+});
+
+test('synthetic UI: journey stepper lists 6 steps, marks the current step and labels step 6 as future', async ({ page }) => {
+  await page.goto('/');
+  const steps = page.locator('.journey-steps');
+  await expect(steps).toBeVisible();
+  await expect(steps.locator('summary')).toContainText('مسیر خرید حضوری: ۶ گام');
+  await expect(steps).not.toHaveAttribute('open', '');
+
+  await steps.locator('summary').click();
+  const items = steps.locator('.journey-steps-list li');
+  await expect(items).toHaveCount(6);
+  await expect(items.nth(0)).toHaveAttribute('aria-current', 'step');
+  await expect(items.nth(0)).toContainText('جست‌وجوی کالا');
+  await expect(items.nth(5)).toContainText('آینده');
+  await expect(steps.locator('.journey-note')).toContainText('در این نسخهٔ پروژه پیاده‌سازی نمی‌شود');
+
+  for (const width of [360, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.screenshot({ path: path.resolve('../../.local/qa/journey-steps-mobile.png') });
+});
+
+test('synthetic UI: text buttons meet contrast and touch-target minimums (R08, R11)', async ({ page }) => {
+  const product = {
+    product_id: 'a11y_targets_product', persian_title: 'کالای دسترس‌پذیری',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => route.fulfill({ json: {
+    items: [{
+      offer_id: 'a11y_offer_1', product_id: product.product_id, shop_id: 'a11y_shop',
+      price_toman: '1000', price_quality: 'not_assessed', last_price_changed_at: null,
+      seller_title: null, description: null, warranty: null, inventory_status: 'unconfirmed',
+      direct_distance_meters: 1234, opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+      shop: { name: 'فروشگاه دسترس‌پذیری', address: null, location_label: null, lat: 35.7, lon: 51.4 },
+    }],
+    has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+  } }));
+
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('دسترس');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  // Compare-bar text button sits on the dark bar (#1c2634)
+  await page.locator('.product-card .compare-btn').click();
+  const dark = await page.evaluate(() => {
+    const el = document.querySelector('.compare-bar .text-btn');
+    return { color: getComputedStyle(el).color, height: el.getBoundingClientRect().height };
+  });
+  expect(contrastRatio(dark.color, 'rgb(28, 38, 52)')).toBeGreaterThanOrEqual(4.5);
+  expect(dark.height).toBeGreaterThanOrEqual(24);
+
+  // Filter badge clear button is a small inline target
+  const clearBtn = await page.evaluate(() => {
+    const el = document.querySelector('.clear-filter-btn');
+    const box = el.getBoundingClientRect();
+    return { width: box.width, height: box.height };
+  });
+  expect(clearBtn.height).toBeGreaterThanOrEqual(24);
+  expect(clearBtn.width).toBeGreaterThanOrEqual(24);
+
+  // «حذف موقعیت» text button sits on the white modal surface
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('.offers-filters > summary').click();
+  await modal.getByLabel('انتخاب سریع محله (مختصات تقریبی)', { exact: true }).selectOption('d12');
+  await expect(modal.getByRole('button', { name: 'حذف موقعیت', exact: true })).toBeVisible();
+  const light = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.text-btn')].find(b => b.textContent.includes('حذف موقعیت'));
+    return { color: getComputedStyle(el).color, height: el.getBoundingClientRect().height };
+  });
+  expect(contrastRatio(light.color, 'rgb(255, 255, 255)')).toBeGreaterThanOrEqual(4.5);
+  expect(light.height).toBeGreaterThanOrEqual(24);
 });

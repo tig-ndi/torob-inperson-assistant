@@ -1161,6 +1161,38 @@ function App() {
             ))}
           </div>
 
+          <details className="journey-steps">
+            <summary>مسیر خرید حضوری: ۶ گام</summary>
+            <ol className="journey-steps-list">
+              <li aria-current="step" className="journey-step-current">
+                <span className="journey-step-num" aria-hidden="true">۱</span>
+                <span>جست‌وجوی کالا در کاتالوگ</span>
+              </li>
+              <li>
+                <span className="journey-step-num" aria-hidden="true">۲</span>
+                <span>انتخاب ۲ تا ۳ کالا برای مقایسه</span>
+              </li>
+              <li>
+                <span className="journey-step-num" aria-hidden="true">۳</span>
+                <span>بررسی آفرها و قیمت هر فروشگاه</span>
+              </li>
+              <li>
+                <span className="journey-step-num" aria-hidden="true">۴</span>
+                <span>ساعت باز بودن و فاصلهٔ هوایی</span>
+              </li>
+              <li>
+                <span className="journey-step-num" aria-hidden="true">۵</span>
+                <span>اعتبار خرید حضوری فروشنده</span>
+              </li>
+              <li>
+                <span className="journey-step-num" aria-hidden="true">۶</span>
+                <span>مراجعه و خرید حضوری</span>
+                <span className="journey-future-badge">آینده</span>
+              </li>
+            </ol>
+            <p className="journey-note">گام ۶ رویداد فیزیکی است و در این نسخهٔ پروژه پیاده‌سازی نمی‌شود؛ اطلاعات تا پایان گام ۵ همین‌جاست.</p>
+          </details>
+
           {(activeBudget || (state.kind === 'success' && (state.categoryName || (state.categoryCleared && !state.categoryName))) || (activeBatteryMah !== null && batteryRequirement?.status === 'minimum')) && (
             <div className="active-filters-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
               {activeBudget && (

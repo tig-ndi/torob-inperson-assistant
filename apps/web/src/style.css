@@ -253,6 +253,103 @@ h3 {
   background: var(--brand-tint);
 }
 
+.journey-steps {
+  margin-top: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: white;
+  padding: 0 14px;
+}
+
+.journey-steps summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  min-height: 24px;
+}
+
+.journey-steps summary::-webkit-details-marker {
+  display: none;
+}
+
+.journey-steps summary::after {
+  content: 'نمایش';
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--brand-text);
+  background: var(--brand-tint);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+
+.journey-steps[open] summary::after {
+  content: 'بستن';
+}
+
+.journey-steps-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 14px 0;
+}
+
+.journey-steps-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.journey-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-text);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.journey-step-current .journey-step-num {
+  background: var(--brand);
+  color: white;
+}
+
+.journey-future-badge {
+  font-size: 12px;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.journey-note {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid #f0f3f7;
+  padding-top: 10px;
+}
+
 .active-filter-badge,
 .active-category-badge {
   display: inline-flex;
@@ -272,7 +369,8 @@ h3 {
   color: var(--brand-text);
   border: none;
   padding: 2px 6px;
-  min-height: auto;
+  min-height: 26px;
+  min-width: 26px;
   font-size: 13px;
 }
 
@@ -347,7 +445,11 @@ h3 {
   font-size: 14px;
   cursor: pointer;
   padding: 4px 8px;
-  min-height: auto;
+  min-height: 28px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
   opacity: 0.85;
   flex-shrink: 0;
@@ -416,7 +518,9 @@ h3 {
   background: transparent;
   color: #334155;
   border: none;
-  min-height: auto;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
   font-size: 13px;
   text-decoration: underline;
 }
@@ -795,7 +899,7 @@ h3 {
   font-size: 13px;
   padding: 2px 6px;
   align-self: flex-start;
-  min-height: auto;
+  min-height: 28px;
   margin-bottom: 6px;
 }
 
@@ -1017,7 +1121,7 @@ h3 {
 
 .provenance-row code {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: #566478;
 }
 
@@ -1309,7 +1413,7 @@ h3 {
   }
 
   .header-note {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .pagination button {
