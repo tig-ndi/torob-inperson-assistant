@@ -17,7 +17,7 @@ import {
   searchProducts,
   validateBudget,
 } from './api';
-import type { AssistantBatteryRequirement, OfferPage, Product, ProductPage } from './api';
+import type { AssistantBatteryRequirement, Offer, OfferPage, Product, ProductPage } from './api';
 import { OpeningHoursDetails } from './OpeningHours';
 import { InPersonCreditDetails } from './InPersonCredit';
 import { Assistant } from './Assistant';
@@ -45,12 +45,14 @@ const formatMoney = (value: string) => numbers.format(BigInt(value));
 function ProductCard({
   product,
   isSelected,
+  budget,
   onToggleCompare,
   onViewOffers,
   specFocus,
 }: {
   product: Product;
   isSelected: boolean;
+  budget: string | null;
   onToggleCompare: (product: Product) => void;
   onViewOffers: (product: Product) => void;
   specFocus: SpecFocus | null;
@@ -59,6 +61,7 @@ function ProductCard({
   const min = summary.min_price_toman;
   const max = summary.max_price_toman;
   const precisionWarning = max !== null && BigInt(max) > 9007199254740991n;
+  const budgetQualified = min !== null && budget !== null && BigInt(min) <= BigInt(budget);
 
   return (
     <article className={`product-card ${isSelected ? 'selected' : ''}`} data-product-id={product.product_id}>
@@ -87,6 +90,9 @@ function ProductCard({
           )}
         </p>
         {precisionWarning && <p className="warning">عدد بسیار بزرگ در منبع؛ نیازمند بررسی قیمت</p>}
+        {budgetQualified && (
+          <span className="budget-qualified-badge">حداقل یک پیشنهاد در بودجهٔ شما</span>
+        )}
       </div>
       <p className="offer-count">
         {numbers.format(summary.offer_count)} آفر ثبت‌شده
@@ -396,6 +402,19 @@ function OffersModal({
   const uniqueShopCount = state.kind === 'success'
     ? new Set(state.page.items.map(o => o.shop_id)).size
     : 0;
+  const shopGroups: { shopId: string; shop: Offer['shop']; offers: Offer[] }[] = [];
+  if (state.kind === 'success') {
+    const groupIndex = new Map<string, number>();
+    for (const offer of state.page.items) {
+      let idx = groupIndex.get(offer.shop_id);
+      if (idx === undefined) {
+        idx = shopGroups.length;
+        groupIndex.set(offer.shop_id, idx);
+        shopGroups.push({ shopId: offer.shop_id, shop: offer.shop, offers: [] });
+      }
+      shopGroups[idx]!.offers.push(offer);
+    }
+  }
 
   return (
     <Modal isOpen onClose={onClose} titleId="offers-modal-title" className="offers-modal">
@@ -647,73 +666,79 @@ function OffersModal({
                 </div>
 
                 <div className="offers-grid">
-                  {state.page.items.map(offer => {
-                    const price = offer.price_toman;
-                    const isVeryLarge = offer.price_quality === 'above_js_safe_integer';
-                    const hasShopCoords = offer.shop.lat !== null && offer.shop.lon !== null;
-                    return (
-                      <article key={offer.offer_id} className="offer-card">
-                        <div className="offer-header">
-                          <h4 className="shop-name">{offer.shop.name?.trim() || 'فروشگاه بدون نام (ناشناس‌شده)'}</h4>
-                          <span className="offer-badge" aria-hidden="true">آفر</span>
-                        </div>
-
-                        <p className="shop-address">
-                          📍 {offer.shop.address?.trim() || offer.shop.location_label?.trim() || 'نشانی ثبت نشده'}
-                        </p>
-
-                        {offer.seller_title?.trim() && (
-                          <p className="seller-title">عنوان اعلامی فروشنده: {offer.seller_title.trim()}</p>
-                        )}
-
-                        <div className="offer-price-block">
-                          <p className="price">
-                            {price === null ? (
-                              'قیمتی ثبت نشده'
-                            ) : (
-                              <>
-                                <bdi>{formatMoney(price)}</bdi> <span>تومان</span>
-                              </>
-                            )}
-                          </p>
-                          {isVeryLarge && (
-                            <p className="warning">هشدار: قیمت بسیار بزرگ در منبع</p>
-                          )}
-                        </div>
-
-                        <div className="offer-details">
-                          <p className="detail-row">
-                            <span>آخرین تغییر قیمت ثبت‌شده:</span>
-                            <strong>{formatTehranDateTime(offer.last_price_changed_at)}</strong>
-                          </p>
-                          <p className="detail-row">
-                            <span>گارانتی:</span>
-                            <span>{formatWarranty(offer.warranty)}</span>
-                          </p>
-
-                          <p className="detail-row">
-                            <span>فاصلهٔ مستقیم هوایی:</span>
-                            {offer.direct_distance_meters !== null ? (
-                              <strong>{formatDistance(offer.direct_distance_meters)}</strong>
-                            ) : !hasShopCoords ? (
-                              <span className="warning">موقعیت ثبت نشده (فاصله نامشخص)</span>
-                            ) : (
-                              <span className="muted-text">نیازمند تعیین موقعیت کاربر</span>
-                            )}
-                          </p>
-
-                          <p className="detail-row provenance-row">
-                            <span>شناسهٔ آفر:</span>
-                            <code>{offer.offer_id}</code>
+                  {shopGroups.map(group => (
+                    <section key={group.shopId} className="offer-shop-group" aria-label={`آفرهای ${group.shop.name?.trim() || 'فروشگاه بدون نام'}`}>
+                      <header className="offer-shop-header">
+                        <div>
+                          <h4 className="shop-name">{group.shop.name?.trim() || 'فروشگاه بدون نام (ناشناس‌شده)'}</h4>
+                          <p className="shop-address">
+                            📍 {group.shop.address?.trim() || group.shop.location_label?.trim() || 'نشانی ثبت نشده'}
                           </p>
                         </div>
+                        <span className="offer-badge" aria-hidden="true">{numbers.format(group.offers.length)} آفر</span>
+                      </header>
+                      <div className="offer-shop-cards">
+                        {group.offers.map(offer => {
+                          const price = offer.price_toman;
+                          const isVeryLarge = offer.price_quality === 'above_js_safe_integer';
+                          const hasShopCoords = offer.shop.lat !== null && offer.shop.lon !== null;
+                          return (
+                            <article key={offer.offer_id} className="offer-card">
+                              {offer.seller_title?.trim() && (
+                                <p className="seller-title">عنوان اعلامی فروشنده: {offer.seller_title.trim()}</p>
+                              )}
 
-                        <OpeningHoursDetails hours={offer.opening_hours} />
-                        <InPersonCreditDetails credit={offer.in_person_credit} />
-                        <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
-                      </article>
-                    );
-                  })}
+                              <div className="offer-price-block">
+                                <p className="price">
+                                  {price === null ? (
+                                    'قیمتی ثبت نشده'
+                                  ) : (
+                                    <>
+                                      <bdi>{formatMoney(price)}</bdi> <span>تومان</span>
+                                    </>
+                                  )}
+                                </p>
+                                {isVeryLarge && (
+                                  <p className="warning">هشدار: قیمت بسیار بزرگ در منبع</p>
+                                )}
+                              </div>
+
+                              <div className="offer-details">
+                                <p className="detail-row">
+                                  <span>آخرین تغییر قیمت ثبت‌شده:</span>
+                                  <strong>{formatTehranDateTime(offer.last_price_changed_at)}</strong>
+                                </p>
+                                <p className="detail-row">
+                                  <span>گارانتی:</span>
+                                  <span>{formatWarranty(offer.warranty)}</span>
+                                </p>
+
+                                <p className="detail-row">
+                                  <span>فاصلهٔ مستقیم هوایی:</span>
+                                  {offer.direct_distance_meters !== null ? (
+                                    <strong>{formatDistance(offer.direct_distance_meters)}</strong>
+                                  ) : !hasShopCoords ? (
+                                    <span className="warning">موقعیت ثبت نشده (فاصله نامشخص)</span>
+                                  ) : (
+                                    <span className="muted-text">نیازمند تعیین موقعیت کاربر</span>
+                                  )}
+                                </p>
+
+                                <p className="detail-row provenance-row">
+                                  <span>شناسهٔ آفر:</span>
+                                  <code>{offer.offer_id}</code>
+                                </p>
+                              </div>
+
+                              <OpeningHoursDetails hours={offer.opening_hours} />
+                              <InPersonCreditDetails credit={offer.in_person_credit} />
+                              <p className="inventory-warning">موجودی تأیید نشده (سوابق کاتالوگ تاریخی)</p>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
 
                 {(state.offset > 0 || state.page.has_more) && (
@@ -1310,6 +1335,7 @@ function App() {
                       <ProductCard
                         key={product.product_id}
                         product={product}
+                        budget={state.budget}
                         specFocus={specFocus}
                         isSelected={isSelected}
                         onToggleCompare={toggleCompare}

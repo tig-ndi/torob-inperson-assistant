@@ -600,3 +600,82 @@ test('synthetic fixture: offers opened from comparison offer explicit return but
   await expect(offersModal).toBeVisible();
   await expect(offersModal.getByRole('button', { name: 'بازگشت به مقایسه', exact: true })).toHaveCount(0);
 });
+
+test('synthetic fixture: offers of one shop are grouped under that shop keeping ids and warranties', async ({ page }) => {
+  const product = {
+    product_id: 'grouped_shop_product', persian_title: 'کالای گروه‌بندی فروشگاه',
+    brand_name: null, model: null, category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 3, min_price_toman: '1000', max_price_toman: '1000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  const makeOffer = (id, shopId, shopName, warranty) => ({
+    offer_id: id, product_id: product.product_id, shop_id: shopId, price_toman: '1000',
+    price_quality: 'not_assessed', last_price_changed_at: null, seller_title: null, description: null,
+    warranty, inventory_status: 'unconfirmed', direct_distance_meters: 0,
+    opening_hours: syntheticHours('unknown'), in_person_credit: unknownCredit(),
+    shop: { name: shopName, address: null, location_label: null, lat: 35.7, lon: 51.4 },
+  });
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
+  await page.route(`**/api/products/${product.product_id}/offers?**`, route => route.fulfill({ json: {
+    items: [
+      makeOffer('grouped_offer_1', 'shop_alpha', 'فروشگاه آلفا', { description: 'گارانتی ۱۸ ماهه' }),
+      makeOffer('grouped_offer_2', 'shop_beta', 'فروشگاه بتا', 'گارانتی شرکتی'),
+      makeOffer('grouped_offer_3', 'shop_alpha', 'فروشگاه آلفا', null),
+    ],
+    has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
+  } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گروه');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await page.locator('.product-card .secondary-btn').click();
+  const modal = page.locator('.offers-modal');
+  await expect(modal).toBeVisible();
+
+  // Two distinct shop groups, offers of shop_alpha gathered even though they were not adjacent
+  const groups = modal.locator('.offer-shop-group');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0)).toContainText('فروشگاه آلفا');
+  await expect(groups.nth(0).locator('.offer-card')).toHaveCount(2);
+  await expect(groups.nth(0).locator('.offer-badge')).toHaveText('۲ آفر');
+  await expect(groups.nth(1)).toContainText('فروشگاه بتا');
+  await expect(groups.nth(1).locator('.offer-card')).toHaveCount(1);
+  await expect(groups.nth(1).locator('.offer-badge')).toHaveText('۱ آفر');
+
+  // Offer ids and warranties preserved inside the grouped cards
+  await expect(groups.nth(0).getByText('گارانتی ۱۸ ماهه')).toBeVisible();
+  await expect(groups.nth(0).locator('.provenance-row code')).toHaveText(['grouped_offer_1', 'grouped_offer_3']);
+  await expect(groups.nth(1).getByText('گارانتی شرکتی')).toBeVisible();
+  await expect(groups.nth(1).locator('.provenance-row code')).toHaveText(['grouped_offer_2']);
+  await expect(modal.locator('.offer-card')).toHaveCount(3);
+});
+
+test('synthetic fixture: product card shows budget-qualified badge only when an offer fits', async ({ page }) => {
+  const cheap = {
+    product_id: 'budget_badge_cheap', persian_title: 'کالای ارزان', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 2, min_price_toman: '5000000', max_price_toman: '9000000', missing_price_count: 0 },
+  };
+  const pricey = {
+    product_id: 'budget_badge_pricey', persian_title: 'کالای گران', brand_name: null, model: null,
+    category_name: null, specs: [], image_urls: [],
+    offer_summary: { offer_count: 1, min_price_toman: '50000000', max_price_toman: '50000000', missing_price_count: 0 },
+  };
+  const source = { currency: 'toman', inventory_status: 'unconfirmed' };
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [cheap, pricey],
+    has_more: false, provenance: source } }));
+  await page.goto('/');
+  await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بودجه');
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+
+  const cheapCard = page.locator('.product-card').filter({ hasText: 'کالای ارزان' });
+  const priceyCard = page.locator('.product-card').filter({ hasText: 'کالای گران' });
+  await expect(cheapCard.getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toBeVisible();
+  await expect(priceyCard.getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toHaveCount(0);
+
+  // Lowering the budget below the cheapest offer removes the badge
+  await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('4000000');
+  await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  await expect(page.locator('.product-card').filter({ hasText: 'کالای ارزان' })
+    .getByText('حداقل یک پیشنهاد در بودجهٔ شما', { exact: true })).toHaveCount(0);
+});
