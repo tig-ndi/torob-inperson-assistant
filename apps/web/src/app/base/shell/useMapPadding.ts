@@ -20,7 +20,7 @@ export function useMapPadding(map: RefObject<HTMLDivElement | null>, panel: RefO
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
-    for (const node of [element, panel.current, search.current]) if (node) observer.observe(node);
+    for (const node of [element, panel.current, search.current]) if (node) observer.observe(node, { box: 'border-box' });
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     measure();

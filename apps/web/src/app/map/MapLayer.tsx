@@ -349,6 +349,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
 
     {previewPin && (
       <div className="um-preview-region" style={{ ...padding,
+        top: `var(--um-preview-top, ${padding.top}px)`,
+        bottom: `var(--um-preview-bottom, ${padding.bottom}px)`,
         left: `max(${padding.left}px, var(--um-control-clearance))` }}>
       <div className="um-preview-card" role="dialog" aria-label={`پیش‌نمایش فروشگاه ${previewPin.title || previewPin.label}`}
         onKeyDown={event => {

@@ -34,6 +34,10 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 360], [959, 720], [
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       const paid = await openPreview(page);
+      // A wrapped filter row reproduces the tighter real-production landscape bounds.
+      if (width === 768) await page.locator('.ub-search-area').evaluate(node => {
+        node.style.paddingBottom = '24px';
+      });
       const preview = page.locator('.um-preview-card');
       const geometry = () => page.evaluate(() => {
         const box = selector => document.querySelector(selector).getBoundingClientRect();

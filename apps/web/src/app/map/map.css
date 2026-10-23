@@ -523,6 +523,11 @@
 }
 
 @media (max-width: 959px) {
+  .um-preview-region {
+    /* Camera padding may shrink on short screens; cards must respect actual overlays. */
+    --um-preview-top: var(--ub-mobile-controls-top);
+    --um-preview-bottom: calc(var(--ub-sheet-height) + 20px);
+  }
   .um-preview-card {
     width: 100%;
     padding: 12px 14px;
