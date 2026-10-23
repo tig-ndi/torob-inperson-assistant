@@ -1010,6 +1010,27 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
 }
 
 @media (max-width: 959px) {
+  /* The panel already names this step. Keep its second heading accessible
+     without spending another row before the selected product and first offer. */
+  .uv-stores-head > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .uv-stores-head {
+    gap: 4px;
+  }
+
+  .uv-product-head .uv-kicker {
+    display: none;
+  }
+
   .uv-steps {
     display: none;
   }
@@ -1066,26 +1087,38 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
 }
 
 @media (max-height: 450px) {
+  .uv-stores { gap: 8px; }
+
+  .ub-app[data-layout=visit][data-sheet=half] .ub-map {
+    display: block;
+  }
+
+  .ub-app[data-layout=visit] .ub-sheet-control {
+    display: inline-flex;
+  }
+
   .uv-visit-screen {
     padding-top: 8px;
   }
 
-  .uv-kicker,
+  .uv-kicker {
+    display: none;
+  }
+
+  /* The full address remains in the expandable source details. Keep the
+     decision and all condition badges reachable without deleting conditions. */
   .uv-card-location,
   .uv-card-address {
     display: none;
   }
 
+  .uv-card > * { order: 3; }
+  .uv-card > .uv-card-head { order: 0; }
+  .uv-card > .uv-card-actions { order: 1; }
+  .uv-card > .uv-card-facts { order: 2; }
+
   .uv-stores-head h2 {
     font-size: 17px;
-  }
-
-  .uv-stores-head .uv-sort {
-    display: none;
-  }
-
-  .uv-card-facts {
-    display: none;
   }
 
   .uv-card {

@@ -18,7 +18,8 @@
 }
 
 .ub-app[data-layout=visit] .um-map .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(.52) contrast(1.12) saturate(.42);
+  /* Keep street labels legible; strong contrast clips pale inverted roads to black. */
+  filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.8) saturate(.42);
 }
 
 .ub-app[data-layout=visit][data-resolved-theme=light] .um-map .leaflet-tile-pane {
