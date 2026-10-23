@@ -14,7 +14,7 @@ for (const width of [320, 390, 1440]) {
       await route.abort();
     });
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/design.html');
+    await page.goto('/');
     await expect(page.getByRole('heading', { name: 'از کجا شروع کنیم؟' })).toBeVisible();
     expect(statusRequests).toBe(0);
     await page.getByRole('button', { name: 'جست‌وجوی کالا', exact: true }).click();

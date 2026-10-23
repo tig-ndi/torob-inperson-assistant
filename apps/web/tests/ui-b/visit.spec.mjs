@@ -37,7 +37,7 @@ async function mockApi(page, { offerPage = fourOffers, tiles = 'ok', onPrepare, 
 }
 
 async function openStores(page) {
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'دیدن فروشندگان' }).click();
@@ -431,7 +431,7 @@ test('dark theme keeps seller cards and comparison readable', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await mockApi(page);
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByRole('combobox', { name: 'تم نمایش' }).selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'dark');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
@@ -452,7 +452,7 @@ test('real snapshot B path: offers, unsent follow-up and alternatives without mo
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/tile.openstreetmap.org/**', route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: tileOk }));
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.ua-product-card').first()).toBeVisible();

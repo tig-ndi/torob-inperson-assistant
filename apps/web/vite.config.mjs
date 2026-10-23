@@ -5,6 +5,7 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       input: {
+        // legacy.html is only a development regression harness, never a published entry.
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
         design: fileURLToPath(new URL('./design.html', import.meta.url)),
       },

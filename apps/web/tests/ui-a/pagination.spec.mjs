@@ -14,7 +14,7 @@ function secondPage() {
   return { ...cataloguePage([{ ...product('p12'), persian_title: 'محصول اولیه 12' }, { ...product('p13'), persian_title: 'محصول صفحه بعد' }]), offset: 12 };
 }
 async function search(page) {
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.ua-product-card')).toHaveCount(12);
@@ -70,7 +70,7 @@ test('assistant pages preserve cleared category, battery, exact budget, nearest 
     nextParams = new URL(r.request().url()).searchParams;
     return r.fulfill({ json: { ...secondPage(), category_name: null, min_battery_capacity_mah: 5000 } });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByRole('button', { name: 'انتخاب موقعیت', exact: false }).click();
   const location = page.getByRole('dialog', { name: 'موقعیت جست‌وجو' });
   await location.getByLabel('عرض جغرافیایی').fill('35.7');
@@ -144,7 +144,7 @@ test('an empty terminal page keeps previous cards and moves keyboard focus away 
 
 test('real snapshot continuation uses the same query and does not repeat product IDs', async ({ page }) => {
   await page.route('**/api/assistant/turn', r => r.abort());
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.ua-product-card')).toHaveCount(12);

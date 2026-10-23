@@ -23,7 +23,7 @@ const search = async page => {
 
 test('source evidence distinguishes negative, missing and irrelevant fields without claiming quality', async ({ page }) => {
   await page.route('**/api/products?**', route => route.fulfill({ json: pageBody(fixtures) }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page);
   await page.getByRole('button', { name: 'بررسی دوربین', exact: true }).click();
   const complete = page.locator('[data-product-id="شواهد کامل"] .spec-evidence');
@@ -64,7 +64,7 @@ test('need focus survives clarification and budget, is user editable without cal
       question: calls === 1 ? 'سقف بودجه‌تان چند تومان است؟' : null,
       products: calls === 1 ? null : calls === 3 ? pageBody([product('کفش', [], 'کفش ورزشی')]) : data } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const need = page.getByLabel('نیاز و کاربرد موردنظر');
   await need.fill('گوشی برای عکاسی می‌خواهم');
   await page.getByRole('button', { name: 'بررسی نیاز', exact: true }).click();
@@ -89,7 +89,7 @@ test('need focus survives clarification and budget, is user editable without cal
 });
 
 test('real dataset evidence points to exact original product specs', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const pending = page.waitForResponse(r => r.url().includes('/api/products?'));
   await search(page);
   const data = await (await pending).json();

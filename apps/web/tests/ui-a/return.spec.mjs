@@ -12,7 +12,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
         persian_title: `کالای آزمون ${i}`, specs: [{ section: 'منبع', key: 'توضیح', value: 'متن بلند منبع '.repeat(20) }] }))) });
     });
     await page.route('**/api/products/p9/offers?**', r => r.fulfill({ json: offers([offer('o9', 's9', 'p9')]) }));
-    await page.goto('/design.html');
+    await page.goto('/');
     await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
     await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
     const card = page.getByRole('article', { name: 'کالای آزمون 9', exact: true });
@@ -51,7 +51,7 @@ for (const sample of [
       { ...product('missing'), persian_title: null, brand_name: null, category_name: null, offer_summary: {
         offer_count: 0, min_price_toman: null, max_price_toman: null, missing_price_count: 0 } },
     ]) }));
-    await page.goto('/design.html');
+    await page.goto('/');
     if (sample.zoom !== 1) await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, sample.zoom);
     await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
     await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();

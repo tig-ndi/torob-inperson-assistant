@@ -12,7 +12,7 @@ for (const [width, height] of [[320,568],[375,667],[390,844],[430,932],[431,932]
   test(`base shell is usable at ${width}x${height}`, async ({ page }) => {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.setViewportSize({ width, height });
-    await page.goto('/design.html');
+    await page.goto('/');
     await expect(page.getByRole('button', { name: 'جست‌وجو', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('combobox', { name: 'تم نمایش' }).selectOption('dark');
@@ -24,7 +24,7 @@ for (const [width, height] of [[320,568],[375,667],[390,844],[430,932],[431,932]
   });
 }
 test('base dialogs have usable focus, budget validation and no hidden location permission', async ({ page }) => {
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByRole('button', { name: 'شرایط جست‌وجو', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'شرایط جست‌وجو' }); await expect(dialog).toBeVisible();
   await dialog.getByLabel('سقف بودجه به تومان').fill('10000000');
@@ -53,7 +53,7 @@ test('shared hook keeps independent offers and ignores a stale search response',
     await route.fulfill({ json: fixturePage([{ ...product(), persian_title: q === 'قدیمی' ? 'پاسخ قدیمی' : 'پاسخ جدید' }]) }).catch(() => {});
   });
   await page.route('**/api/products/p1/offers?**', route => route.fulfill({ json: offers([offer(), offer('o2')]) }));
-  await page.goto('/design.html');
+  await page.goto('/');
   const input = page.getByLabel('نام کالا در کاتالوگ');
   await input.fill('قدیمی'); await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await input.fill('جدید');
@@ -70,7 +70,7 @@ test('shared hook keeps independent offers and ignores a stale search response',
   await page.screenshot({ path: path.join(qa, 'offers-390.png'), fullPage: true });
 });
 test('real API client handles snapshot search, offers and unsent followups with no model', async ({ page }) => {
-  await page.goto('/design.html');
+  await page.goto('/');
   const summary = await page.evaluate(async () => {
     const c = await import('/src/app/base/domain/client.ts');
     const signal = new AbortController().signal;
@@ -92,7 +92,7 @@ test('real API client handles snapshot search, offers and unsent followups with 
   expect(summary).toMatchObject({ unsent: 'draft_not_sent', hasSource: true, noContact: true, alternativeScope: true });
 });
 test('public discovery and visit routes remain reachable without a developer menu', async ({ page }) => {
-  await page.goto('/design.html');
+  await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'صفحه‌های پایه', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'کمک برای انتخاب', exact: true }).click();
   await expect(page.locator('.ub-panel-top strong')).toHaveText('بررسی نیاز');
@@ -112,7 +112,7 @@ test('offer retry resumes the failed page without dropping already loaded rows',
     if (offset === 20 && failNext) { failNext = false; return route.fulfill({ status: 503, json: { code: 'catalogue_unavailable' } }); }
     return route.fulfill({ json: { ...offers([offer(offset === 0 ? 'o1' : 'o2')]), offset, has_more: offset === 0 } });
   });
-  await page.goto('/design.html'); await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
+  await page.goto('/'); await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'دیدن فروشندگان' }).click();
   await page.getByRole('button', { name: 'آفرهای بیشتر' }).click();

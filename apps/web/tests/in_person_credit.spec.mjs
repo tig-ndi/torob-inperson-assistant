@@ -27,7 +27,7 @@ const pageBody = (items, offset = 0, has_more = false) => ({ items, has_more, li
 
 async function openSynthetic(page, budget = false) {
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('آزمایشی');
   if (budget) await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۱۰۰۰۰');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
@@ -124,7 +124,7 @@ test('synthetic credit empty, failure, retry, malformed response and unknown cha
 });
 
 test('real dataset credit display and filter through isolated API', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').first().click();

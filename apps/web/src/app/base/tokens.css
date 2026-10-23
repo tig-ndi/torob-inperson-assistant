@@ -166,9 +166,6 @@ bdi {
   background:var(--ub-surface);
   color:var(--ub-ink)
 }
-.ub-legacy-link {
-  font-size:13px
-}
 .ub-search-area {
   padding:16px 28px 12px;
   display:flex;
@@ -602,9 +599,6 @@ bdi {
   }
   .ub-brand small {
     font-size:11px
-  }
-  .ub-legacy-link {
-    display:none
   }
   .ub-theme {
     font-size:0

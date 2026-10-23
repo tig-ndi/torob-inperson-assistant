@@ -41,7 +41,7 @@ for (const width of [390, 1440]) {
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     const bodies = await fixture(page);
     const errors = []; page.on('pageerror', error => errors.push(error.message));
-    await page.goto('/design.html');
+    await page.goto('/');
     await expect(page.getByText(/صفحه‌های اختصاصی و نقشه هنوز/)).toHaveCount(0);
     await page.getByRole('button', { name: 'کمک برای انتخاب', exact: true }).click();
     await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی تا ده میلیون تومان');

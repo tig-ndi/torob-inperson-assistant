@@ -3,6 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { execSync, spawn } from 'node:child_process';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { HOURS_CHECKED_AT, syntheticHours } from './fixtures/hours.mjs';
 import { unknownCredit } from './fixtures/credit.mjs';
@@ -55,7 +56,7 @@ test('wired assistant activity covers checking, pending, success, error and canc
     }
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
 
   // checking: gated status keeps the single activity live region with its spinner
   await expect(activity(page)).toHaveText('در حال بررسی دسترسی دستیار…');
@@ -115,7 +116,7 @@ test('icons decorate controls without changing names, mirroring or layout from 3
     has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
   } }));
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
 
   // Accessible names are preserved exactly; decorative icons inherit color without transforms
   const searchButton = page.getByRole('button', { name: 'جست‌وجو', exact: true });
@@ -202,7 +203,7 @@ test('motion classes sit at stable points, replay only on list replacement, and 
     await route.fulfill({ json: searchResult(request) });
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.product-card')).toHaveCount(1);
@@ -252,6 +253,9 @@ test('built version links the favicon assets and survives a real-tab reload', as
       setTimeout(() => reject(new Error('vite preview did not start')), 15000);
     });
     await page.goto(previewUrl);
+    await expect(page.locator('.ub-app')).toBeVisible();
+    await expect(page.getByLabel('نام کالا در کاتالوگ')).toBeVisible();
+    expect(existsSync(path.join(webRoot, 'dist', 'legacy.html'))).toBe(false);
     const readLinks = () => page.evaluate(() =>
       [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')].map(link => link.getAttribute('href')));
     expect(await readLinks()).toEqual(['/icons/favicon.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
@@ -262,9 +266,13 @@ test('built version links the favicon assets and survives a real-tab reload', as
     const svg = await request.get(`${previewUrl}icons/favicon.svg`);
     expect(svg.status()).toBe(200);
     await page.reload();
+    await expect(page.locator('.ub-app')).toBeVisible();
     expect(await readLinks()).toEqual(['/icons/favicon.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.resolve('../../.local/qa/icons-integration-built.png') });
+    await page.goto(`${previewUrl}design.html`);
+    await expect(page).toHaveURL(previewUrl);
+    await expect(page.locator('.ub-app')).toBeVisible();
   } finally {
     if (process.platform === 'win32') {
       try { execSync(`taskkill /pid ${preview.pid} /T /F`, { stdio: 'ignore' }); } catch { /* already gone */ }

@@ -9,7 +9,7 @@ async function setup(page, handler) {
     return r.fulfill({ json: { ready: true, reason: 'ready', remaining_calls: 20 } });
   });
   await page.route('**/api/assistant/turn', r => { calls.turns++; return handler(r, calls.turns); });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByRole('button', { name: 'کمک برای انتخاب', exact: true }).click();
   await expect(page.getByRole('button', { name: 'بررسی نیاز', exact: true })).toBeDisabled();
   await expect(page.locator('.ua-status')).toContainText('آمادهٔ بررسی');
@@ -87,7 +87,7 @@ test('contract failure keeps old catalogue results and is never rendered as a su
     requests++;
     return r.fulfill({ json: requests === 1 ? cataloguePage([product()]) : { items: 'malformed' } });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.ua-product-card')).toHaveCount(1);
@@ -111,7 +111,7 @@ test('an incompatible alternative page offers a fresh collection instead of retr
     if (offsets.length > 1) value.alternatives.provenance = { ...value.alternatives.provenance, snapshot_id: 'changed' };
     return r.fulfill({ json: value });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'دیدن فروشندگان', exact: true }).click();

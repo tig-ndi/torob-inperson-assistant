@@ -29,7 +29,7 @@ async function setup(page, more = false) {
     if (more) for (let i = 5; i <= 12; i++) items.push({ ...product(`p${i}`), persian_title: `محصول ${i}` });
     return r.fulfill({ json: cataloguePage(items, more) });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'گوشی الف', exact: true })).toBeVisible();
@@ -153,7 +153,7 @@ test('selected products survive pagination and independent searches; seller sele
 
 test('real snapshot comparison shows the two selected source product titles without a model call', async ({ page }) => {
   await page.route('**/api/assistant/turn', r => r.abort());
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی سامسونگ');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.ua-product-card')).toHaveCount(12);

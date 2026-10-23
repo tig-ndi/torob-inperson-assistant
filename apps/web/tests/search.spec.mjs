@@ -15,7 +15,7 @@ async function search(page, query) {
 test('real UI → Vite proxy → API → dataset; RTL, pages and responsive widths', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'fa');
   await search(page, 'گوشی');
@@ -41,7 +41,7 @@ test('synthetic empty results differ from service failure and retry preserves qu
     return route.fulfill(attempt === 1 ? { status: 503, json: { detail: 'unavailable' } }
       : { json: { ...fixture(), items: [] } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page, 'نمونه');
   await expect(page.getByRole('alert')).toContainText('جست‌وجو انجام نشد');
   await expect(page.getByText('کالایی با این جست‌وجو پیدا نشد')).toHaveCount(0);
@@ -55,7 +55,7 @@ test('synthetic missing values, exact large money and untrusted title render saf
   payload.items.push({ ...payload.items[0], product_id: 'no_price', persian_title: null,
     offer_summary: { offer_count: 1, missing_price_count: 1, min_price_toman: null, max_price_toman: null } });
   await page.route('**/api/products?**', route => route.fulfill({ json: payload }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page, 'نمونه');
   await expect(page.getByRole('article')).toHaveCount(2);
   await expect(page.getByText(new Intl.NumberFormat('fa-IR').format(733518940747298944n), { exact: true })).toBeVisible();
@@ -73,7 +73,7 @@ test('synthetic malformed response is an error, never empty success', async ({ p
     return route.fulfill(attempt === 1 ? { json: { items: [] } }
       : { status: 200, contentType: 'text/html', body: '<html>not JSON</html>' });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page, 'نمونه');
   await expect(page.getByRole('alert')).toContainText('جست‌وجو انجام نشد');
   await expect(page.getByText('کالایی با این جست‌وجو پیدا نشد')).toHaveCount(0);
@@ -87,7 +87,7 @@ test('synthetic delayed response cannot replace a newer search; loading is visib
     if (query === 'قدیمی') await new Promise(resolve => setTimeout(resolve, 500));
     await route.fulfill({ json: fixture(query === 'قدیمی' ? 'نتیجهٔ قدیمی' : 'نتیجهٔ جدید') });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page, 'قدیمی');
   await expect(page.getByRole('region', { name: 'نتایج برای «قدیمی»' }).getByRole('status')).toContainText('در حال جست‌وجوی کاتالوگ');
   await search(page, 'جدید');
@@ -101,7 +101,7 @@ test('category filter is auto-detected, preserved across pagination and budget, 
   await page.route('**/api/assistant/status', route => route.fulfill({ json: {
     ready: true, reason: 'ready', remaining_calls: 3, attempt_limit: 3, model: 'synthetic' } }));
   await page.route('**/api/assistant/turn', route => route.fulfill({ status: 503, json: { code: 'provider_failed' } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await search(page, 'گوشی');
   const catBadge = page.locator('.active-category-badge').getByText('دسته: گوشی موبایل');
   await expect(catBadge).toBeVisible();

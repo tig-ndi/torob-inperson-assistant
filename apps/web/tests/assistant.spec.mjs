@@ -25,7 +25,7 @@ test('synthetic assistant clarification, followup, exact budget, real cards and 
         question: 'چه نوع کالایی می‌خواهید؟', products: null, model: 'synthetic-model' }
       : { ...searchResult(request), max_price_toman: '10000000' } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('برای خرید تا ده میلیون تومان کمک می‌خواهم');
   await submit(page);
   await expect(page.getByText('چه نوع کالایی می‌خواهید؟', { exact: false })).toBeVisible();
@@ -55,7 +55,7 @@ test('synthetic assistant uses typed budget before manual search and rejects inv
     requests.push(request);
     return route.fulfill({ json: searchResult(request) });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('۷۳۳۵۱۸۹۴۰۷۴۷۲۹۸۹۴۴');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
@@ -77,7 +77,7 @@ test('synthetic assistant failure and malformed reply stay errors without automa
     return route.fulfill(calls === 1 ? { status: 503, json: { code: 'provider_timeout' } }
       : { json: { ...searchResult(request), request_id: 'wrong-request' } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   await expect(page.locator('.assistant-panel [role="alert"]')).toContainText('پاسخ دستیار به‌موقع نرسید');
@@ -103,7 +103,7 @@ test('synthetic delayed assistant cannot replace newer manual search; cancellati
   });
   await page.route('**/api/products?**', route => route.fulfill({ json: { ...products,
     items: [{ ...product, product_id: 'manual_product', persian_title: 'کفش دستی' }] } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   await started;
@@ -120,7 +120,7 @@ test('synthetic delayed assistant cannot replace newer manual search; cancellati
 test('disabled assistant does not prevent direct catalogue search', async ({ page }) => {
   await statusRoute(page, false);
   await page.route('**/api/products?**', route => route.fulfill({ json: products }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await expect(page.getByText('دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.')).toBeVisible();
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
@@ -132,7 +132,7 @@ test('synthetic assistant status retry re-checks without page refresh', async ({
   await page.route('**/api/assistant/status', route => route.fulfill({ json: mode === 'ready'
     ? { ready: true, reason: 'ready', remaining_calls: 3, attempt_limit: 3, model: 'synthetic-model' }
     : { ready: false, reason: 'disabled', remaining_calls: 0, attempt_limit: 3, model: 'synthetic-model' } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const retry = page.getByRole('button', { name: 'بررسی مجدد وضعیت دستیار', exact: true });
   await expect(page.getByText('دستیار فعلاً قابل استفاده نیست؛ جست‌وجوی مستقیم در دسترس است.')).toBeVisible();
   await expect(retry).toBeVisible();
@@ -145,7 +145,7 @@ test('synthetic assistant status retry re-checks without page refresh', async ({
 test('synthetic attempt limit shows its message without a retry button', async ({ page }) => {
   await page.route('**/api/assistant/status', route => route.fulfill({ json: {
     ready: false, reason: 'attempt_limit', remaining_calls: 0, attempt_limit: 3, model: 'synthetic-model' } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await expect(page.getByText(/سقف درخواست‌های تنظیم‌شدهٔ دستیار تمام شده است/).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'بررسی مجدد وضعیت دستیار', exact: true })).toHaveCount(0);
 });
@@ -160,7 +160,7 @@ test('synthetic assistant processing keeps previous successful results visible (
     await gate;
     await route.fulfill({ json: searchResult(request) });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.product-card')).toHaveCount(1);
@@ -182,7 +182,7 @@ test('synthetic same-query budget clear keeps assistant topic and history (R03)'
     const request = route.request().postDataJSON();
     return route.fulfill({ json: { ...searchResult(request), max_price_toman: '10000000' } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نیاز و کاربرد موردنظر').fill('گوشی');
   await submit(page);
   await expect(page.locator('.product-card')).toHaveCount(1);
@@ -208,7 +208,7 @@ test('result followups retain topic and budget, replace product, roll history an
     return route.fulfill({ json: { ...searchResult(request), query: changedProduct ? 'کفش کتانی' : 'گوشی',
       max_price_toman: requests.length === 1 ? '10000000' : '8000000' } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const need = page.getByLabel('نیاز و کاربرد موردنظر');
   const topic = page.locator('.assistant-notice').filter({ hasText: 'موضوع فعلی:' });
   for (const [index, text] of ['گوشی تا ده میلیون تومان', 'بودجه را هشت میلیون کن', 'حالا کفش کتانی می‌خواهم',
@@ -256,7 +256,7 @@ test('manual search provides context; an empty result and clarification retain i
       ? { ...searchResult(request), status: 'needs_input', query: 'گوشی', products: null, question: 'سقف بودجه‌تان چند تومان است؟' }
       : { ...searchResult(request), status: 'no_evidence', max_price_toman: '0', products: { ...products, items: [] } } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await expect(page.locator('.product-card')).toHaveCount(1);
@@ -281,7 +281,7 @@ test('long followups keep complete recent pairs within the API character bound',
     requests.push(request);
     return route.fulfill({ json: searchResult(request) });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const need = page.getByLabel('نیاز و کاربرد موردنظر');
   for (let i = 0; i < 3; i++) {
     await need.fill('گوشی ' + 'الف'.repeat(995));
@@ -304,7 +304,7 @@ test('new conversation resets removed category while keeping the visible budget'
     captured = route.request().postDataJSON();
     return route.fulfill({ json: { ...searchResult(captured), category_name: 'گوشی موبایل' } });
   });
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();

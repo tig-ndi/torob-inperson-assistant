@@ -19,7 +19,7 @@ async function setup(page, handler) {
   await page.route('**/api/products?**', r => r.fulfill({ json: productPage() }));
   await page.route('**/api/products/p1/offers?**', r => r.fulfill({ json: offers([selected]) }));
   await page.route('**/api/followups/alternatives', handler);
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.getByRole('button', { name: 'دیدن فروشندگان', exact: true }).click();
@@ -164,7 +164,7 @@ test('real snapshot alternatives continue with exact source offer IDs and exclud
   // Controlled discovery handoff of a real detail response; offers and both alternative pages use the actual API.
   await page.route('**/api/products?**', r => r.fulfill({ json: { items: [candidate.product], has_more: false,
     offset: 0, limit: 12, category_name: candidate.product.category_name, min_battery_capacity_mah: null, provenance: candidate.provenance } }));
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.ua-product-card').getByRole('button', { name: 'دیدن فروشندگان' }).click();

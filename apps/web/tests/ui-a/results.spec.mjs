@@ -26,7 +26,7 @@ async function setup(page, { emptyAssistant = false } = {}) {
     const q = new URL(r.request().url()).searchParams.get('q');
     return r.fulfill({ json: cataloguePage([{ ...product(`manual-${q}`), persian_title: `نتیجه مستقیم ${q}` }]) });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   return () => posts;
 }
 
@@ -166,7 +166,7 @@ test('an earlier assistant answer cannot take over a newer direct search of the 
 
 test('real snapshot results select the same product for the seller list without a model', async ({ page }) => {
   await page.route('**/api/assistant/turn', r => r.abort());
-  await page.goto('/design.html');
+  await page.goto('/');
   await directSearch(page, 'گوشی سامسونگ');
   const first = page.locator('.ua-product-card').first();
   await expect(first).toBeVisible();

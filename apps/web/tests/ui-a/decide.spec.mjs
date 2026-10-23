@@ -28,7 +28,7 @@ async function openDecide(page, options = {}) {
     if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
     await settle(route, () => route.fulfill({ json: { ...response.turn, request_id: body.request_id } }));
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   await page.getByRole('button', { name: 'کمک برای انتخاب', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'نیازتان را بگویید' })).toBeVisible();
   return calls;

@@ -58,7 +58,7 @@ export function WorkspaceShell() {
       <div className="ub-header-actions"><label className="ub-theme">نمایش<select aria-label="تم نمایش" value={state.theme}
         onChange={e => dispatch({ type: 'theme', value: e.target.value === 'dark' ? 'dark' : e.target.value === 'light' ? 'light' : 'system' })}>
         <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تیره</option></select></label>
-        <a className="ub-legacy-link" href="/">رابط فعلی</a></div>
+      </div>
     </header>
     <section className="ub-search-area" aria-label="جست‌وجو و شرایط">
       <form className="ub-search" onSubmit={search}>

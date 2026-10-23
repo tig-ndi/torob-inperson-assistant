@@ -7,7 +7,7 @@ for (const [width, height] of [[320, 568], [768, 360], [1440, 900]]) {
     await page.route('**/api/products?**', r => r.fulfill({ json: productPage() }));
     await page.route('**/api/products/p1/offers?**', r => r.fulfill({ json: offers([offer()]) }));
     await page.route('**/tile.openstreetmap.org/**', r => r.abort());
-    await page.goto('/design.html');
+    await page.goto('/');
     await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
     await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
     await page.getByRole('button', { name: 'دیدن فروشندگان' }).click();

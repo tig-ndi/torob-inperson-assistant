@@ -19,7 +19,7 @@ test('real UI: budget filter with Persian digits, active badge and offers modal 
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
 
   // Search with query and Persian digits budget: ۱۰،۰۰۰،۰۰۰
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
@@ -73,7 +73,7 @@ test('real UI: compare 2 to 3 products, compare specs by key/section, enforce li
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -237,7 +237,7 @@ test('synthetic fixture: preserve multiple offers of same shop, format dates in 
       items: syntheticOffers.items.map(offer => ({ ...offer, opening_hours: syntheticHours(), in_person_credit: unknownCredit() })) } });
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('چندآفر');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -273,7 +273,7 @@ test('synthetic fixture: validate invalid budget input without network request',
     return route.fulfill({ json: { items: [], has_more: false, provenance: { currency: 'toman', inventory_status: 'unconfirmed' } } });
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   // Enter invalid budget (letters)
   await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('abc');
@@ -287,7 +287,7 @@ test('real UI: manual coordinates, radius filter and direct distance calculation
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -340,7 +340,7 @@ test('synthetic fixture: browser geolocation explicit click and error handling',
     };
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -359,7 +359,7 @@ test('synthetic fixture: browser geolocation explicit click and error handling',
 });
 
 test('synthetic fixture: radius without coordinates is rejected before network request', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -400,7 +400,7 @@ test('synthetic fixture: neighborhood picker fills approximate coords, honest co
     } });
   });
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('محله');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').click();
@@ -427,7 +427,7 @@ test('synthetic fixture: neighborhood picker fills approximate coords, honest co
 });
 
 test('synthetic fixture: geolocation unavailable and timeout produce distinct messages', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -456,7 +456,7 @@ test('synthetic fixture: geolocation unavailable and timeout produce distinct me
 });
 
 test('local UI: budget formatting with commas and real-time Persian words conversion', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
 
   const budgetInput = page.getByLabel('سقف بودجه (تومان)', { exact: true });
   const wordsCaption = page.locator('.budget-words-caption');
@@ -491,7 +491,7 @@ test('local UI: budget formatting with commas and real-time Persian words conver
 });
 
 test('real UI: floating toast appears in viewport after scroll when selecting 4th product', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
 
@@ -548,7 +548,7 @@ test('synthetic fixture: comparison columns carry fixed A/B badges and titles ar
   };
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [productA, productB],
     has_more: false, provenance: { currency: 'toman', inventory_status: 'unconfirmed' } } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('مقایسه');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   const cards = page.locator('.product-card');
@@ -584,7 +584,7 @@ test('synthetic fixture: offers opened from comparison offer explicit return but
     has_more: false, provenance: source } }));
   await page.route('**/api/products/*/offers?**', route => route.fulfill({ json: { items: [], has_more: false,
     limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بازگشت');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   const cards = page.locator('.product-card');
@@ -636,7 +636,7 @@ test('synthetic fixture: offers of one shop are grouped under that shop keeping 
     ],
     has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
   } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گروه');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').click();
@@ -675,7 +675,7 @@ test('synthetic fixture: product card shows budget-qualified badge only when an 
   const source = { currency: 'toman', inventory_status: 'unconfirmed' };
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [cheap, pricey],
     has_more: false, provenance: source } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('بودجه');
   await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
@@ -693,7 +693,7 @@ test('synthetic fixture: product card shows budget-qualified badge only when an 
 });
 
 test('synthetic UI: journey stepper lists 6 steps, marks the current step and labels step 6 as future', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   const steps = page.locator('.journey-steps');
   await expect(steps).toBeVisible();
   await expect(steps.locator('summary')).toContainText('مسیر خرید حضوری: ۶ گام');
@@ -733,7 +733,7 @@ test('synthetic UI: text buttons meet contrast and touch-target minimums (R08, R
     has_more: false, limit: 10, offset: 0, provenance: source, hours_evaluated_at: HOURS_CHECKED_AT,
   } }));
 
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('دسترس');
   await page.getByLabel('سقف بودجه (تومان)', { exact: true }).fill('10000000');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();

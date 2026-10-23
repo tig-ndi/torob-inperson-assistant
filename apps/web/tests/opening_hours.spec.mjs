@@ -22,7 +22,7 @@ const allOffers = [offer('open_1', 'declared_open', 'same_shop'),
 
 async function openSynthetic(page) {
   await page.route('**/api/products?**', route => route.fulfill({ json: { items: [product], has_more: false, provenance: source } }));
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('آزمایشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').click();
@@ -104,7 +104,7 @@ test('synthetic hours filter empty state, failed refresh and retry keep filter; 
 });
 
 test('real dataset hours display and open-only request through isolated API', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/legacy.html');
   await page.getByLabel('نام کالا یا مدل', { exact: true }).fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
   await page.locator('.product-card .secondary-btn').first().click();

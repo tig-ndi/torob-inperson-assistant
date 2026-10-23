@@ -22,7 +22,7 @@ async function setup(page) {
     response.product.product_id = 'p9';
     return r.fulfill({ json: response });
   });
-  await page.goto('/design.html');
+  await page.goto('/');
   return counts;
 }
 
