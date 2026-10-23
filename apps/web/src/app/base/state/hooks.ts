@@ -5,6 +5,7 @@ import { RequestGate } from './RequestGate.ts';
 import { mergeOffers, offerQueryKey } from './model.ts';
 import { useWorkspace } from './Workspace.tsx';
 import { alternativeSearchKey, appendAlternatives } from './alternativePages.ts';
+import { requestFailure } from '../domain/errors.ts';
 
 export function useCommand<T>() {
   const gate = useRef(new RequestGate());
@@ -18,8 +19,9 @@ export function useCommand<T>() {
       setResult({ status: 'success', data, error: null });
       return data;
     } catch (error: unknown) {
+      const failure = requestFailure(error);
       if (active.isCurrent()) setResult(previous => ({ status: 'error', data: previous.data,
-        error: error instanceof Error ? error.message : 'درخواست انجام نشد.' }));
+        error: failure.message, failure }));
       return null;
     }
   }, []);
@@ -82,8 +84,9 @@ export function useOffers(productId: string | null, filters: Filters, position: 
     Promise.resolve().then(() => loadOffers(productId, filters, position, active.signal)).then(data => {
       if (active.isCurrent()) setCollection({ key, result: { status: 'success', data, error: null } });
     }).catch((error: unknown) => {
+      const failure = requestFailure(error);
       if (active.isCurrent()) setCollection({ key, result: { status: 'error', data: null,
-        error: error instanceof Error ? error.message : 'آفرها دریافت نشدند.' } });
+        error: failure.message, failure } });
     }).finally(() => { if (active.isCurrent()) pageBusy.current = false; });
     return () => gate.current.cancel();
     // key contains every request argument; avoid restarting on equivalent objects.
@@ -101,8 +104,9 @@ export function useOffers(productId: string | null, filters: Filters, position: 
       if (active.isCurrent() && currentKey.current === key) setCollection({ key, result: { status: 'success', error: null,
         data: { ...next, items: mergeOffers(before.items, next.items) } } });
     } catch (error: unknown) {
+      const failure = requestFailure(error);
       if (active.isCurrent() && currentKey.current === key) setCollection({ key, result: { status: 'error', data: before,
-        error: error instanceof Error ? error.message : 'صفحهٔ بعد دریافت نشد.' } });
+        error: failure.message, failure } });
     } finally { if (active.isCurrent()) pageBusy.current = false; }
   };
   const reload = () => setRefresh(value => value + 1);

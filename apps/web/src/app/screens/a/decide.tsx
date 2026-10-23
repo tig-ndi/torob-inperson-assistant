@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { AssistantTurn, RequestState } from '../../base/domain/contracts.ts';
+import type { AssistantTurn, RequestFailure, RequestState } from '../../base/domain/contracts.ts';
 import { assistantStatus } from '../../base/domain/client.ts';
 import { conversationInput } from '../../base/state/conversation.ts';
 import { useAssistant, useCommand } from '../../base/state/hooks.ts';
@@ -8,6 +8,7 @@ import { Badge, Button, ErrorCard } from '../../base/ui/primitives.tsx';
 import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
+import { assistantBlockReason } from '../../base/domain/errors.ts';
 
 const numbers = new Intl.NumberFormat('fa-IR');
 type AssistantStatus = Awaited<ReturnType<typeof assistantStatus>>;
@@ -78,6 +79,7 @@ export function DecideScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [blockedFailure, setBlockedFailure] = useState<RequestFailure | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
   const awaiting = useRef<{ text: string; previousTurnId: string | null } | null>(null);
@@ -91,7 +93,16 @@ export function DecideScreen() {
   useEffect(() => { void status.run(signal => assistantStatus(signal)); }, [status.run]);
 
   const pending = assistant.result.status === 'loading';
-  const availability = availabilityOf(status.result);
+  const turnFailure = assistant.result.status === 'error' ? assistant.result.failure : null;
+  const latestFailure = useRef(turnFailure);
+  latestFailure.current = turnFailure;
+  const turnBlock = assistantBlockReason(turnFailure);
+  useEffect(() => { if (turnBlock && turnFailure) setBlockedFailure(turnFailure); }, [turnBlock, turnFailure]);
+  const block = turnBlock ? turnFailure : blockedFailure;
+  const latestBlock = useRef(block);
+  latestBlock.current = block;
+  const blockReason = assistantBlockReason(block);
+  const availability: Availability = blockReason ? { phase: 'blocked', reason: blockReason } : availabilityOf(status.result);
   const canSend = availability.phase === 'ready' || availability.phase === 'unknown';
   const need = state.needState;
   const lastTurn = state.lastTurn;
@@ -107,7 +118,17 @@ export function DecideScreen() {
     setDraft(value => value.trim() === current.text ? '' : value);
   }, [assistant.result, state.lastTurn]);
 
-  const refreshStatus = () => { void status.run(signal => assistantStatus(signal)); };
+  const refreshStatus = async (explicit = false) => {
+    const failed = latestBlock.current;
+    const result = await status.run(signal => assistantStatus(signal));
+    // A post-turn background GET must not erase a definitive failure from that turn.
+    // Only an explicit fresh ready check may release the same blocked request.
+    if (explicit && result && dataAvailability(result).phase === 'ready' && failed &&
+      latestBlock.current === failed && assistantBlockReason(failed)) {
+      setBlockedFailure(null);
+      if (latestFailure.current === failed) assistant.cancel();
+    }
+  };
 
   const send = async () => {
     const text = draft.trim();
@@ -165,7 +186,7 @@ export function DecideScreen() {
             ? 'نامشخص است. ارسال صریح نیاز همچنان ممکن است؛ سرویس در هر حال سقف خودش را اعمال می‌کند.'
             : blockedCopy[availability.reason]}</p>
       {(availability.phase === 'unknown' || availability.phase === 'blocked') && <Button tone="secondary" className="ua-status-retry"
-        onClick={refreshStatus}><RefreshIcon />بررسی مجدد وضعیت</Button>}
+        onClick={() => void refreshStatus(true)}><RefreshIcon />بررسی مجدد وضعیت</Button>}
     </div>
 
     <form className="ua-decide-form" onSubmit={submit} aria-busy={pending}>
@@ -185,7 +206,7 @@ export function DecideScreen() {
     </form>
 
     {localError && <ErrorCard message={localError} />}
-    {assistant.result.status === 'error' && <ErrorCard message={assistant.result.error}
+    {assistant.result.status === 'error' && <ErrorCard message={assistant.result.error} failure={assistant.result.failure}
       onRetry={canSend && draft.trim() ? () => void send() : undefined} />}
     {notice && <p className="ua-notice" role="status">{notice}</p>}
 

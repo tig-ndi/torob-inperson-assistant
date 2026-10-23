@@ -124,8 +124,12 @@ export type Alternatives = {
   limitations: string[];
 };
 export type Screen = 'home' | 'decide' | 'results' | 'stores' | 'compare' | 'contact' | 'trip';
+export type RequestFailure = {
+  kind: 'http' | 'network' | 'contract' | 'unexpected';
+  status: number | null; code: string; message: string; retryable: boolean;
+};
 export type RequestState<T> =
   | { status: 'idle'; data: null; error: null }
   | { status: 'loading'; data: T | null; error: null }
   | { status: 'success'; data: T; error: null }
-  | { status: 'error'; data: T | null; error: string };
+  | { status: 'error'; data: T | null; error: string; failure: RequestFailure };

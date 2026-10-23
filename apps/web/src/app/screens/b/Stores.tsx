@@ -54,7 +54,7 @@ export function StoresScreen() {
     </header>
     <ReviewNotice />
     {offers.result.status === 'loading' && !page && <Skeleton />}
-    {offers.result.status === 'error' && <ErrorCard message={offers.result.error} onRetry={offers.retry} />}
+    {offers.result.status === 'error' && <ErrorCard message={offers.result.error} failure={offers.result.failure} onRetry={offers.retry} />}
     {page && !page.items.length && <Empty title="آفری با این شرایط در صفحهٔ بارگذاری‌شده نیست">
       <p>بودجه، شعاع، ساعت یا اعتبار را تغییر دهید. این پیام نبود پوشش در تهران را اثبات نمی‌کند و موجودی زنده را نمی‌سنجد.</p>
     </Empty>}

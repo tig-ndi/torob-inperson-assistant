@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type Rea
 import { CloseIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { formatMoney } from '../domain/presentation.ts';
 import { formatDistance, formatTehranDateTime, HOURS_REASON_TEXT } from '../../../api.ts';
-import type { Offer } from '../domain/contracts.ts';
+import type { Offer, RequestFailure } from '../domain/contracts.ts';
 
 export function Button({ tone = 'primary', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
   tone?: 'primary' | 'secondary' | 'ghost';
@@ -30,8 +30,8 @@ export function CreditBadge({ offer }: { offer: Offer }) {
   </Badge>;
 }
 export function SimBadge() { return <Badge tone="warning">شبیه‌سازی — تماس واقعی انجام نشد</Badge>; }
-export function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
-  return <div className="ub-error" role="alert"><p>{message}</p>{onRetry && <Button tone="secondary" onClick={onRetry}>تلاش مجدد</Button>}</div>;
+export function ErrorCard({ message, onRetry, failure }: { message: string; onRetry?: () => void; failure?: RequestFailure }) {
+  return <div className="ub-error" role="alert"><p>{message}</p>{onRetry && failure?.retryable !== false && <Button tone="secondary" onClick={onRetry}>تلاش مجدد</Button>}</div>;
 }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return <div className="ub-empty"><h2>{title}</h2>{children}</div>;

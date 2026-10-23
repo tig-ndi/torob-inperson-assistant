@@ -132,7 +132,7 @@ export function ResultsScreen() {
         <Button tone="secondary" disabled={loading || !currentSearch.query.trim()} onClick={refresh}>جست‌وجو با شرایط فعلی</Button>
       </div>}
       {loading && <p role="status">در حال دریافت؛ نتایج قبلی تا دریافت پاسخ تازه حفظ می‌شوند.</p>}
-      {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} onRetry={refresh} />}
+      {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} failure={catalogue.result.failure} onRetry={refresh} />}
       {results.explanation && <details className="ua-result-explanation">
         <summary>توضیح و محدودیت‌های پاسخ</summary>
         <p>{results.explanation.summary}</p>
@@ -151,7 +151,7 @@ export function ResultsScreen() {
         nearestSort={results.search.sort === 'nearest'} evidence={results.explanation?.products.find(item => item.product_id === product.product_id)} />)}
       <div className="ua-pagination" aria-label="ادامهٔ نتایج محصولات">
         {pages.result.status === 'error' ? <>
-          <ErrorCard message={pages.result.error} onRetry={!stale ? () => void pages.more() : undefined} />
+          <ErrorCard message={pages.result.error} failure={pages.result.failure} onRetry={!stale ? () => void pages.more() : undefined} />
           <Button tone="ghost" disabled={loading || !currentSearch.query.trim()} onClick={refresh}>از نو جست‌وجو کن</Button>
         </> : results.page.has_more ? <Button tone="secondary" disabled={stale || loading} onClick={() => void pages.more()}>
           {pages.result.status === 'loading' ? 'در حال دریافت محصولات بیشتر…' : 'محصولات بیشتر'}

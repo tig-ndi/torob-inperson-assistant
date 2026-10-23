@@ -89,7 +89,7 @@ export function WorkspaceShell() {
           onClick={() => dispatch({ type: 'navigate', screen: step.screen })}><span>{new Intl.NumberFormat('fa').format(i + 1)}</span>{step.label}</button>)}</nav>
         <div className="ub-panel-body">
           {catalogue.result.status === 'loading' && <Skeleton />}
-          {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} />}
+          {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} failure={catalogue.result.failure} />}
           <ScreenOutlet screen={state.screen} catalogue={catalogue.result.data} />
         </div>
         <footer className="ub-panel-footer">

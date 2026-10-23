@@ -24,7 +24,7 @@ export function OffersPreview() {
     <p className="ub-meta">{offers.loadedCount} آفر بارگذاری‌شده؛ شمار کل فروشگاه‌ها نیست.</p>
     {state.selectionNeedsReview && <p className="ub-warning">شرایط تغییر کرده‌اند؛ انتخاب قبلی نیازمند بررسی دوباره است.</p>}
     {offers.result.status === 'loading' && <Skeleton />}
-    {offers.result.status === 'error' && <ErrorCard message={offers.result.error} onRetry={offers.retry} />}
+    {offers.result.status === 'error' && <ErrorCard message={offers.result.error} failure={offers.result.failure} onRetry={offers.retry} />}
     {offers.result.status === 'success' && !offers.loadedCount && <Empty title="آفر منطبق ثبت نشده"><p>شرایط را تغییر دهید؛ موجودی زنده را از این نتیجه استنباط نمی‌کنیم.</p></Empty>}
     {offers.result.data?.items.map(offer => <OfferCard key={offer.offer_id} offer={offer} selected={state.selectedOffer?.offer_id === offer.offer_id}
       onSelect={() => dispatch({ type: 'selectOffer', value: offer })} onCompare={() => dispatch({ type: 'compareOffer', value: offer })} />)}

@@ -4,23 +4,9 @@ import type { Alternatives, AssistantTurn, CataloguePage, Filters, NeedState, Po
   Selection, FollowupOutcome, BatteryRequirement, OfferSort, ReviewTopic, CatalogueSearch } from './contracts.ts';
 import { parseAlternatives, parseBattery, parseCataloguePage, parseNeedState, parseOffers, parsePrepared, parseTurn } from './parsers.ts';
 import { bool, ContractError, identifier, integer, money, oneOf, pairedCoordinates, record } from './validation.ts';
+import { ApiError } from './errors.ts';
+export { ApiError } from './errors.ts';
 
-const errorMessages: Record<number, string> = {
-  404: 'این کالا یا آفر در کاتالوگ پیدا نشد؛ انتخاب را دوباره بررسی کنید.',
-  409: 'کالا، آفر و فروشگاه با هم منطبق نیستند؛ دوباره انتخاب کنید.',
-  422: 'ورودی یا شرایط جست‌وجو معتبر نیست؛ فیلترها را بررسی کنید.',
-  429: 'سقف درخواست دستیار رسیده است؛ جست‌وجوی مستقیم همچنان در دسترس است.',
-  503: 'سرویس فعلاً در دسترس نیست؛ دوباره تلاش کنید.',
-  504: 'پاسخ سرویس طول کشید؛ ارسال دوباره فقط با انتخاب شما انجام می‌شود.',
-};
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-  constructor(status: number, code = 'request_failed') {
-    super(errorMessages[status] ?? (status === 0 ? 'ارتباط برقرار نشد؛ اتصال را بررسی کنید.' : 'درخواست انجام نشد؛ دوباره تلاش کنید.'));
-    this.name = 'ApiError'; this.status = status; this.code = code;
-  }
-}
 async function request<T>(path: string, parse: (value: unknown) => T, signal: AbortSignal,
   body?: unknown): Promise<T> {
   let response: Response;
@@ -40,7 +26,12 @@ async function request<T>(path: string, parse: (value: unknown) => T, signal: Ab
   }
   let value: unknown;
   try { value = await response.json(); } catch { throw new ContractError(); }
-  return parse(value);
+  try { return parse(value); }
+  catch (error: unknown) {
+    // Legacy parsers may throw plain Error; a rejected response is still a contract failure.
+    if (error instanceof ContractError) throw error;
+    throw new ContractError();
+  }
 }
 function locationParams(position: Position | null): Record<string, number> {
   if (!position) return {};

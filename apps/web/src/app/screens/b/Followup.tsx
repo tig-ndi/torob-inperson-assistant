@@ -61,7 +61,7 @@ export function FollowupScreen() {
       <h3 id="uv-draft-title">پیش‌نویس پیگیری</h3>
       <p className="ub-meta">پیش‌نویس پرسش موجودی/قیمت روز است و ارسال نمی‌شود. این عملیات هیچ تأیید موجودی یا پاسخ فروشنده‌ای تولید نمی‌کند.</p>
       {draftBusy && <><Skeleton /><Button tone="ghost" onClick={followup.cancel}>لغو درخواست پیش‌نویس</Button></>}
-      {followup.draft.status === 'error' && <ErrorCard message={followup.draft.error} onRetry={() => void followup.prepare(selection)} />}
+      {followup.draft.status === 'error' && <ErrorCard message={followup.draft.error} failure={followup.draft.failure} onRetry={() => void followup.prepare(selection)} />}
       {!prepared && !draftBusy && <Button onClick={() => void followup.prepare(selection)}>ساخت پیش‌نویس ارسال‌نشده</Button>}
       {prepared && <article className="uv-draft">
         <div className="uv-draft-badges"><Badge tone="warning">پیش‌نویس ارسال‌نشده</Badge><Badge>کانال تماس ندارد</Badge>
@@ -93,7 +93,7 @@ export function FollowupScreen() {
         </Button>
         {reportBusy && <Button tone="ghost" onClick={followup.cancel}>لغو درخواست جایگزین</Button>}
       </div>
-      {followup.alternatives.status === 'error' && !followup.pageMode && <ErrorCard message={followup.alternatives.error}
+      {followup.alternatives.status === 'error' && !followup.pageMode && <ErrorCard message={followup.alternatives.error} failure={followup.alternatives.failure}
         onRetry={() => void followup.report(selection, outcome, source)} />}
       {alternatives && <div className="uv-alternatives" aria-live="polite">
         <div className="uv-alternatives-head">
@@ -120,9 +120,12 @@ export function FollowupScreen() {
             dispatch({ type: 'plan', primary: offer });
             dispatch({ type: 'navigate', screen: 'trip' });
           }} />)}
-        {followup.alternatives.status === 'error' && followup.pageMode && <ErrorCard message={followup.alternatives.error}
+        {followup.alternatives.status === 'error' && followup.pageMode && <ErrorCard message={followup.alternatives.error} failure={followup.alternatives.failure}
           onRetry={!stale ? () => void followup.more(selection) : undefined} />}
-        {alternatives.alternatives.has_more ? <Button tone="secondary" disabled={stale || reportBusy}
+        {followup.alternatives.status === 'error' && followup.pageMode && !followup.alternatives.failure.retryable &&
+          <Button tone="secondary" disabled={reportBusy} onClick={() => void followup.report(selection, outcome, source)}>دریافت دوبارهٔ جایگزین‌ها از ابتدا</Button>}
+        {alternatives.alternatives.has_more ? <Button tone="secondary" disabled={stale || reportBusy ||
+          (followup.alternatives.status === 'error' && !followup.alternatives.failure.retryable)}
           onClick={() => void followup.more(selection)}>{reportBusy && followup.pageMode ? 'در حال دریافت جایگزین‌های بیشتر…' : 'جایگزین‌های بیشتر'}</Button>
           : alternatives.alternatives.items.length > 0 && <p className="ub-meta">پایان جایگزین‌های ثبت‌شده با این شرایط.</p>}
         {alternatives.alternatives.offset > 0 && <p className="ub-meta">ساعت‌های اعلامی هر صفحه هنگام دریافت همان صفحه ارزیابی شده‌اند؛ این اطلاعات تأیید زنده نیستند.</p>}
