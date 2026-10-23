@@ -22,6 +22,7 @@ export function CompareScreen() {
     <header>
       <h2>مقایسهٔ آفرهای همین محصول</h2>
       <p className="ub-meta">قیمت‌ها و ساعت‌های ثبت‌شده‌اند، نه موجودی یا تأیید فروشنده. هر آفر مستقل مقایسه می‌شود و چند آفر یک فروشگاه جدا می‌مانند.</p>
+      <p className="uv-note uv-compare-hint">در موبایل جدول را افقی بکشید تا ستون آفرهای دیگر دیده شود.</p>
     </header>
     <div className="uv-compare-scroll" role="region" aria-label="جدول مقایسهٔ آفرها" tabIndex={0}>
       <table className="uv-table">

@@ -60,13 +60,13 @@ for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932], [
     await expect(page.locator('.uv-shop')).toHaveCount(3);
     const first = page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first();
     const box = await first.boundingBox();
+    if (width === 320 || width === 390 || width === 1440) {
+      await page.screenshot({ path: path.join(qa, `stores-${width}-view.png`) });
+    }
     expect(box).not.toBeNull();
     expect(box.y).toBeLessThan(height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
-    if (width === 320 || width === 390 || width === 1440) {
-      await page.screenshot({ path: path.join(qa, `stores-${width}-view.png`) });
-    }
   });
 }
 
@@ -81,12 +81,12 @@ test('map pins stay in sync with the grouped list and never auto-select an offer
   await expect(pin).toHaveCount(1);
   await pin.click();
   await expect(page.locator('#uv-shop-s2')).toHaveClass(/is-focused/);
-  await expect(page.locator('.ub-offer.is-selected')).toHaveCount(0);
+  await expect(page.locator('.uv-card.is-selected')).toHaveCount(0);
   // Both offers of the clustered co-located shops remain reachable from the list.
-  await expect(page.locator('#uv-shop-s1 .ub-offer')).toHaveCount(2);
-  await expect(page.locator('#uv-shop-s4 .ub-offer')).toHaveCount(1);
+  await expect(page.locator('#uv-shop-s1 .uv-card')).toHaveCount(2);
+  await expect(page.locator('#uv-shop-s4 .uv-card')).toHaveCount(1);
   await page.locator('#uv-shop-s4').getByRole('button', { name: 'انتخاب این آفر', exact: true }).click();
-  await expect(page.locator('#uv-shop-s4 .ub-offer')).toHaveClass(/is-selected/);
+  await expect(page.locator('#uv-shop-s4 .uv-card')).toHaveClass(/is-selected/);
   await page.screenshot({ path: path.join(qa, 'map-sync-390.png') });
 });
 
@@ -100,7 +100,7 @@ test('a named map action reveals the mobile map without losing the selection', a
   await page.getByRole('button', { name: 'نمایش روی نقشه' }).click();
   await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'فهرست کامل', exact: true })).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('.ub-offer.is-selected')).toHaveCount(1);
+  await expect(page.locator('.uv-card.is-selected')).toHaveCount(1);
   await expect(page.locator('.um-cluster.is-selected')).toHaveCount(1);
   await expect(page.locator('.leaflet-tile-loaded').first()).toBeVisible();
   expect(errors).toEqual([]);
@@ -122,6 +122,24 @@ test('co-located shops stay clustered and every member is reachable without fake
   await page.screenshot({ path: path.join(qa, 'map-spiderfy-390.png') });
 });
 
+test('map controls switch theme, locate and reveal the seller list', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await openStores(page);
+  await showMap(page);
+  await page.getByRole('button', { name: 'تغییر به تم روشن' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'light');
+  await expect(page.locator('.uv-visit')).toHaveAttribute('data-theme-mode', 'light');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(qa, 'stores-light-390.png') });
+  await page.getByRole('button', { name: 'تغییر به تم تیره' }).click();
+  await page.getByRole('button', { name: 'موقعیت من' }).click();
+  await expect(page.locator('.ub-toast')).toContainText('موقعیت دریافت نشد');
+  await page.getByRole('button', { name: 'نمایش فهرست فروشندگان' }).click();
+  await expect(page.locator('.um-map')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'نقشه و فهرست', exact: true })).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('tile failure is visible and the seller list still completes a selection', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, { tiles: 'fail' });
@@ -131,8 +149,8 @@ test('tile failure is visible and the seller list still completes a selection', 
   await expect(page.getByRole('button', { name: 'تلاش دوباره برای نقشه' })).toBeVisible();
   const second = page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).nth(1);
   await second.click();
-  await expect(page.locator('.ub-offer.is-selected')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'پیگیری این آفر' })).toBeVisible();
+  await expect(page.locator('.uv-card.is-selected')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'پیگیری', exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(qa, 'map-tile-failure-390.png') });
 });
 
@@ -142,8 +160,8 @@ test('a second offer keeps its offer_id through prepare, back and return', async
   await mockApi(page, { onPrepare: body => preparedBodies.push(body) });
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).nth(1).click();
-  await expect(page.locator('#uv-shop-s1 .ub-offer').nth(1)).toHaveClass(/is-selected/);
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await expect(page.locator('#uv-shop-s1 .uv-card').nth(1)).toHaveClass(/is-selected/);
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   expect(preparedBodies).toHaveLength(1);
@@ -154,8 +172,8 @@ test('a second offer keeps its offer_id through prepare, back and return', async
   expect(await page.locator('a[href^="tel:"]').count()).toBe(0);
   expect(await page.locator('a[href*="wa.me"], a[href*="whatsapp"]').count()).toBe(0);
   await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
-  await expect(page.locator('#uv-shop-s1 .ub-offer').nth(1)).toHaveClass(/is-selected/);
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await expect(page.locator('#uv-shop-s1 .uv-card').nth(1)).toHaveClass(/is-selected/);
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   expect(preparedBodies).toHaveLength(1);
 });
@@ -164,8 +182,9 @@ test('comparison scrolls locally, does not create a trip, and one shop can be a 
   await page.setViewportSize({ width: 320, height: 568 });
   await mockApi(page);
   await openStores(page);
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(0).click();
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(1).click();
+  await page.locator('#uv-shop-s1 .uv-card').first().getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.locator('#uv-shop-s2 .uv-card').getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.screenshot({ path: path.join(qa, 'stores-tray-320.png') });
   await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
   const region = page.getByRole('region', { name: 'جدول مقایسهٔ آفرها' });
   await expect(region).toBeVisible();
@@ -192,8 +211,8 @@ test('a non-first offer can become the destination from comparison', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
   await openStores(page);
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(0).click();
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(2).click();
+  await page.locator('#uv-shop-s1 .uv-card').first().getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.locator('#uv-shop-s2 .uv-card').getByRole('button', { name: 'مقایسه', exact: true }).click();
   await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
   const secondColumn = page.locator('.uv-table tbody tr').last().locator('td').nth(1);
   await secondColumn.getByRole('button', { name: 'برنامهٔ مراجعه' }).click();
@@ -207,7 +226,7 @@ test('simulated outcome uses alternatives, survives a return, and labels the new
   await mockApi(page, { onAlternatives: body => requests.push(body) });
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await page.getByLabel('کالا موجود نبود').check();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();
   await expect(page.getByRole('heading', { name: 'جایگزین‌های همین محصول' })).toBeVisible();
@@ -218,7 +237,7 @@ test('simulated outcome uses alternatives, survives a return, and labels the new
   await expect(page.getByText('۲ آفر ثبت‌شده از فروشگاه گزارش‌شده')).toBeVisible();
   expect(await page.locator('a[href^="tel:"]').count()).toBe(0);
   await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'جایگزین‌های همین محصول' })).toBeVisible();
   expect(requests).toHaveLength(1);
   await page.getByRole('button', { name: 'ثبت این جایگزین به‌عنوان مقصد' }).click();
@@ -234,7 +253,7 @@ test('no_alternatives is explicit and never raises budget or radius', async ({ p
   await mockApi(page, { alternativesResponse: body => noAlternatives(offer('o1'), body.outcome, body.outcome_source) });
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();
   await expect(page.getByRole('heading', { name: 'جایگزینی با این شرایط نیست' })).toBeVisible();
   await expect(page.getByText('بودجه یا شعاع به‌طور خودکار افزایش داده نشد؛')).toBeVisible();
@@ -270,7 +289,7 @@ test('changed filters flag the old selection and only a visible offer can be con
   await dialog.getByRole('button', { name: 'اعمال شرایط' }).click();
   await expect(page.getByText('این آفر در صفحهٔ بارگذاری‌شدهٔ فعلی دیده نمی‌شود')).toBeVisible();
   await expect(page.getByRole('button', { name: 'تأیید همین انتخاب' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'پیگیری این آفر' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'پیگیری', exact: true })).toHaveCount(0);
   await page.screenshot({ path: path.join(qa, 'selection-review-390.png') });
 });
 
@@ -350,7 +369,7 @@ test('cancel stops a pending draft and leaves no unsent-success claim', async ({
   });
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('در حال دریافت…')).toBeVisible();
   await page.getByRole('button', { name: 'لغو درخواست پیش‌نویس' }).click();
@@ -378,11 +397,12 @@ test('unknown hours, missing price and an exact large price stay distinct', asyn
   await openStores(page);
   await expect(page.getByRole('button', { name: 'انتخاب این آفر', exact: true })).toHaveCount(2);
   await expect(page.getByText('ساعت نامشخص').first()).toBeVisible();
-  const prices = await page.locator('.uv-shop-offers .ub-price').allTextContents();
+  const prices = await page.locator('.uv-card .ub-price').allTextContents();
   expect(prices[0]).toContain('قیمت ثبت نشده');
   expect(prices[1]?.replace(/[^۰-۹]/g, '')).toBe('۹۰۰۷۱۹۹۲۵۴۷۴۰۹۹۳');
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(0).click();
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(1).click();
+  const oddCards = page.locator('.uv-card');
+  await oddCards.nth(0).getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await oddCards.nth(1).getByRole('button', { name: 'مقایسه', exact: true }).click();
   await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
   await expect(page.locator('.uv-table')).toContainText('قیمت ثبت نشده');
   expect((await page.locator('.uv-table .ub-price').nth(1).textContent())?.replace(/[^۰-۹]/g, '')).toBe('۹۰۰۷۱۹۹۲۵۴۷۴۰۹۹۳');
@@ -401,8 +421,8 @@ test('dark theme keeps seller cards and comparison readable', async ({ page }) =
   await page.getByRole('button', { name: 'دیدن فروشندگان' }).click();
   await expect(page.getByRole('button', { name: 'انتخاب این آفر', exact: true })).toHaveCount(4);
   await page.screenshot({ path: path.join(qa, 'stores-dark-390.png') });
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(0).click();
-  await page.getByRole('button', { name: 'مقایسه', exact: true }).nth(1).click();
+  await page.locator('#uv-shop-s1 .uv-card').first().getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.locator('#uv-shop-s2 .uv-card').getByRole('button', { name: 'مقایسه', exact: true }).click();
   await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
   await expect(page.locator('.uv-compare-scroll')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -424,12 +444,12 @@ test('real snapshot B path: offers, unsent follow-up and alternatives without mo
     if (await card.count() === 0) break;
     await card.getByRole('button', { name: 'دیدن فروشندگان' }).click();
     await page.waitForTimeout(400);
-    found = await page.locator('.ub-offer').count() > 0;
+    found = await page.locator('.uv-card').count() > 0;
     if (!found) await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
   }
   expect(found).toBe(true);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
-  await page.getByRole('button', { name: 'پیگیری این آفر' }).click();
+  await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();

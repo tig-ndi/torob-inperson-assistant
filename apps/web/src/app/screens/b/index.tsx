@@ -6,6 +6,7 @@ import { StoresScreen } from './Stores.tsx';
 import { CompareScreen } from './Compare.tsx';
 import { FollowupScreen } from './Followup.tsx';
 import { TripScreen } from './Trip.tsx';
+import { JourneySteps } from './JourneySteps.tsx';
 import './b.css';
 
 /** Stable mount point. B owns this file, screens/b and map. */
@@ -28,9 +29,13 @@ export function VisitScreen({ screen }: { screen: Screen }) {
     <p>آفرها همیشه برای یک محصول مشخص‌اند؛ انتخاب محصول در بخش کشف/نتایج انجام می‌شود.</p>
     <Button onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>رفتن به انتخاب محصول</Button>
   </Empty>;
-  if (screen === 'stores') return <StoresScreen />;
-  if (screen === 'compare') return <CompareScreen />;
-  if (screen === 'contact') return <FollowupScreen key={state.selectedOffer?.offer_id ?? 'no-offer'} />;
-  if (screen === 'trip') return <TripScreen />;
-  return <Empty title="این صفحه متعلق به بخش فروشندگان نیست"><p>صفحهٔ انتخاب کالا و نتایج در بخش A قرار دارد.</p></Empty>;
+  return <div className="uv-visit" data-theme-mode={state.theme} data-screen={screen}>
+    <JourneySteps />
+    <div className="uv-visit-screen">
+      {screen === 'stores' ? <StoresScreen /> : screen === 'compare' ? <CompareScreen />
+        : screen === 'contact' ? <FollowupScreen key={state.selectedOffer?.offer_id ?? 'no-offer'} />
+          : screen === 'trip' ? <TripScreen />
+            : <Empty title="این صفحه متعلق به بخش فروشندگان نیست"><p>صفحهٔ انتخاب کالا و نتایج در بخش A قرار دارد.</p></Empty>}
+    </div>
+  </div>;
 }

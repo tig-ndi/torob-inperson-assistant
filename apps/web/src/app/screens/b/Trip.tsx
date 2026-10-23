@@ -2,6 +2,7 @@ import { useWorkspace } from '../../base/state/Workspace.tsx';
 import type { Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, FreshTag, OpenBadge, Price, SimBadge } from '../../base/ui/primitives.tsx';
+import { ClockIcon, CreditCardIcon, MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { alternativeOrigin, mapLink, shopFacts, tripAlternatives } from './model.ts';
 import { revealMapOnMobile } from './revealMap.ts';
 import { ReviewNotice } from './ReviewNotice.tsx';
@@ -86,13 +87,19 @@ function TripCard({ role, offer, source, onRemove }: {
       <OpenBadge offer={offer} /><CreditBadge offer={offer} /><Badge>موجودی تأییدنشده</Badge>
       {source && <Badge tone="warning">منبع انتخاب: {source === 'simulated' ? 'شبیه‌سازی' : 'گزارش خودم'}</Badge>}
     </div>
+    {role === 'مقصد اصلی' && <div className="uv-metrics">
+      <div className="uv-metric"><MapPinIcon size={18} /><strong>{formatDistance(offer.direct_distance_meters)}</strong><span>فاصلهٔ هوایی</span></div>
+      <div className="uv-metric"><ClockIcon size={18} /><strong>{offer.opening_hours.status === 'unknown' ? 'نامشخص' : offer.opening_hours.status === 'declared_open' ? 'باز' : 'بسته'}</strong><span>ساعت اعلامی</span></div>
+      <div className="uv-metric"><CreditCardIcon size={18} /><strong>{offer.in_person_credit.status === 'matches_declared_terms' ? 'منطبق' : offer.in_person_credit.status === 'unknown' ? 'نامشخص' : 'نامنطبق'}</strong><span>اعتبار اعلامی</span></div>
+    </div>}
+    {role === 'مقصد اصلی' && <Indoor facts={facts} />}
     <p className="ub-meta">{HOURS_REASON_TEXT[offer.opening_hours.reason]}{offer.opening_hours.status === 'unknown' ? '؛ ساعت نامعلوم به معنی بسته‌بودن نیست.' : ''}</p>
     <p className="ub-meta">آدرس ثبت‌شده: {facts.address || 'ثبت نشده'}</p>
-    <dl className="uv-evidence">
+    {role !== 'مقصد اصلی' && <dl className="uv-evidence">
       <Evidence label="پاساژ" part={facts.mall} />
       <Evidence label="طبقه" part={facts.floor} />
       <Evidence label="واحد" part={facts.unit} />
-    </dl>
+    </dl>}
     <FreshTag timestamp={offer.last_price_changed_at} />
     <p className="ub-meta">فاصلهٔ هوایی: <bdi>{formatDistance(offer.direct_distance_meters)}</bdi> · مسیر خیابانی محاسبه نشده است.</p>
     {offer.opening_hours.today_shifts.length > 0 && <p className="ub-meta">بازه‌های اعلام‌شدهٔ امروز: {offer.opening_hours.today_shifts.map(shift =>
@@ -119,4 +126,19 @@ function Evidence({ label, part }: { label: string; part: { value: string; match
     {part ? <>{part.value}<small className="uv-small">شاهد در متن آدرس: «{part.matchedText}»</small></>
       : <span className="uv-small">در متن آدرس مشخص نیست</span>}
   </dd></div>;
+}
+
+function Indoor({ facts }: { facts: ReturnType<typeof shopFacts> }) {
+  return <section className="uv-indoor" aria-label="اطلاعات پاساژ از متن آدرس">
+    <div className="uv-indoor-head">
+      <strong>{facts.mall ? `داخل ${facts.mall.value}` : 'پاساژ در متن آدرس مشخص نیست'}</strong>
+      <Badge>استخراج از متن آدرس</Badge>
+    </div>
+    <div className="uv-indoor-chips">
+      {facts.floor && <span>طبقه {facts.floor.value}</span>}
+      {facts.unit && <span>واحد {facts.unit.value}</span>}
+      {!facts.floor && !facts.unit && <span>طبقه/واحد در آدرس مشخص نیست</span>}
+    </div>
+    <p className="uv-small">این اطلاعات فقط از متن آدرس ثبت‌شده استخراج شده‌اند؛ نقشهٔ داخلی، تعداد کل مغازه‌ها یا تأیید ساختمان را نشان نمی‌دهند.</p>
+  </section>;
 }
