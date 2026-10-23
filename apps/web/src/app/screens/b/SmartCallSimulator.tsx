@@ -11,6 +11,7 @@ interface SmartCallSimulatorProps {
   productTitle?: string | null;
   onOutcomeResolved: (outcome: FollowupOutcome, source: 'simulated') => void;
   onConfirmedAvailable: () => void;
+  canPlanVisit: boolean;
 }
 
 export function SmartCallSimulator({
@@ -18,6 +19,7 @@ export function SmartCallSimulator({
   productTitle,
   onOutcomeResolved,
   onConfirmedAvailable,
+  canPlanVisit,
 }: SmartCallSimulatorProps) {
   const safeProductTitle = productTitle || 'کالای مورد نظر';
   const [callState, setCallState] = useState<'idle' | 'ringing' | 'connected' | 'completed'>('idle');
@@ -172,7 +174,7 @@ export function SmartCallSimulator({
       {callState === 'idle' && (
         <div className="uv-call-idle">
           <p className="uv-call-desc">
-            دستیار هوشمند به‌صورت شبیه‌سازی‌شده با فروشگاه تماس گرفته و موجودی کالا و قیمت قطعی روز را استعلام می‌کند:
+            دستیار هوشمند به‌صورت شبیه‌سازی‌شده با فروشگاه تماس گرفته و فرایند استعلام موجودی و قیمت را تمرین می‌کند:
           </p>
 
           <div className="uv-scenario-selector">
@@ -183,7 +185,7 @@ export function SmartCallSimulator({
               onChange={e => setScenario(e.target.value as CallScenario)}
             >
               <option value="out_of_stock">۱. اعلام عدم موجودی (آزمون استعلام و پیشنهاد جایگزین)</option>
-              <option value="available">۲. تأیید موجودی و قیمت قطعی (مراجعه حضوری)</option>
+              <option value="available">۲. پاسخ مثبت فرضی (تمرین برنامهٔ مراجعه)</option>
               <option value="no_answer">۳. عدم پاسخگویی فروشگاه (بوق اشغال/بی‌پاسخ)</option>
               <option value="closed">۴. فروشگاه تعطیل یا خارج از ساعت کاری</option>
             </select>
@@ -263,12 +265,12 @@ export function SmartCallSimulator({
 
           {scenario === 'available' && (
             <div className="uv-result-box uv-result-box--success">
-              <h5>✅ موجودی و شرایط خرید تأیید شد</h5>
+              <h5>پاسخ مثبت شبیه‌سازی شد؛ موجودی واقعی تأیید نشده</h5>
               <p className="ub-meta">
                 فروشگاه کالا را با قیمت اعلامی موجود دارد. می‌توانید مستقیماً به مرحلهٔ مراجعه رفته و برنامه سفر خود را ثبت کنید.
               </p>
-              <Button onClick={onConfirmedAvailable}>
-                ثبت قطعی و رفتن به برنامهٔ مراجعه
+              <Button disabled={!canPlanVisit} onClick={onConfirmedAvailable}>
+                ساخت برنامه از نتیجهٔ شبیه‌سازی
               </Button>
             </div>
           )}

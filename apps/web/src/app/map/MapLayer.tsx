@@ -10,6 +10,8 @@ import { useWorkspace } from '../base/state/Workspace.tsx';
 import { Button } from '../base/ui/primitives.tsx';
 import { CloseIcon, CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
 import { useMapView } from '../base/shell/MapView.tsx';
+import { offerQueryKey } from '../base/state/model.ts';
+import { formatMoney } from '../base/domain/presentation.ts';
 
 import { formatDistance } from '../../api.ts';
 
@@ -128,10 +130,11 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     const animate = !reduced.current;
     const instance = L.map(element, {
       center: TEHRAN, zoom: 11, minZoom: 8, maxZoom: 19, zoomControl: true, keyboard: true,
-      scrollWheelZoom: false, zoomAnimation: animate, fadeAnimation: animate, markerZoomAnimation: animate,
+      scrollWheelZoom: window.matchMedia('(pointer: fine)').matches, zoomAnimation: animate, fadeAnimation: animate, markerZoomAnimation: animate,
     });
     map.current = instance;
-    const tileLayer = L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION, crossOrigin: true });
+    // The map is now the persistent workspace, including before a product exists.
+    const tileLayer = L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION, crossOrigin: true }).addTo(instance);
     tileLayer.on('tileerror', () => setTileFailed(true));
     tiles.current = tileLayer;
     const group = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 64,
@@ -259,8 +262,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       marker.bindTooltip(positionTooltip);
       marker.addTo(layer);
       if (radiusKm !== null && Number.isFinite(radiusKm) && radiusKm > 0) {
-        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: 'var(--um-route-color)', weight: 1,
-          fillColor: 'var(--um-route-color)', fillOpacity: 0.05, dashArray: '5 9', interactive: false }).addTo(layer);
+        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: 'var(--um-radius-color, #9564e8)', weight: 2,
+          fillColor: 'var(--um-radius-color, #9564e8)', fillOpacity: 0.14, dashArray: '5 9', interactive: false }).addTo(layer);
       }
     }
     const destination = live.current.pins.find(pin => pin.id === selectedPinId);
@@ -323,10 +326,17 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
   };
   const legend = userPosition && pins.some(pin => pin.id === selectedPinId)
-    ? 'خط‌چین سرخ: فاصلهٔ هوایی · دایرهٔ قرمز: شعاع انتخابی'
-    : 'قیمت‌ها: فروشگاه‌های بارگذاری‌شده · دایرهٔ قرمز: شعاع انتخابی';
+    ? 'خط‌چین: فاصلهٔ مستقیم · دایرهٔ بنفش: شعاع انتخابی'
+    : 'قیمت‌های ثبت‌شده · دایرهٔ بنفش: شعاع انتخابی';
 
   const previewPin = previewPinId ? pins.find(p => p.id === previewPinId) : null;
+  const previewChoices = previewPin && state.loadedOffers?.key === offerQueryKey(state.product?.product_id ?? null, state.filters, state.position)
+    ? state.loadedOffers.page.items.filter(item => item.shop_id === previewPin.id && previewPin.offerIds.includes(item.offer_id)) : [];
+
+  const previewOffer = !state.selectionNeedsReview && state.selectedOffer?.shop_id === previewPin?.id
+    ? previewChoices.find(item => item.offer_id === state.selectedOffer?.offer_id)
+    : previewChoices.length === 1 ? previewChoices[0] : undefined;
+
   const closePreview = (restoreFocus = false) => {
     setPreviewPinId(null);
     if (restoreFocus) {
@@ -347,23 +357,38 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       </button>
     </div>
 
-    {previewPin && (
+    {previewPin && state.screen === 'stores' && (
       <div className="um-preview-region" style={{ ...padding,
         top: `var(--um-preview-top, ${padding.top}px)`,
         bottom: `var(--um-preview-bottom, ${padding.bottom}px)`,
         left: `max(${padding.left}px, var(--um-control-clearance))` }}>
-      <div className="um-preview-card" role="dialog" aria-label={`پیش‌نمایش فروشگاه ${previewPin.title || previewPin.label}`}
-        onKeyDown={event => {
-          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closePreview(true); }
-        }}>
-        <button type="button" className="um-preview-close" onClick={() => closePreview(true)} aria-label="بستن پیش‌نمایش"><CloseIcon size={18} /></button>
+        <div
+          className="um-preview-card"
+          role="dialog"
+          aria-label={`پیش‌نمایش فروشگاه ${previewPin.title || previewPin.label}`}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              closePreview(true);
+            }
+          }}
+        >
+          <button
+            type="button"
+            className="um-preview-close"
+            onClick={() => closePreview(true)}
+            aria-label="بستن پیش‌نمایش"
+          >
+            <CloseIcon size={18} />
+          </button>
         <div className="um-preview-content">
           <div className="um-preview-header">
             <h4 className="um-preview-title">{previewPin.title || 'فروشگاه'}</h4>
             {previewPin.address && <p className="um-preview-address">{previewPin.address}</p>}
           </div>
           <div className="um-preview-badges">
-            <span className="um-preview-price">{shortPrice(previewPin.label)} تومان</span>
+            <span className="um-preview-price">{!previewOffer && previewPin.minPrice !== null ? 'از ' : ''}{formatMoney(previewOffer ? previewOffer.price_toman : previewPin.minPrice ?? null)}</span>
             <span className={`um-status-pill um-status-pill--${previewPin.state}`}>
               {previewPin.state === 'declared_open' ? 'طبق برنامه باز' : previewPin.state === 'declared_closed' ? 'طبق برنامه بسته' : 'ساعت نامشخص'}
             </span>
@@ -376,14 +401,15 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
             <Button onClick={() => {
               closePreview();
               onPinSelect(previewPin.id);
-              const offer = state.loadedOffers?.page.items.find(o => o.shop_id === previewPin.id);
+              const offer = previewOffer;
               if (offer) {
                 dispatch({ type: 'selectOffer', value: offer });
                 dispatch({ type: 'navigate', screen: 'contact' });
               }
+              setPreviewPinId(null);
               showList();
             }}>
-              انتخاب این آفر و پیگیری
+              بررسی آفر و پیگیری
             </Button>
             <Button tone="secondary" onClick={() => {
               closePreview();
@@ -410,7 +436,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     </div>}
     {!pins.length && !tileFailed && <p className="um-empty-note" role="status">
       {visit ? 'برای این شرایط، پینی بارگذاری نشده است؛ فهرست فروشندگان مرجع است.'
-        : 'نقشه پس از انتخاب محصول و بارگذاری آفرهای فروشندگان نمایش داده می‌شود.'}
+        : 'برای دیدن فروشگاه‌ها، در گفت‌وگو یک کالا انتخاب کن.'}
     </p>}
     {pins.length > 0 && <p className="um-legend" aria-hidden="true">{legend}</p>}
   </section>;

@@ -23,7 +23,7 @@ export type WorkspaceState = {
   loadedOffers: { key: string; page: OfferPage } | null;
   focusedShopId: string | null;
   cameraIntent: { revision: number; kind: 'all' | 'user' | 'selection' } | null;
-  visitPlan: { primary: Offer; alternative: Offer | null } | null;
+  visitPlan: { primary: Offer; alternative: Offer | null; source?: 'simulated' | 'user_report' } | null;
   followups: Record<string, { prepared: PreparedFollowup | null; alternatives: Alternatives | null; alternativesSearch?: AlternativeSearch }>;
   theme: 'system' | 'light' | 'dark';
   notice: string | null;
@@ -73,7 +73,7 @@ export type WorkspaceAction =
   | { type: 'offersLoaded'; key: string; page: OfferPage }
   | { type: 'focusShop'; shopId: string }
   | { type: 'mapCamera'; kind: 'all' | 'user' | 'selection' }
-  | { type: 'plan'; primary: Offer; alternative?: Offer | null }
+  | { type: 'plan'; primary: Offer; alternative?: Offer | null; source?: 'simulated' | 'user_report' }
   | { type: 'prepared'; result: PreparedFollowup; expectedRevision: number }
   | { type: 'alternatives'; result: Alternatives; expectedRevision: number; search?: AlternativeSearch; base?: Alternatives }
   | { type: 'theme'; value: WorkspaceState['theme'] }
@@ -164,7 +164,12 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
           (action.alternative && (action.alternative.product_id !== action.primary.product_id || action.alternative.shop_id === action.primary.shop_id))) {
         return { ...state, notice: 'مقصد و جایگزین باید برای همان کالا و فروشگاه‌های متفاوت باشند.' };
       }
-      return { ...state, visitPlan: { primary: action.primary, alternative: action.alternative ?? null } };
+      if (!canPlanOffer(state, action.primary, 'primary') || (action.alternative && !canPlanOffer(state, action.alternative, 'alternative'))) {
+        return { ...state, notice: 'ابتدا آفر را با شرایط فعلی بازبینی کنید.' };
+      }
+      return { ...state, visitPlan: { primary: action.primary, alternative: action.alternative ?? null,
+        ...((action.source ?? (state.visitPlan?.primary.offer_id === action.primary.offer_id ? state.visitPlan.source : undefined))
+          ? { source: action.source ?? state.visitPlan?.source } : {}) } };
     case 'prepared': {
       if (action.expectedRevision !== state.revision || action.result.product.product_id !== state.product?.product_id) return state;
       const key = action.result.selected_offer.offer_id;
@@ -224,4 +229,21 @@ export function mergeOffers(previous: readonly Offer[], next: readonly Offer[]):
   const offers = new Map(previous.map(o => [o.offer_id, o]));
   for (const offer of next) offers.set(offer.offer_id, offer);
   return [...offers.values()];
+}
+
+/** New destinations require current source evidence; old saved destinations remain historical. */
+export function canPlanOffer(state: WorkspaceState, offer: Offer, role: 'primary' | 'alternative' = 'primary'): boolean {
+  if (offer.product_id !== state.product?.product_id) return false;
+  const same = (item: Offer | null | undefined) => item?.offer_id === offer.offer_id && item.shop_id === offer.shop_id && item.product_id === offer.product_id;
+  if (same(state.visitPlan?.[role])) return true;
+  if (state.selectionNeedsReview && same(state.selectedOffer)) return false;
+  const key = offerQueryKey(state.product.product_id, state.filters, state.position);
+  if (state.loadedOffers?.key === key && state.loadedOffers.page.items.some(same)) return true;
+  return Object.values(state.followups).some(entry => {
+    const search = entry.alternativesSearch, result = entry.alternatives;
+    return !!search && !!result && search.selection.offer_id === result.reported_offer_id &&
+      search.selection.shop_id === result.reported_shop_id && search.outcome === result.outcome.kind && search.source === result.outcome.source &&
+      offerQueryKey(search.selection.product_id, search.filters, search.position) === key &&
+      offer.shop_id !== result.reported_shop_id && result.alternatives.items.some(same);
+  });
 }

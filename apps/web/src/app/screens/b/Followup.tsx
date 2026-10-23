@@ -8,6 +8,7 @@ import { formatCount, OUTCOME_LABEL, SOURCE_LABEL, shopFacts, shopName } from '.
 import { ReviewNotice } from './ReviewNotice.tsx';
 import { alternativeSearchKey } from '../../base/state/alternativePages.ts';
 import { formatMoney } from '../../base/domain/presentation.ts';
+import { canPlanOffer } from '../../base/state/model.ts';
 import { SmartCallSimulator } from './SmartCallSimulator.tsx';
 
 const outcomes: FollowupOutcome[] = ['no_answer', 'closed', 'out_of_stock'];
@@ -48,6 +49,11 @@ export function FollowupScreen() {
   const prepared = saved?.prepared ?? null;
   const alternatives = saved?.alternatives ?? null;
   const selection = { product_id: selected.product_id, offer_id: selected.offer_id, shop_id: selected.shop_id };
+  const planVisit = (origin: 'simulated' | 'user_report') => {
+    if (!canPlanOffer(state, selected)) { dispatch({ type: 'notice', value: 'ابتدا آفر را با شرایط فعلی بازبینی کنید.' }); return; }
+    dispatch({ type: 'plan', primary: selected, source: origin });
+    dispatch({ type: 'navigate', screen: 'trip' });
+  };
   const draftBusy = followup.draft.status === 'loading';
   const reportBusy = followup.alternatives.status === 'loading';
 
@@ -110,6 +116,7 @@ export function FollowupScreen() {
       <section className="uv-panel-section" aria-label="تماس صوتی هوشمند">
         <SmartCallSimulator
           offer={selected}
+          canPlanVisit={canPlanOffer(state, selected)}
           productTitle={state.product.persian_title}
           onOutcomeResolved={(newOutcome, newSource) => {
             setOutcome(newOutcome);
@@ -117,8 +124,7 @@ export function FollowupScreen() {
             void followup.report(selection, newOutcome, newSource);
           }}
           onConfirmedAvailable={() => {
-            dispatch({ type: 'plan', primary: selected });
-            dispatch({ type: 'navigate', screen: 'trip' });
+            planVisit('simulated');
           }}
         />
       </section>
@@ -129,9 +135,9 @@ export function FollowupScreen() {
         <div className="uv-checklist-card">
           <h4>چک‌لیست طلایی قبل از حرکت به سمت فروشگاه:</h4>
           <ul className="uv-checklist">
-            <li><label><input type="checkbox" defaultChecked /> استعلام رنگ، ظرفیت و مدل دقیق کالا</label></li>
-            <li><label><input type="checkbox" defaultChecked /> استعلام گارانتی معتبر و پلمپ بودن جعبه</label></li>
-            <li><label><input type="checkbox" defaultChecked /> هماهنگی ساعت حضور متصدی در فروشگاه</label></li>
+            <li><label><input type="checkbox"  /> استعلام رنگ، ظرفیت و مدل دقیق کالا</label></li>
+            <li><label><input type="checkbox"  /> استعلام گارانتی معتبر و پلمپ بودن جعبه</label></li>
+            <li><label><input type="checkbox"  /> هماهنگی ساعت حضور متصدی در فروشگاه</label></li>
             <li><label><input type="checkbox" /> بررسی امکان پرداخت با کارت‌خوان یا اعتبار حضوری</label></li>
           </ul>
 
@@ -156,12 +162,12 @@ export function FollowupScreen() {
               <button
                 type="button"
                 className="uv-outcome-chip uv-outcome-chip--success"
+                disabled={!canPlanOffer(state, selected)}
                 onClick={() => {
-                  dispatch({ type: 'plan', primary: selected });
-                  dispatch({ type: 'navigate', screen: 'trip' });
+                  planVisit('user_report');
                 }}
               >
-                ✅ موجود بود و قیمت تأیید شد (ثبت مراجعه)
+                طبق گزارش من موجود بود؛ ساخت برنامهٔ مراجعه
               </button>
               <button
                 type="button"
