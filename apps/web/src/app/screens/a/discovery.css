@@ -207,3 +207,18 @@
   .ua-decide-actions .ub-button { flex: 1 1 auto; }
   .ua-need-row { grid-template-columns: minmax(70px, auto) minmax(0, 1fr); }
 }
+
+.ua-decide--start .ua-decide-form { order: -1; padding: 16px; gap: 10px; }
+.ua-decide--start .ua-status { font-size: 12px; }
+.ua-decide--start .ua-voice-entry { display: contents; }
+.ua-decide--start .uv-voice-launcher-btn { font-size: 12px; padding-inline: 10px; }
+.ua-decide--start .uv-voice-launcher-badge { display: none; }
+.ua-decide--start .ua-decide-form .ub-meta { font-size: 11px; }
+.ua-start-options .ua-start-welcome > p:last-child { font-size: 13px; }
+@media (max-width: 600px) {
+  .ua-start { gap: 16px; }
+  .ua-start h1 { font-size: 22px; }
+  .ua-decide--start .ua-decide-form { padding: 12px; }
+  .ua-decide--start .ua-decide-form textarea { min-height: 84px; }
+  .ua-decide--start .ua-decide-actions .ub-button { flex: initial; }
+}

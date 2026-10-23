@@ -32,3 +32,16 @@ test('a clarification resumes the conversation; a new conversation is not a new 
   state = workspaceReducer(state, { type: 'newConversation' });
   assert.equal(resumeScreen(state), 'stores');
 });
+
+test('an unsent need draft survives navigation without invalidating an in-flight turn', () => {
+  const initial = initialWorkspace();
+  let state = workspaceReducer(initial, { type: 'needDraft', value: 'گوشی برای عکاسی' });
+  assert.equal(state.revision, initial.revision);
+  assert.equal(resumeScreen(state), 'decide');
+  state = workspaceReducer(state, { type: 'navigate', screen: 'results' });
+  state = workspaceReducer(state, { type: 'navigate', screen: 'home' });
+  assert.equal(state.needDraft, 'گوشی برای عکاسی');
+  state = workspaceReducer(state, { type: 'newConversation' });
+  assert.equal(state.needDraft, '');
+  assert.equal(resumeScreen(state), null);
+});

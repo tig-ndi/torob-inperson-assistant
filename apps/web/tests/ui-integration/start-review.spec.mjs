@@ -19,7 +19,7 @@ for (const width of [320, 390, 1440]) {
     await page.route('**/api/products/p1/offers?**', route => route.fulfill({ json: offers([offer()]) }));
     await page.goto('/');
     await expect(page.locator('.um-map')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'کمک برای انتخاب', exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole('button', { name: 'بررسی نیاز', exact: true })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole('button', { name: 'ادامهٔ خرید', exact: true })).toHaveCount(0);
     await expect(page.getByText('دستیار انتخاب در تهران', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: /انتخاب موقعیت/ }).click();
