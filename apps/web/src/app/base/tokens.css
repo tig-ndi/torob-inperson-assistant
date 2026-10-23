@@ -365,18 +365,28 @@ bdi {
 }
 .ub-stepper button {
   display:flex;
-  gap:5px;
+  flex-direction:column;
+  position:relative;
+  gap:4px;
   align-items:center;
   justify-content:center;
   background:transparent;
   border:0;
   border-radius:8px;
   color:var(--ub-muted);
-  font-size:11px;
-  min-height:44px;
-  padding:4px
+  font-size:12px;
+  min-height:56px;
+  padding:8px 0 2px
 }
-.ub-stepper button span {
+.ub-stepper button::before {
+  content:'';
+  position:absolute;
+  inset:0 0 auto;
+  height:3px;
+  border-radius:99px;
+  background:var(--ub-line)
+}
+.ub-stepper button span:first-child {
   display:grid;
   place-items:center;
   background:var(--ub-soft);
@@ -385,10 +395,16 @@ bdi {
   height:20px;
   flex-shrink:0
 }
+.ub-stepper .ub-step-label { white-space:nowrap; line-height:1.5 }
 .ub-stepper button[aria-current] {
   color:var(--ub-brand);
   background:var(--ub-brand-soft)
 }
+.ub-stepper button[aria-current]::before { background:var(--ub-brand) }
+.ub-stepper button:disabled { opacity:1; cursor:default }
+.ub-stepper button:disabled span:first-child { border:1px dashed var(--ub-line) }
+.ub-panel-theme .ub-theme { font-size:0 }
+.ub-panel-theme select { font-size:12px; max-width:90px }
 .ub-panel-body {
   padding:16px;
   overflow:auto;
@@ -729,7 +745,7 @@ bdi {
     padding-inline:10px
   }
   .ub-stepper button {
-    font-size:10px;
+    font-size:11px;
     gap:3px
   }
   .ub-panel-top>strong {
@@ -743,6 +759,9 @@ bdi {
   }
 }
 @media(max-height:450px) {
+  .ub-stepper { padding-block:4px }
+  .ub-stepper button { min-height:44px; gap:1px; padding-top:6px }
+  .ub-stepper button span:first-child { width:16px; height:16px; font-size:10px }
   .ub-header {
     min-height:55px;
     padding-block:6px

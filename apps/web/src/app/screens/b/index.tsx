@@ -6,7 +6,6 @@ import { StoresScreen } from './Stores.tsx';
 import { CompareScreen } from './Compare.tsx';
 import { FollowupScreen } from './Followup.tsx';
 import { TripScreen } from './Trip.tsx';
-import { JourneySteps } from './JourneySteps.tsx';
 import { useResolvedTheme } from '../../base/state/useResolvedTheme.ts';
 import './b.css';
 
@@ -32,7 +31,6 @@ export function VisitScreen({ screen }: { screen: Screen }) {
     <Button onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>رفتن به انتخاب محصول</Button>
   </Empty>;
   return <div className="uv-visit" data-theme-mode={theme} data-screen={screen}>
-    <JourneySteps />
     <div className="uv-visit-screen">
       {screen === 'stores' ? <StoresScreen /> : screen === 'compare' ? <CompareScreen />
         : screen === 'contact' ? <FollowupScreen key={state.selectedOffer?.offer_id ?? 'no-offer'} />

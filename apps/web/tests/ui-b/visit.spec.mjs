@@ -213,10 +213,10 @@ test('comparison scrolls locally, does not create a trip, and one shop can be a 
   await page.keyboard.press('Tab');
   expect(await page.evaluate(() => Boolean(document.activeElement?.closest('.uv-compare-scroll')))).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const journey = page.getByRole('navigation', { name: 'مسیر خرید حضوری', exact: true });
-  await journey.getByRole('button', { name: /تأیید و مراجعه/ }).click();
-  await expect(page.getByRole('heading', { name: 'مقصدی انتخاب نشده' })).toBeVisible();
-  await journey.getByRole('button', { name: /فروشگاه‌های نزدیک/ }).click();
+  const journey = page.getByRole('navigation', { name: 'مسیر خرید', exact: true });
+  await expect(journey.getByRole('button', { name: /پیگیری و مراجعه/ })).toBeDisabled();
+  await expect(page.getByText('مقصد اصلی', { exact: true })).toHaveCount(0);
+  await journey.getByRole('button', { name: /فروشندگان/ }).click();
   await page.setViewportSize({ width: 320, height: 568 });
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'برنامهٔ مراجعه', exact: true }).click();
