@@ -1,5 +1,15 @@
 # ارزیابی و شواهد
 
+## حلقهٔ فوکوس عنوان نتایج — B1 | ۲۰۲۶-۱۰-۲۳
+
+مبنا main `f04d689` با tree تمیز (جز `.agents/`) و تأیید صریح انسان برای فقط B1. تغییر: یک قاعدهٔ CSS در `apps/web/src/app/screens/a/discovery.css` برای `.ua-results h2:focus` با حلقهٔ ۳px `var(--ub-focus)`، offset ۳px و radius ۶px؛ بدون `outline:none` و بدون تغییر `results.tsx`/`useResultsReturn.ts`/فوکوس کنترل‌ها. یک تست رگرسیون در `apps/web/tests/ui-a/results.spec.mjs` حلقهٔ روشن/تیره و دست‌نخورده‌بودن حلقهٔ SUMMARY را می‌سنجد.
+
+پیش از اصلاح، فوکوس برنامه‌ای H2 سالم بود و در اجرای تازه `:focus-visible` فعال نبود/outline دیده نمی‌شد؛ کادر مشکی گزارش اولیه یک نشانگر پیش‌فرض حالت‌وابسته بود، نه اختلال فوکوس. این تشخیص، S1-01 را در گزارش ممیزی به S3 تنزل داد.
+
+**اجراهای واقعی:** `npx playwright test tests/ui-a/results.spec.mjs tests/ui-a/return.spec.mjs` برابر **۱۸/۱۸ passed** در ۱۶٫۵ ثانیه (شامل تست تازه، ۳۲۰/۳۹۰/۹۶۰/۱۴۴۰ و بازگشت/اسکرول)؛ `npm run typecheck` موفق؛ `npm run build` موفق با هشدار از پیش موجود حجم chunk. بررسی بیرون‌مخزن با Vite 15174 (working tree) و API 18001 با snapshot فقط‌خواندنی: روشن `solid 3px rgb(35,94,174)`، تیره `solid 3px rgb(149,191,255)`، offset ۳px/radius ۶px در ۱۴۴۰ و ۳۹۰؛ Tab روی SUMMARY با همان حلقه؛ بازگشت به دکمهٔ «دیدن فروشندگان» با `scrollDelta = 0`؛ body روشن/تیره در discovery و visit مطابق overrideهای `b.css`. تصاویر `qa/b1-postfix-*` بیرون Git هستند.
+
+**محدودیت:** کل suite (۱۸۹ تست D43) اجرا نشد؛ فقط دو spec هدفمند و build/typecheck. دستگاه فیزیکی/صفحه‌خوان/زوم واقعی و مرورگر غیر Chromium بررسی نشد. Figma رندر/مقایسهٔ تصویری نشد. B1 عملکرد فوکوس را ترمیم نکرد (از قبل سالم بود) و شاهد چند آفر یک فروشگاه همچنان کد/تست تاریخی است، نه runtime تازه. commit محلی B1 (بدون push)؛ بدون push و بدون درخواست مدل واقعی.
+
 ## ورودی عمومی جدید — D43 | ۲۰۲۶-۱۰-۲۳
 
 مبنا main تمیز و push‌شدهٔ `9202406`، با تأیید صریح انسان. build/typecheck از طریق تست built-preview موفق؛ **۷۵/۷۵ واحد** و اجرای نهایی کامل `npm run test:e2e` برابر **۱۸۹/۱۸۹ Chromium** در ۲٫۶ دقیقه بدون skip/retry موفق. اجرای هدفمند پیش از آن ۷/۷ موفق بود؛ شکست توسعه/تغییر oracle ثبت نشد.

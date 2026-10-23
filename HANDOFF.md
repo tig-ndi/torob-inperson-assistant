@@ -1,5 +1,13 @@
 # تحویل جاری — اتصال A/B روی main؛ پذیرش نهایی UI باز است
 
+## B1 — حلقهٔ فوکوس عنوان نتایج | ۲۰۲۶-۱۰-۲۳
+
+با تأیید صریح انسان و فقط در محدودهٔ B1: یک قاعدهٔ محدود در `apps/web/src/app/screens/a/discovery.css` (`.ua-results h2:focus`) حلقهٔ ۳px از توکن `--ub-focus`، offset ۳px و radius ۶px می‌دهد؛ روشن `#235eae` و تیره `#95bfff`. `outline:none` استفاده نشد؛ قاعدهٔ focus-visible کنترل‌های تعاملی در `tokens.css:74-77`، فوکوس برنامه‌ای، بازگشت به کارت و اسکرول (`useResultsReturn.ts`) دست‌نخورده‌اند. یک تست رگرسیون در `apps/web/tests/ui-a/results.spec.mjs` اضافه شد.
+
+پیش از اصلاح مشخص شد فوکوس برنامه‌ای روی H2 سالم است و کادر مشکی ثبت‌شده یک outline پیش‌فرض و حالت‌وابسته بود، نه ازدست‌رفتن فوکوس؛ S1-01 در گزارش ممیزی به S3 تنزل یافت. اجراها: `npx playwright test tests/ui-a/results.spec.mjs tests/ui-a/return.spec.mjs` **۱۸/۱۸**؛ typecheck و build موفق. بررسی بیرون‌مخزن با Vite 15174 و API 18001/snapshot فقط‌خواندنی: حلقهٔ روشن `solid 3px rgb(35,94,174)`، تیره `solid 3px rgb(149,191,255)`، Tab روی SUMMARY با همان حلقه، بازگشت به دکمهٔ فروشندگان با `scrollDelta = 0`، body روشن/تیره در discovery و visit. کل suite، دستگاه/صفحه‌خوان/زوم واقعی و رندر Figma بررسی نشدند؛ هیچ مدل واقعی فراخوانی نشد.
+
+commit محلی B1 (بدون push)؛ هیچ push/PR/remote تغییر نکرد. بستهٔ دیگری تأیید نشده؛ C-01/C-02 بازند و B7 (handle تزئینی بدون drag) حذف شده است.
+
 ## انتقال ورودی اصلی — D43 | ۲۰۲۶-۱۰-۲۳
 
 با تأیید صریح انسان از main تمیز و push‌شدهٔ `9202406` انجام شد. `index.html` اکنون `src/app/main.tsx` را بارگذاری می‌کند؛ viewport-fit، metadata فارسی و همهٔ آیکون‌های اصلی حفظ‌اند. `/design.html` فقط با replace به `/` می‌رود و پیوند fallback دارد؛ query/hash قدیمی حمل نمی‌شود و تاریخچهٔ رفت‌وبرگشت وارد حلقه نمی‌شود. پیوند «رابط فعلی» و CSS بلااستفادهٔ آن از پوسته حذف شدند. هیچ state/فیلتر/داده یا منطق backend تغییر نکرد.

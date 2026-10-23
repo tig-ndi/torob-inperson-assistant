@@ -183,6 +183,28 @@ test('real snapshot results select the same product for the seller list without 
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 });
 
+test('the focused results heading uses the design-token ring in both themes without changing control focus', async ({ page }) => {
+  await setup(page);
+  await directSearch(page, 'گوشی');
+  const heading = page.getByRole('heading', { name: 'انتخاب محصول', exact: true });
+  await expect(heading).toBeFocused();
+  const ring = () => heading.evaluate(el => {
+    const style = getComputedStyle(el);
+    return { style: style.outlineStyle, width: style.outlineWidth, color: style.outlineColor, offset: style.outlineOffset };
+  });
+  expect(await ring()).toEqual({ style: 'solid', width: '3px', color: 'rgb(35, 94, 174)', offset: '3px' });
+  await page.getByRole('combobox', { name: 'تم نمایش' }).selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'dark');
+  await heading.focus();
+  expect(await ring()).toEqual({ style: 'solid', width: '3px', color: 'rgb(149, 191, 255)', offset: '3px' });
+  await page.keyboard.press('Tab');
+  const control = await page.evaluate(() => {
+    const style = getComputedStyle(document.activeElement);
+    return { tag: document.activeElement.tagName, outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}` };
+  });
+  expect(control).toEqual({ tag: 'SUMMARY', outline: 'solid 3px rgb(149, 191, 255)' });
+});
+
 for (const [width, height] of [[320, 568], [390, 844], [960, 844], [1440, 900]]) {
   test(`first product name, price and action are visible at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });

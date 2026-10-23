@@ -8,6 +8,7 @@
 .ua-start-option .ub-button { justify-self: start; max-width: 100%; }
 
 .ua-results { display: grid; gap: 14px; min-width: 0; }
+.ua-results h2:focus { outline: 3px solid var(--ub-focus); outline-offset: 3px; border-radius: 6px; }
 .ua-results h2, .ua-results h3, .ua-results h4, .ua-results p { margin: 0; }
 .ua-results p, .ua-results li { line-height: 1.85; overflow-wrap: anywhere; }
 .ua-result-context, .ua-result-explanation { display: grid; gap: 8px; padding-block: 10px; }
