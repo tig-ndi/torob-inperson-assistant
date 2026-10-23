@@ -173,13 +173,13 @@ class VisitAssistantTests(unittest.TestCase):
 
 
 class SettingsLimitTests(unittest.TestCase):
-    def test_approved_200_limit_is_valid_and_out_of_range_still_rejected(self):
+    def test_approved_500_limit_is_valid_and_out_of_range_still_rejected(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {}, clear=True):
             root = Path(directory)
-            for limit in (100, 200):
+            for limit in (100, 200, 500):
                 (root / '.env.local').write_text(f'TOROB_ASSISTANT_ENABLED=1\nTOROB_ASSISTANT_ATTEMPT_LIMIT={limit}\n')
                 self.assertEqual(AgentSettings.load(root).attempt_limit, limit)
-            for limit in (0, 201):
+            for limit in (-1, 0, 501):
                 (root / '.env.local').write_text(f'TOROB_ASSISTANT_ATTEMPT_LIMIT={limit}\n')
                 with self.assertRaises(ValueError):
                     AgentSettings.load(root)

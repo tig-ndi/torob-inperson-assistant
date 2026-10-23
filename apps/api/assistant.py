@@ -98,7 +98,7 @@ class AgentSettings:
             return os.environ.get(key, values.get(key, default))
         model = get('TOROB_ASSISTANT_MODEL', 'gpt-5.6-luna')
         limit = int(get('TOROB_ASSISTANT_ATTEMPT_LIMIT', '3'))
-        if model not in {'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 200:
+        if model not in {'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 500:
             raise ValueError("unsupported model or attempt limit")
         key = get('BOXAPI_API_KEY', '')
         if key and (not key.isascii() or len(key) > 1024 or any(c.isspace() for c in key)):
