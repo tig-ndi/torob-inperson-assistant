@@ -1,0 +1,33 @@
+.uv-voice-launcher-btn, .uv-voice-btn, .uv-voice-speaker-btn, .uv-voice-pill-btn,
+.uv-voice-btn-primary, .uv-voice-btn-subtle, .uv-voice-action-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 16px; border: 1px solid var(--ub-line); border-radius: 14px;
+  color: var(--ub-ink); background: var(--ub-surface); font: inherit; cursor: pointer;
+}
+.uv-voice-launcher-btn { max-width: 100%; background: var(--ub-brand-soft); border-color: var(--ub-brand); }
+.uv-voice-launcher-badge { font-size: 11px; padding: 2px 6px; border-radius: 8px; background: var(--ub-surface); }
+.uv-voice-launcher-mic { font-size: 20px; }
+.uv-voice-dialog { width: min(620px, calc(100vw - 24px)); padding: 20px; color: var(--ub-ink); background: var(--ub-surface); }
+.uv-voice-modal { display: flex; flex-direction: column; gap: 16px; color: var(--ub-ink); }
+.uv-voice-modal > .ub-meta { margin: 0; }
+.uv-voice-visualizer-section { text-align: center; }
+.uv-visualizer-canvas-container { overflow: hidden; border-radius: 20px; background: radial-gradient(ellipse, var(--ub-brand-soft), transparent 75%); }
+.uv-visualizer-canvas-container canvas { max-width: 100%; height: auto !important; margin-inline: auto; }
+.uv-voice-status-pill { margin: 8px 0 0; color: var(--ub-muted); font-size: 13px; }
+.uv-voice-body { display: flex; flex-direction: column; gap: 10px; }
+.uv-voice-body > label { font-size: 14px; color: var(--ub-ink); }
+.uv-voice-dialog textarea { display: block; width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--ub-line); border-radius: 12px; background: var(--ub-soft); color: var(--ub-ink); font: inherit; resize: vertical; }
+.uv-voice-dialog textarea::placeholder { color: var(--ub-muted); opacity: 1; }
+.uv-voice-actions-row, .uv-voice-modal-footer, .uv-voice-input-wrapper { display: flex; flex-wrap: wrap; gap: 8px; }
+.uv-voice-modal-footer { padding-top: 16px; border-top: 1px solid var(--ub-line); }
+.uv-voice-action-btn { flex: 1; }
+.uv-voice-btn-primary, .uv-voice-action-btn { color: var(--ub-on-brand); background: var(--ub-brand); border-color: var(--ub-brand); }
+.uv-voice-card { padding: 16px; border: 1px solid var(--ub-line); border-radius: 16px; background: var(--ub-soft); }
+.uv-voice-card-text { margin-block: 8px; line-height: 1.9; }
+.uv-voice-response-title { margin: 0; font-size: 16px; }
+.uv-voice-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+.uv-voice-stop-square { width: 14px; height: 14px; border-radius: 3px; background: currentColor; }
+.uv-voice-error { color: var(--ub-warning); font-size: 13px; line-height: 1.8; }
+.uv-voice-bars { display: inline-flex; align-items: center; gap: 3px; height: 18px; }
+.uv-voice-bars span { width: 3px; height: 12px; background: currentColor; border-radius: 2px; }
+@media (max-height: 600px) { .uv-voice-visualizer-section canvas { max-height: 85px; width: auto !important; } }

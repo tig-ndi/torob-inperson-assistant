@@ -1,11 +1,34 @@
-.ua-start { display: grid; gap: 16px; min-width: 0; }
+.ua-start { display: grid; gap: 24px; min-width: 0; }
 .ua-start h2, .ua-start h3, .ua-start p { margin: 0; }
 .ua-start h2 { font-size: 1.35rem; }
 .ua-start h3 { font-size: 1rem; }
 .ua-start p { line-height: 1.9; overflow-wrap: anywhere; }
-.ua-start-options { display: grid; gap: 12px; }
+.ua-start h1 { margin: 0; font-size: 26px; line-height: 1.6; }
+.ua-start .ua-start-title { font-size: clamp(28px, 3.2vw, 44px); font-weight: 700; line-height: 1.6; letter-spacing: -.6px; }
+.ua-start-option h2 { font-size: 16px; }
+.ua-start-intro { display: grid; align-content: center; gap: 16px; padding: 20px; border-radius: 20px; background: linear-gradient(135deg,var(--ub-brand-soft),var(--ub-soft)); }
+.ua-start-mark { display: grid; place-items: center; width: 86px; height: 86px; border-radius: 26px; color: var(--ub-brand); background: var(--ub-surface); transform: rotate(-8deg); }
+.ua-start-mark svg { transform: rotate(8deg); }
+.ua-start-journey { display: grid; gap: 18px; margin: 8px 0 0; padding-inline-start: 24px; color: var(--ub-brand); }
+.ua-start-journey li { padding-inline-start: 6px; }
+.ua-start-journey strong, .ua-start-journey span { display: block; }
+.ua-start-journey strong { color: var(--ub-ink); font-size: 14px; }
+.ua-start-journey span { color: var(--ub-muted); font-size: 13px; }
+.ua-start-options { display: grid; align-content: center; gap: 12px; min-width: 0; }
+.ua-start-welcome { display: grid; gap: 8px; }
+.ua-start-resume { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--ub-brand); border-radius: 16px; background: var(--ub-brand-soft); }
+.ua-start-resume .ub-button { justify-self: start; }
 .ua-start-option { display: grid; gap: 12px; padding-block: 16px; border-block-start: 1px solid var(--ub-line); }
 .ua-start-option .ub-button { justify-self: start; max-width: 100%; }
+@media(min-width:960px) {
+  .ua-start { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 40px; padding: 16px; }
+  .ua-start-intro { grid-column: 2; grid-row: 1; padding: 32px; }
+  .ua-start-options { grid-column: 1; grid-row: 1; }
+}
+@media(max-width:959px) {
+  .ua-start-intro { display: none; }
+  .ua-start-welcome .ua-eyebrow { display: none; }
+}
 
 .ua-results { display: grid; gap: 14px; min-width: 0; }
 .ua-results h2:focus { outline: 3px solid var(--ub-focus); outline-offset: 3px; border-radius: 6px; }
@@ -183,4 +206,19 @@
   .ua-decide-form, .ua-outcome, .ua-conditions { padding: 12px; }
   .ua-decide-actions .ub-button { flex: 1 1 auto; }
   .ua-need-row { grid-template-columns: minmax(70px, auto) minmax(0, 1fr); }
+}
+
+.ua-decide--start .ua-decide-form { order: -1; padding: 16px; gap: 10px; }
+.ua-decide--start .ua-status { font-size: 12px; }
+.ua-decide--start .ua-voice-entry { display: contents; }
+.ua-decide--start .uv-voice-launcher-btn { font-size: 12px; padding-inline: 10px; }
+.ua-decide--start .uv-voice-launcher-badge { display: none; }
+.ua-decide--start .ua-decide-form .ub-meta { font-size: 11px; }
+.ua-start-options .ua-start-welcome > p:last-child { font-size: 13px; }
+@media (max-width: 600px) {
+  .ua-start { gap: 16px; }
+  .ua-start h1 { font-size: 22px; }
+  .ua-decide--start .ua-decide-form { padding: 12px; }
+  .ua-decide--start .ua-decide-form textarea { min-height: 84px; }
+  .ua-decide--start .ua-decide-actions .ub-button { flex: initial; }
 }

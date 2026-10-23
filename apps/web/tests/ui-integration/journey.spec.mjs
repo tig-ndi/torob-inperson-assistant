@@ -68,7 +68,9 @@ for (const width of [390, 1440]) {
     await second.getByRole('button', { name: 'نمایش روی نقشه', exact: true }).click();
     await expect(page.locator('.um-map')).toBeVisible();
     await expect(page.locator('.ub-map')).toBeFocused();
-    await expect(page.getByRole('button', { name: 'تغییر به تم روشن' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'تم نمایش', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'تم نمایش', exact: true })).toHaveValue('system');
+    await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'dark');
     await page.screenshot({ path: `${qa}/journey-map-dark-${width}.png`, animations: 'disabled' });
     if (width < 960) {
       await page.getByRole('button', { name: 'نمایش فهرست فروشندگان' }).click();

@@ -49,6 +49,33 @@ async function showMap(page) {
   await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
 }
 
+test('compact comparison preserves two offers of one shop and follows the exact second offer', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const bodies = [];
+  await mockApi(page, { onPrepare: body => bodies.push(body) });
+  await openStores(page);
+  const cards = page.locator('#uv-shop-s1 .uv-card');
+  await cards.nth(0).getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await cards.nth(1).getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
+  const summary = page.getByRole('region', { name: 'خلاصهٔ گزینه‌های مقایسه' });
+  await expect(summary.getByRole('article')).toHaveCount(2);
+  await expect(summary.getByRole('article').nth(1)).toContainText('۱٬۲۰۰٬۰۰۰');
+  const boxes = await summary.getByRole('article').evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, y: element.getBoundingClientRect().y })));
+  expect(boxes[0].y).toBe(boxes[1].y);
+  expect(boxes[0].x).not.toBe(boxes[1].x);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: path.join(qa, 'compact-compare-320.png') });
+  await summary.getByRole('button', { name: 'انتخاب و پیگیری آفر ۲', exact: true }).click();
+  await page.getByLabel(/گزارش خودم از مراجعه/).check();
+  await expect(page.getByText('حالت گزارش شما — تأیید بیرونی نشده', { exact: true })).toBeVisible();
+  await expect(page.getByText('شبیه‌سازی — تماس واقعی انجام نشد', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
+  await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
+  expect(bodies).toEqual([{ product_id: 'p1', offer_id: 'o2', shop_id: 's1' }]);
+  await expect(page.getByText('مقصد اصلی', { exact: true })).toHaveCount(0);
+});
+
 for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932], [768, 1024], [768, 360],
   [959, 800], [960, 800], [1024, 768], [1440, 900], [1920, 1080]]) {
   test(`stores expose a first decidable offer at ${width}x${height}`, async ({ page }) => {
@@ -122,7 +149,7 @@ test('co-located shops stay clustered and every member is reachable without fake
   await page.screenshot({ path: path.join(qa, 'map-spiderfy-390.png') });
 });
 
-test('map controls switch theme, locate and reveal the seller list', async ({ page }) => {
+test('shell theme and map controls switch appearance, locate and reveal the seller list', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
@@ -130,12 +157,12 @@ test('map controls switch theme, locate and reveal the seller list', async ({ pa
   await expect(page.locator('.um-map')).toBeHidden();
   await page.getByRole('button', { name: 'نمایش همهٔ فروشگاه‌ها روی نقشه' }).click();
   await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
-  await page.getByRole('button', { name: 'تغییر به تم روشن' }).click();
+  await page.getByRole('combobox', { name: 'تم نمایش', exact: true }).selectOption('light');
   await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'light');
   await expect(page.locator('.uv-visit')).toHaveAttribute('data-theme-mode', 'light');
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(qa, 'stores-light-390.png') });
-  await page.getByRole('button', { name: 'تغییر به تم تیره' }).click();
+  await page.getByRole('combobox', { name: 'تم نمایش', exact: true }).selectOption('dark');
   await page.getByRole('button', { name: 'موقعیت من' }).click();
   await expect(page.locator('.ub-toast')).toBeVisible();
   await expect(page.locator('.ub-toast')).toContainText('موقعیت دریافت نشد');
@@ -213,10 +240,10 @@ test('comparison scrolls locally, does not create a trip, and one shop can be a 
   await page.keyboard.press('Tab');
   expect(await page.evaluate(() => Boolean(document.activeElement?.closest('.uv-compare-scroll')))).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const journey = page.getByRole('navigation', { name: 'مسیر خرید حضوری', exact: true });
-  await journey.getByRole('button', { name: /تأیید و مراجعه/ }).click();
-  await expect(page.getByRole('heading', { name: 'مقصدی انتخاب نشده' })).toBeVisible();
-  await journey.getByRole('button', { name: /فروشگاه‌های نزدیک/ }).click();
+  const journey = page.getByRole('navigation', { name: 'مسیر خرید', exact: true });
+  await expect(journey.getByRole('button', { name: /پیگیری و مراجعه/ })).toBeDisabled();
+  await expect(page.getByText('مقصد اصلی', { exact: true })).toHaveCount(0);
+  await journey.getByRole('button', { name: /فروشندگان/ }).click();
   await page.setViewportSize({ width: 320, height: 568 });
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'برنامهٔ مراجعه', exact: true }).click();

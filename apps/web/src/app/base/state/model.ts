@@ -6,6 +6,7 @@ export type WorkspaceState = {
   screen: Screen;
   navigation: Screen[];
   query: string;
+  needDraft: string;
   filters: Filters;
   position: Position | null;
   locationStatus: 'ask' | 'gps' | 'manual' | 'denied';
@@ -28,18 +29,35 @@ export type WorkspaceState = {
   notice: string | null;
 };
 export function initialWorkspace(): WorkspaceState {
-  return { revision: 0, screen: 'home', navigation: [], query: '',
+  return { revision: 0, screen: 'home', navigation: [], query: '', needDraft: '',
     filters: { maxPrice: null, radiusKm: null, openNowOnly: false, creditOnly: false, sort: 'price' },
     position: null, locationStatus: 'ask', needState: null, lastTurn: null, productResults: null, productResultsRequest: null, history: [],
     product: null, compareProducts: [], selectedOffer: null, selectionNeedsReview: false,
     compareOffers: [], loadedOffers: null, focusedShopId: null, cameraIntent: null,
     visitPlan: null, followups: {}, theme: 'system', notice: null };
 }
+
+export function resumeScreen(state: WorkspaceState): Screen | null {
+  const previous = state.navigation.filter(screen => screen !== 'home').at(-1);
+  if (previous === 'results' && state.productResults) return 'results';
+  if (previous === 'decide' && (state.needDraft.trim() || state.needState || state.lastTurn || state.history.length)) return 'decide';
+  if (previous === 'stores' && state.product) return 'stores';
+  if (previous === 'compare' && state.compareOffers.length >= 2) return 'compare';
+  if (previous === 'contact' && state.selectedOffer) return 'contact';
+  if (previous === 'trip' && state.visitPlan) return 'trip';
+  if (state.visitPlan) return 'trip';
+  if (state.selectedOffer) return 'contact';
+  if (state.product) return 'stores';
+  if (state.productResults) return 'results';
+  if (state.needDraft.trim() || state.needState || state.lastTurn || state.history.length) return 'decide';
+  return null;
+}
 export type WorkspaceAction =
   | { type: 'navigate'; screen: Screen }
   | { type: 'restoreNavigation'; screen: Screen; navigation: Screen[] }
   | { type: 'back' }
   | { type: 'query'; value: string }
+  | { type: 'needDraft'; value: string }
   | { type: 'filters'; value: Partial<Filters> }
   | { type: 'position'; value: Position }
   | { type: 'locationDenied' }
@@ -69,6 +87,7 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return action.screen === state.screen ? state : { ...state, screen: action.screen, navigation: [...state.navigation.slice(-19), state.screen] };
     case 'back':
       return { ...state, screen: state.navigation.at(-1) ?? 'home', navigation: state.navigation.slice(0, -1) };
+    case 'needDraft': return { ...state, needDraft: action.value.slice(0, 1000) };
     case 'query': return action.value === state.query ? state : { ...state, query: action.value, revision: state.revision + 1 };
     case 'filters': {
       const filters = { ...state.filters, ...action.value };
@@ -111,7 +130,7 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         selectionNeedsReview: state.selectedOffer !== null };
     }
     case 'newConversation':
-      return { ...state, needState: null, lastTurn: null, productResults: null, productResultsRequest: null, history: [], query: '', revision: state.revision + 1,
+      return { ...state, needState: null, lastTurn: null, productResults: null, productResultsRequest: null, history: [], needDraft: '', query: '', revision: state.revision + 1,
         notice: 'گفت‌وگوی تازه؛ بودجه و موقعیت فعلی حفظ شدند.' };
     case 'product': {
       if (state.product?.product_id === action.value.product_id) return { ...state, product: action.value };

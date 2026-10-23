@@ -10,7 +10,6 @@ import { useWorkspace } from '../base/state/Workspace.tsx';
 import { Button } from '../base/ui/primitives.tsx';
 import { CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
 import { useMapView } from '../base/shell/MapView.tsx';
-import { useResolvedTheme } from '../base/state/useResolvedTheme.ts';
 
 export type MapPin = {
   id: string;
@@ -45,15 +44,6 @@ function coordinates(value: Position) { return L.latLng(value.lat, value.lon); }
 function shortPrice(label: string) {
   return label.split(' · ')[0]!.replace(/^از\s+/, '').replace(/\s*تومان$/, '');
 }
-function ThemeIcon({ dark }: { dark: boolean }) {
-  return dark
-    ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </svg>
-    : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />
-    </svg>;
-}
 
 /** B's real map. The list stays the complete path when tiles or the map fail. */
 export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSelect, onPositionPick,
@@ -77,19 +67,16 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const [locating, setLocating] = useState(false);
   const { state, dispatch } = useWorkspace();
   const { showList } = useMapView();
-  const theme = useResolvedTheme();
   const visit = ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
-  const darkMode = theme === 'dark';
   pinCallback.current = onPinSelect;
   pickCallback.current = onPositionPick;
   live.current = { pins, userPosition, selectedPinId, padding };
 
   const paddingOptions = (animate: boolean) => {
-    const desktop = window.matchMedia('(min-width: 960px)').matches;
-    const panel = desktop ? Math.min(520, Math.max(380, window.innerWidth * 0.35)) + 24 : 20;
+    const inset = live.current.padding;
     return {
-      paddingTopLeft: L.point(padding.left + 18, padding.top + (desktop ? 92 : 16)),
-      paddingBottomRight: L.point(padding.right + panel, padding.bottom + 18),
+      paddingTopLeft: L.point(inset.left, inset.top),
+      paddingBottomRight: L.point(inset.right, inset.bottom),
       animate,
     };
   };
@@ -224,6 +211,15 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   }, [signature]);
 
   useEffect(() => {
+    const instance = map.current;
+    if (!instance || !container.current?.clientWidth || !container.current.clientHeight || !framed.current) return;
+    instance.invalidateSize({ pan: false });
+    const selected = live.current.pins.find(pin => pin.id === live.current.selectedPinId);
+    if (selected) instance.panInside(L.latLng(selected.lat, selected.lon), paddingOptions(false));
+    else frameAll(false);
+  }, [padding.top, padding.right, padding.bottom, padding.left]);
+
+  useEffect(() => {
     applySelection();
   }, [selectedPinId]);
 
@@ -308,10 +304,6 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     <div className="um-controls" role="group" aria-label="کنترل‌های نقشه">
       <button type="button" className="um-control" onClick={locate} disabled={locating} aria-label="موقعیت من" aria-busy={locating}>
         <CrosshairIcon size={20} />
-      </button>
-      <button type="button" className="um-control" onClick={() => dispatch({ type: 'theme', value: darkMode ? 'light' : 'dark' })}
-        aria-label={darkMode ? 'تغییر به تم روشن' : 'تغییر به تم تیره'}>
-        <ThemeIcon dark={darkMode} />
       </button>
       <button type="button" className="um-control um-list-control" onClick={showList} aria-label="نمایش فهرست فروشندگان">
         <StoreIcon size={20} />

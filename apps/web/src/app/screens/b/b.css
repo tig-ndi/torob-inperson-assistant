@@ -241,85 +241,6 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
   color: var(--ub-brand);
 }
 
-/* Figma-like journey header, desktop only; mobile keeps the shell stepper. */
-.uv-steps {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2px;
-  padding: 10px 12px 8px;
-  background: color-mix(in srgb, var(--ub-surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--ub-line);
-}
-
-.uv-step {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 4px;
-  min-height: 52px;
-  padding: 3px 2px;
-  border: 0;
-  background: transparent;
-  color: var(--ub-muted);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.uv-step::before {
-  content: '';
-  position: absolute;
-  top: 13px;
-  inset-inline: 0;
-  height: 1px;
-  background: var(--ub-line);
-  z-index: 0;
-}
-
-.uv-step:first-child::before { inset-inline-start: 50%; }
-.uv-step:last-child::before { inset-inline-end: 50%; }
-
-.uv-step-dot {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--ub-line);
-  background: var(--ub-surface);
-  color: var(--ub-muted);
-  font-size: 10px;
-}
-
-.uv-step[data-state=current] {
-  color: var(--ub-ink);
-}
-
-.uv-step[data-state=current] .uv-step-dot {
-  border-color: var(--ub-brand);
-  background: var(--ub-brand);
-  color: var(--ub-on-brand);
-  box-shadow: 0 0 0 4px var(--ub-brand-soft);
-}
-
-.uv-step[data-state=done] .uv-step-dot {
-  border-color: var(--ub-positive);
-  background: var(--ub-positive-soft);
-  color: var(--ub-positive);
-}
-
-.uv-step:focus-visible {
-  outline: 3px solid var(--ub-focus);
-  outline-offset: -2px;
-  border-radius: 10px;
-}
-
 .uv-shop-list {
   display: grid;
   gap: 12px;
@@ -928,10 +849,6 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
     background: var(--ub-surface);
   }
 
-  .ub-app[data-layout=visit] .ub-stepper {
-    display: none;
-  }
-
   .ub-app[data-layout=visit] .ub-search-area {
     position: fixed;
     top: 16px;
@@ -1000,9 +917,6 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
     border-top-color: var(--ub-line);
   }
 
-  .uv-steps {
-    border-radius: 26px 26px 0 0;
-  }
 
   .uv-visit-screen {
     padding: 14px 16px 92px;
@@ -1028,10 +942,6 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
   }
 
   .uv-product-head .uv-kicker {
-    display: none;
-  }
-
-  .uv-steps {
     display: none;
   }
 
@@ -1171,3 +1081,16 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
     padding: 6px;
   }
 }
+
+.uv-compare-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.uv-compare-option { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--ub-line); border-radius: 16px; background: var(--ub-surface); }
+.uv-compare-option h3, .uv-compare-option p, .uv-compare-option dl, .uv-compare-option dd { margin: 0; }
+.uv-compare-option h3 { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.uv-compare-option > .ub-price { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
+.uv-compare-option dl { display: grid; gap: 10px; font-size: 12px; }
+.uv-compare-option dt { color: var(--ub-muted); margin-bottom: 4px; }
+.uv-compare-option dd .ub-badge { white-space: normal; }
+.uv-compare-option > .ub-button { margin-top: auto; min-height: 44px; font-size: 12px; padding-inline: 8px; }
+.uv-compare-detail-title { margin: 8px 0 0; font-size: 14px; }
+.uv-source-details summary { cursor: pointer; min-height: 44px; align-content: center; font-size: 13px; color: var(--ub-muted); }
+@media (min-width: 960px) { .uv-compare-summary { gap: 8px; } }

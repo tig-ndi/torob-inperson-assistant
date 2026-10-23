@@ -51,10 +51,13 @@ export function FollowupScreen() {
           {selected.shop.name ? ` · ${selected.shop.location_label || selected.shop.address || 'موقعیت ثبت نشده'}` : ''}
           {selected.seller_title ? ` · ${selected.seller_title}` : ''}</p>
       </div>
-      <SimBadge />
+      {source === 'simulated' ? <SimBadge /> : <Badge tone="warning">حالت گزارش شما — تأیید بیرونی نشده</Badge>}
     </header>
-    <p className="uv-small">نام فروشگاه، نام نمایشی دیتاست است و هویت حقوقی یا تأییدشده را نشان نمی‌دهد.</p>
-    <p className="uv-note">شماره‌های دیتاست مصنوعی‌اند. این صفحه هیچ شماره، لینک تماس، واتساپ یا کانال پیام نمی‌سازد و هیچ تماس یا پیامی انجام نمی‌دهد. وضعیت بارگذاری و خطا مربوط به درخواست برنامه است، نه تماس با فروشنده.</p>
+    <p className="uv-note">شماره‌های دیتاست مصنوعی‌اند؛ تماس واقعی انجام نمی‌شود. پیش‌نویس ارسال نمی‌شود و موجودی یا قیمت روز را تأیید نمی‌کند.</p>
+    <details className="uv-source-details"><summary>منبع داده و محدودیت پیگیری</summary>
+      <p className="uv-small">نام فروشگاه، نام نمایشی دیتاست است و هویت حقوقی یا تأییدشده را نشان نمی‌دهد.</p>
+      <p className="ub-meta">این صفحه هیچ شماره، لینک تماس، واتساپ یا کانال پیام نمی‌سازد. وضعیت بارگذاری و خطا مربوط به درخواست برنامه است، نه تماس با فروشنده. شبیه‌سازی و گزارش شما هر دو تأیید بیرونی نشده‌اند.</p>
+    </details>
     <ReviewNotice />
 
     <section className="uv-panel-section" aria-labelledby="uv-draft-title" aria-busy={draftBusy}>
@@ -67,7 +70,9 @@ export function FollowupScreen() {
         <div className="uv-draft-badges"><Badge tone="warning">پیش‌نویس ارسال‌نشده</Badge><Badge>کانال تماس ندارد</Badge>
           <Badge>ارسال بیرونی انجام نشد</Badge></div>
         <p className="uv-draft-text">{prepared.draft.text}</p>
-        <ul className="uv-list">{prepared.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul>
+        {prepared.limitations.length > 0 && <details className="uv-source-details"><summary>محدودیت‌های این پیش‌نویس</summary>
+          <ul className="uv-list">{prepared.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul>
+        </details>}
         <p className="ub-meta">زمان ارزیابی ساعت‌ها: <bdi>{formatTehranDateTime(prepared.hours_evaluated_at)}</bdi></p>
       </article>}
     </section>

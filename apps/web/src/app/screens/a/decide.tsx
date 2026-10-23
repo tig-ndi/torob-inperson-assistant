@@ -9,6 +9,8 @@ import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
 import { assistantBlockReason } from '../../base/domain/errors.ts';
+import { VoiceAssistantModal, VoiceSpeakerButton } from '../../voice/index.ts';
+
 
 const numbers = new Intl.NumberFormat('fa-IR');
 type AssistantStatus = Awaited<ReturnType<typeof assistantStatus>>;
@@ -51,6 +53,12 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
     response.current?.focus({ preventScroll: true });
     response.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   }, [turn.request_id]);
+  const speechText = outcome.kind === 'question'
+    ? outcome.question
+    : outcome.summary
+      ? `${outcome.title}؛ ${outcome.summary}`
+      : outcome.title;
+
   return <section ref={response} tabIndex={-1} className={`ua-outcome ua-outcome--${outcome.kind}`} aria-labelledby="ua-outcome-title" aria-live="polite">
     <p className="ua-eyebrow">{outcome.kind === 'question' ? 'پرسش دستیار' : outcome.kind === 'results' ? 'خلاصهٔ نتیجه' : 'بدون نتیجه'}</p>
     <h3 id="ua-outcome-title">{outcome.title}</h3>
@@ -59,6 +67,9 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
       {outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.kind === 'empty' && <p>برای این درخواست، محصولی در پاسخ ثبت‌شده برنگشت.{outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.summary && <p className="ua-summary">{outcome.summary}</p>}
+    <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+      <VoiceSpeakerButton text={speechText} />
+    </div>
     {outcome.limitations.length > 0 && <div className="ua-limitations">
       <h4>محدودیت‌های پاسخ</h4>
       <ul>{outcome.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>
@@ -71,18 +82,31 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
   </section>;
 }
 
-export function DecideScreen() {
+export function DecideScreen({ start = false }: { start?: boolean }) {
   const { state, dispatch } = useWorkspace();
   const assistant = useAssistant();
   const status = useCommand<AssistantStatus>();
-  const [draft, setDraft] = useState('');
+  const draft = state.needDraft;
+  const setDraft = (value: string) => dispatch({ type: 'needDraft', value });
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [blockedFailure, setBlockedFailure] = useState<RequestFailure | null>(null);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
+  const sending = useRef(false);
+  const previousScreen = useRef(state.screen);
   const awaiting = useRef<{ text: string; previousTurnId: string | null } | null>(null);
+
+  useEffect(() => {
+    if (previousScreen.current === 'decide' && state.screen === 'home') {
+      assistant.cancel();
+      awaiting.current = null;
+    }
+    previousScreen.current = state.screen;
+  }, [state.screen, assistant.cancel]);
+
 
   useEffect(() => {
     mounted.current = true;
@@ -115,8 +139,8 @@ export function DecideScreen() {
     if (state.lastTurn?.request_id !== result.data.request_id) return;
     if (result.data.request_id === current.previousTurnId) return;
     awaiting.current = null;
-    setDraft(value => value.trim() === current.text ? '' : value);
-  }, [assistant.result, state.lastTurn]);
+    if (state.needDraft.trim() === current.text) dispatch({ type: 'needDraft', value: '' });
+  }, [assistant.result, state.lastTurn, state.needDraft, dispatch]);
 
   const refreshStatus = async (explicit = false) => {
     const failed = latestBlock.current;
@@ -130,20 +154,27 @@ export function DecideScreen() {
     }
   };
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text || pending || !canSend) return;
+  const send = async (value = draft): Promise<string | null> => {
+    const text = value.trim();
+    if (!text || pending || sending.current || !canSend) return null;
     let input;
     try { input = conversationInput(state, text); }
     catch (error: unknown) {
       setLocalError(error instanceof Error ? error.message : 'متن نیاز قابل ارسال نیست.');
-      return;
+      return null;
     }
     awaiting.current = { text, previousTurnId: state.lastTurn?.request_id ?? null };
     setLocalError(null);
     setNotice('');
-    await assistant.submit(input);
-    if (mounted.current) refreshStatus();
+    if (state.screen === 'home') dispatch({ type: 'navigate', screen: 'decide' });
+    sending.current = true;
+    let turn;
+    try { turn = await assistant.submit(input); }
+    finally { sending.current = false; }
+    if (mounted.current) void refreshStatus();
+    if (!turn) return null;
+    const outcome = assistantOutcome(turn);
+    return outcome.kind === 'question' ? outcome.question ?? null : [outcome.title, outcome.summary].filter(Boolean).join('. ');
   };
 
   const cancel = () => {
@@ -169,13 +200,25 @@ export function DecideScreen() {
     void send();
   };
 
+  const modalAssistantResponse = lastTurn ? {
+    title: assistantOutcome(lastTurn).title,
+    text: assistantOutcome(lastTurn).kind === 'question'
+      ? assistantOutcome(lastTurn).question!
+      : [assistantOutcome(lastTurn).title, assistantOutcome(lastTurn).summary].filter(Boolean).join('. '),
+    summary: assistantOutcome(lastTurn).summary ?? undefined,
+    hasResults: assistantOutcome(lastTurn).kind === 'results',
+    productCount: assistantOutcome(lastTurn).count ?? undefined,
+    onViewResults: () => dispatch({ type: 'navigate', screen: 'results' }),
+  } : null;
+
   const tone = availability.phase === 'ready' ? 'ready' : availability.phase === 'unknown' ? 'unknown'
     : availability.phase === 'checking' ? 'checking' : 'blocked';
-  return <section className="ua-decide" aria-labelledby="ua-decide-title">
-    <header className="ua-decide-head">
+  return <section className={`ua-decide${start ? ' ua-decide--start' : ''}`} aria-labelledby={start ? 'ua-start-title' : 'ua-decide-title'}>
+    {!start && <header className="ua-decide-head">
       <h2 id="ua-decide-title">نیازتان را بگویید</h2>
       <p>نیاز و کاربردتان را بنویسید؛ دستیار در صورت نیاز پرسش بعدی را همین‌جا می‌پرسد.</p>
-    </header>
+    </header>}
+
 
     <div className={`ua-status ua-status--${tone}`}>
       <p className="ua-status-text" role="status" aria-live="polite"><strong>وضعیت دستیار: </strong>
@@ -196,6 +239,21 @@ export function DecideScreen() {
         placeholder="مثلاً گوشی برای عکاسی می‌خواهم؛ سقف بودجه‌ام ۱۰ میلیون تومان است." />
       <div className="ua-decide-actions">
         <Button type="submit" disabled={pending || !canSend || !draft.trim()}><SparklesIcon />بررسی نیاز</Button>
+    <div className="ua-voice-entry">
+      <button
+        type="button"
+        className="uv-voice-launcher-btn"
+        aria-label="گفت‌وگوی صوتی با دستیار هوشمند"
+        onClick={() => setVoiceModalOpen(true)}
+        title="گفت‌وگوی صوتی با دستیار خرید"
+      >
+        <span className="uv-voice-launcher-mic" aria-hidden="true">🎙️</span>
+        <span>گفت‌وگوی صوتی با دستیار هوشمند</span>
+        <span className="uv-voice-launcher-badge" aria-hidden="true">صوتی</span>
+      </button>
+    </div>
+        {start && <><Button tone="secondary" type="button" onClick={() => setFiltersOpen(true)}>بودجه و شرایط</Button>
+          <Button tone="ghost" type="button" onClick={() => { dispatch({ type: 'navigate', screen: 'decide' }); requestAnimationFrame(() => textarea.current?.focus()); }}>کمک برای انتخاب</Button></>}
         {pending && <Button tone="secondary" type="button" onClick={cancel}><StopCircleIcon />لغو درخواست</Button>}
         {!pending && (state.history.length > 0 || need !== null) && <Button tone="secondary" type="button" onClick={resetConversation}>
           <RestartIcon />گفت‌وگوی تازه</Button>}
@@ -212,7 +270,7 @@ export function DecideScreen() {
 
     {lastTurn && <Outcome turn={lastTurn} />}
 
-    <section className="ua-conditions" aria-labelledby="ua-conditions-title">
+    {!start && <section className="ua-conditions" aria-labelledby="ua-conditions-title">
       <div className="ua-section-head">
         <h3 id="ua-conditions-title">شرایط جست‌وجو</h3>
         <Button tone="secondary" onClick={() => setFiltersOpen(true)} disabled={pending}>بودجه و شرایط</Button>
@@ -234,7 +292,7 @@ export function DecideScreen() {
         </div>}
         <p className="ub-meta">این شرایط از آخرین پاسخ دستیار ثبت شده‌اند؛ تغییر بودجه، تاریخچهٔ گفت‌وگو را پاک نمی‌کند.</p>
       </> : <p className="ub-meta">هنوز شرطی از گفت‌وگو ثبت نشده است؛ بودجه و شرایط فعال در اولین ارسال لحاظ می‌شوند.</p>}
-    </section>
+    </section>}
 
     {state.history.length > 0 && <details className="ua-history">
       <summary>تاریخچهٔ گفت‌وگو ({numbers.format(state.history.length)} پیام)</summary>
@@ -247,5 +305,12 @@ export function DecideScreen() {
 
     <p className="ub-meta">پاسخ‌ها به کاتالوگ ثبت‌شده محدودند؛ موجودی و تناسب تأیید نشده است. سقف و وضعیت سرویس، جدا از متن گفت‌وگو، توسط سرویس اعمال می‌شوند.</p>
     {filtersOpen && <FiltersDialog onClose={() => setFiltersOpen(false)} />}
+    {voiceModalOpen && <VoiceAssistantModal
+      disabled={pending || !canSend}
+      onClose={() => setVoiceModalOpen(false)}
+      onSubmitPrompt={send}
+      currentAssistantResponse={modalAssistantResponse}
+    />}
   </section>;
+
 }
