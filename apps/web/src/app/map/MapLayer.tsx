@@ -144,11 +144,11 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     const group = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 64,
       spiderfyOnMaxZoom: true, zoomToBoundsOnClick: true, spiderfyDistanceMultiplier: 1.8,
       animate, chunkedLoading: true, iconCreateFunction: clusterIcon => L.divIcon({ className: 'um-cluster',
-        html: `<span>${clusterIcon.getChildCount().toLocaleString('fa-IR')}</span>`, iconSize: L.point(36, 36), iconAnchor: L.point(18, 18) }) });
+        html: `<span>${clusterIcon.getChildCount().toLocaleString('fa-IR')}</span>`, iconSize: L.point(44, 44), iconAnchor: L.point(22, 22) }) });
     group.addTo(instance);
     cluster.current = group;
     overlay.current = L.layerGroup().addTo(instance);
-    line.current = L.polyline([], { color: '#ff5d70', weight: 2, dashArray: '7 9', interactive: true }).addTo(instance);
+    line.current = L.polyline([], { color: 'var(--um-route-color)', weight: 2, dashArray: '7 9', interactive: true }).addTo(instance);
     instance.on('click', event => { pickCallback.current?.(event.latlng.lat, event.latlng.lng); });
     const resize = new ResizeObserver(() => {
       instance.invalidateSize();
@@ -183,14 +183,15 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     group.clearLayers(); markers.current.clear();
     for (const pin of live.current.pins) {
       const title = pin.title;
-      const display = title ? `${title} · ${pin.label}` : pin.label;
+      const hours = { declared_open: 'طبق برنامه باز', declared_closed: 'طبق برنامه بسته', unknown: 'ساعت نامشخص' }[pin.state];
+      const display = `${title ? `${title} · ` : ''}${pin.label} · ${hours}`;
       const tag = document.createElement('span');
       tag.className = 'um-tag';
       tag.textContent = shortPrice(pin.label);
-      const width = Math.min(176, Math.max(74, 28 + tag.textContent.length * 7));
+      const width = Math.min(208, Math.max(74, 32 + tag.textContent.length * 8));
       const marker = L.marker([pin.lat, pin.lon], { keyboard: true, title: display, alt: display, riseOnHover: true,
         icon: L.divIcon({ className: `um-pin um-pin--${pin.state}`, html: tag,
-          iconSize: L.point(width, 30), iconAnchor: L.point(width / 2, 30) }) });
+          iconSize: L.point(width, 44), iconAnchor: L.point(width / 2, 44) }) });
       marker.on('click', () => pinCallback.current(pin.id));
       const tooltip = document.createElement('span');
       tooltip.textContent = display;
@@ -246,8 +247,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       marker.bindTooltip(positionTooltip);
       marker.addTo(layer);
       if (radiusKm !== null && Number.isFinite(radiusKm) && radiusKm > 0) {
-        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: '#ff5d70', weight: 1,
-          fillColor: '#ff5d70', fillOpacity: 0.05, dashArray: '5 9', interactive: false }).addTo(layer);
+        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: 'var(--um-route-color)', weight: 1,
+          fillColor: 'var(--um-route-color)', fillOpacity: 0.05, dashArray: '5 9', interactive: false }).addTo(layer);
       }
     }
     const destination = live.current.pins.find(pin => pin.id === selectedPinId);
