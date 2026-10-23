@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Alternatives, AssistantTurn, CataloguePage, Filters, FollowupOutcome, OfferPage, Position, PreparedFollowup, RequestState, Selection } from '../domain/contracts.ts';
+import type { Alternatives, AlternativeSearch, AssistantTurn, CataloguePage, Filters, FollowupOutcome, OfferPage, Position, PreparedFollowup, RequestState, Selection } from '../domain/contracts.ts';
 import { findAlternatives, loadOffers, prepareFollowup, searchCatalogue, sendAssistant, type SearchInput, type AssistantInput } from '../domain/client.ts';
 import { RequestGate } from './RequestGate.ts';
 import { mergeOffers, offerQueryKey } from './model.ts';
 import { useWorkspace } from './Workspace.tsx';
+import { alternativeSearchKey, appendAlternatives } from './alternativePages.ts';
 
 export function useCommand<T>() {
   const gate = useRef(new RequestGate());
@@ -112,20 +113,45 @@ export function useOffers(productId: string | null, filters: Filters, position: 
 export function useSellerFollowup() {
   const { state, dispatch } = useWorkspace();
   const draft = useCommand<PreparedFollowup>(), alternatives = useCommand<Alternatives>();
-  useEffect(() => { draft.cancel(); alternatives.cancel(); }, [state.revision, draft.cancel, alternatives.cancel]);
+  const latest = useRef(state), busy = useRef<symbol | null>(null);
+  latest.current = state;
+  const [pageMode, setPageMode] = useState(false);
+  useEffect(() => { busy.current = null; draft.cancel(); alternatives.cancel(); }, [state.revision, draft.cancel, alternatives.cancel]);
   const prepare = async (selection: Selection) => {
     const expectedRevision = state.revision;
     const result = await draft.run(signal => prepareFollowup(selection, state.position, signal));
     if (result) dispatch({ type: 'prepared', result, expectedRevision });
     return result;
   };
-  const report = async (selection: Selection, outcome: FollowupOutcome, source: 'simulated' | 'user_report' = 'simulated', offset = 0) => {
+  const report = async (selection: Selection, outcome: FollowupOutcome, source: 'simulated' | 'user_report' = 'simulated') => {
+    if (busy.current) return null;
+    const token = Symbol(); busy.current = token; setPageMode(false);
     const expectedRevision = state.revision;
-    const result = await alternatives.run(signal => findAlternatives(selection, outcome, state.filters, state.position, signal, offset, source));
-    if (result) dispatch({ type: 'alternatives', result, expectedRevision });
-    return result;
+    const search: AlternativeSearch = { selection: { ...selection }, outcome, source,
+      filters: { ...state.filters }, position: state.position ? { ...state.position } : null };
+    try {
+      const result = await alternatives.run(signal => findAlternatives(selection, outcome, search.filters, search.position, signal, 0, source));
+      if (result) dispatch({ type: 'alternatives', result, expectedRevision, search });
+      return result;
+    } finally { if (busy.current === token) busy.current = null; }
+  };
+  const more = async (selection: Selection) => {
+    const saved = state.followups[selection.offer_id], base = saved?.alternatives, search = saved?.alternativesSearch;
+    if (busy.current || !base?.alternatives.has_more || !search ||
+      state.selectedOffer?.offer_id !== selection.offer_id ||
+      alternativeSearchKey(search) !== alternativeSearchKey({ ...search, selection, filters: state.filters, position: state.position })) return null;
+    const token = Symbol(); busy.current = token; setPageMode(true);
+    const expectedRevision = state.revision;
+    try {
+      const result = await alternatives.run(async signal => appendAlternatives(base, await findAlternatives(search.selection,
+        search.outcome, search.filters, search.position, signal, base.alternatives.offset + base.alternatives.limit, search.source)));
+      if (!result || latest.current.revision !== expectedRevision || latest.current.selectedOffer?.offer_id !== selection.offer_id ||
+        latest.current.followups[selection.offer_id]?.alternatives !== base) return null;
+      dispatch({ type: 'alternatives', result, expectedRevision, search, base });
+      return result;
+    } finally { if (busy.current === token) busy.current = null; }
   };
   // Completed drafts/outcomes live in Workspace, keyed by offer_id, across screens.
-  return { draft: draft.result, alternatives: alternatives.result, prepare, report,
-    cancel: () => { draft.cancel(); alternatives.cancel(); } };
+  return { draft: draft.result, alternatives: alternatives.result, prepare, report, more, pageMode,
+    cancel: () => { busy.current = null; draft.cancel(); alternatives.cancel(); } };
 }

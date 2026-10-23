@@ -6,6 +6,7 @@ import { ClockIcon, CreditCardIcon, MapPinIcon } from '../../../presentation/ico
 import { alternativeOrigin, mapLink, shopFacts, shopName, tripAlternatives } from './model.ts';
 import { useMapView } from '../../base/shell/MapView.tsx';
 import { ReviewNotice } from './ReviewNotice.tsx';
+import { alternativeSearchKey } from '../../base/state/alternativePages.ts';
 
 export function TripScreen() {
   const { state, dispatch } = useWorkspace();
@@ -23,7 +24,11 @@ export function TripScreen() {
       <p className="uv-note">با یک فروشگاه هم مسیر مراجعه ممکن است؛ جایگزین اختیاری است.</p>
     </div>;
   }
-  const alternatives = tripAlternatives(state.followups, plan.primary)
+  const currentFollowups = Object.fromEntries(Object.entries(state.followups).filter(([, entry]) => {
+    const search = entry.alternativesSearch;
+    return search && alternativeSearchKey(search) === alternativeSearchKey({ ...search, filters: state.filters, position: state.position });
+  }));
+  const alternatives = tripAlternatives(currentFollowups, plan.primary)
     .filter(item => item.offer.shop_id !== plan.primary.shop_id && item.offer.shop_id !== plan.alternative?.shop_id);
   const alternativeSource = plan.alternative ? alternativeOrigin(state.followups, plan.alternative) : undefined;
   const primarySource = alternativeOrigin(state.followups, plan.primary);

@@ -108,6 +108,10 @@ export type PreparedFollowup = {
   hours_evaluated_at: string;
 };
 export type FollowupOutcome = 'no_answer' | 'closed' | 'out_of_stock';
+export type AlternativeSearch = {
+  selection: Selection; outcome: FollowupOutcome; source: 'simulated' | 'user_report';
+  filters: Filters; position: Position | null;
+};
 export type Alternatives = {
   status: 'alternatives_available' | 'no_alternatives';
   product_id: string;

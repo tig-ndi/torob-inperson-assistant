@@ -136,7 +136,8 @@ export function findAlternatives(selection: Selection, outcome: FollowupOutcome,
   return request('/api/followups/alternatives', value => {
     const result = parseAlternatives(value);
     if (result.product_id !== selection.product_id || result.reported_offer_id !== selection.offer_id ||
-        result.reported_shop_id !== selection.shop_id) throw new ContractError();
+        result.reported_shop_id !== selection.shop_id || result.outcome.kind !== outcome || result.outcome.source !== source ||
+        result.alternatives.offset !== offset || result.alternatives.limit !== 20) throw new ContractError();
     return result;
   }, signal, { ...selectionBody(selection, position), ...filterParams(filters, position),
     outcome: oneOf(outcome, ['no_answer', 'closed', 'out_of_stock']), outcome_source: oneOf(source, ['simulated', 'user_report']),

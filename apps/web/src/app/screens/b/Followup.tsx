@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '../../base/state/Workspace.tsx';
 import { useSellerFollowup } from '../../base/state/hooks.ts';
 import type { FollowupOutcome, Offer } from '../../base/domain/contracts.ts';
@@ -6,20 +6,37 @@ import { formatDistance, formatTehranDateTime } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, ErrorCard, FreshTag, OpenBadge, Price, SimBadge, Skeleton } from '../../base/ui/primitives.tsx';
 import { formatCount, OUTCOME_LABEL, SOURCE_LABEL, shopFacts, shopName } from './model.ts';
 import { ReviewNotice } from './ReviewNotice.tsx';
+import { alternativeSearchKey } from '../../base/state/alternativePages.ts';
 
 const outcomes: FollowupOutcome[] = ['no_answer', 'closed', 'out_of_stock'];
 
 export function FollowupScreen() {
   const { state, dispatch } = useWorkspace();
   const selected = state.selectedOffer;
+  const saved = selected ? state.followups[selected.offer_id] : undefined;
   const followup = useSellerFollowup();
-  const [outcome, setOutcome] = useState<FollowupOutcome>('no_answer');
-  const [source, setSource] = useState<'simulated' | 'user_report'>('simulated');
+  const [outcome, setOutcome] = useState<FollowupOutcome>(saved?.alternatives?.outcome.kind ?? 'no_answer');
+  const [source, setSource] = useState<'simulated' | 'user_report'>(saved?.alternatives?.outcome.source ?? 'simulated');
+  const count = useRef<HTMLParagraphElement>(null);
+  const previous = useRef(saved?.alternatives);
+  const currentSearch = selected ? { selection: { product_id: selected.product_id, offer_id: selected.offer_id, shop_id: selected.shop_id },
+    outcome, source, filters: state.filters, position: state.position } : null;
+  const stale = !!saved?.alternatives && (!saved.alternativesSearch || !currentSearch ||
+    alternativeSearchKey(saved.alternativesSearch) !== alternativeSearchKey(currentSearch));
+  useEffect(() => {
+    const before = previous.current, next = saved?.alternatives;
+    previous.current = next;
+    if (stale || !before || !next || next.alternatives.offset <= before.alternatives.offset) return;
+    const oldIds = new Set(before.alternatives.items.map(item => item.offer_id));
+    const fresh = next.alternatives.items.find(item => !oldIds.has(item.offer_id));
+    const target = fresh ? document.getElementById(`uv-alternative-${encodeURIComponent(fresh.offer_id)}`) : count.current;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }, [saved?.alternatives, stale]);
   if (!selected || !state.product) return <Empty title="آفری انتخاب نشده">
     <p>برای ساخت پیش‌نویس پیگیری، یک آفر مشخص از فروشندگان را انتخاب کنید.</p>
     <Button onClick={() => dispatch({ type: 'navigate', screen: 'stores' })}>رفتن به آفری فروشندگان</Button>
   </Empty>;
-  const saved = state.followups[selected.offer_id];
   const prepared = saved?.prepared ?? null;
   const alternatives = saved?.alternatives ?? null;
   const selection = { product_id: selected.product_id, offer_id: selected.offer_id, shop_id: selected.shop_id };
@@ -72,17 +89,17 @@ export function FollowupScreen() {
       </fieldset>
       <div className="uv-inline-actions">
         <Button onClick={() => void followup.report(selection, outcome, source)} disabled={reportBusy}>
-          {reportBusy ? 'در حال دریافت جایگزین‌ها…' : 'دیدن جایگزین‌ها با این نتیجه'}
+          {reportBusy && !followup.pageMode ? 'در حال دریافت جایگزین‌ها…' : 'دیدن جایگزین‌ها با این نتیجه'}
         </Button>
         {reportBusy && <Button tone="ghost" onClick={followup.cancel}>لغو درخواست جایگزین</Button>}
       </div>
-      {followup.alternatives.status === 'error' && <ErrorCard message={followup.alternatives.error}
+      {followup.alternatives.status === 'error' && !followup.pageMode && <ErrorCard message={followup.alternatives.error}
         onRetry={() => void followup.report(selection, outcome, source)} />}
       {alternatives && <div className="uv-alternatives" aria-live="polite">
         <div className="uv-alternatives-head">
           <h4>{alternatives.status === 'alternatives_available' ? 'جایگزین‌های همین محصول' : 'جایگزینی با این شرایط نیست'}</h4>
           <Badge tone={alternatives.status === 'alternatives_available' ? 'positive' : 'warning'}>
-            {alternatives.status === 'alternatives_available' ? `${formatCount(alternatives.alternatives.items.length)} جایگزین در این صفحه` : 'بدون جایگزین'}
+            {alternatives.status === 'alternatives_available' ? `${formatCount(alternatives.alternatives.items.length)} آفر جایگزین بارگذاری‌شده` : 'بدون جایگزین'}
           </Badge>
         </div>
         <div className="uv-draft-badges">
@@ -91,17 +108,24 @@ export function FollowupScreen() {
           <Badge>تأیید بیرونی: خیر</Badge>
           <Badge>زمان ثبت: <bdi>{formatTehranDateTime(alternatives.outcome.received_at)}</bdi></Badge>
         </div>
-        <p className="ub-meta">{formatCount(alternatives.excluded_offer_count)} آفر ثبت‌شده از فروشگاه گزارش‌شده، کامل کنار گذاشته شد. محصول و شرایط تغییر نکرده‌اند؛ موجودی جایگزین‌ها تأییدنشده است.</p>
+        <p className="ub-meta">{formatCount(alternatives.excluded_offer_count)} آفر ثبت‌شده از فروشگاه گزارش‌شده، کامل کنار گذاشته شد. این نتایج متعلق به شرایط زمان دریافت‌اند؛ موجودی جایگزین‌ها تأییدنشده است.</p>
+        {stale && <p className="uv-warning" role="status">شرایط، موقعیت یا نتیجهٔ گزارش تغییر کرده است؛ موارد زیر نتایج قبلی‌اند. برای ادامه یا انتخاب، جایگزین‌ها را با شرایط فعلی از ابتدا دریافت کنید.</p>}
+        <p className="ub-meta" ref={count} tabIndex={-1} role="status">{formatCount(alternatives.alternatives.items.length)} آفر جایگزین بارگذاری‌شده؛ این شمارش کل نتایج یا تعداد فروشگاه‌های یکتا نیست.</p>
         {alternatives.status === 'no_alternatives' && <p className="uv-warning" role="status">
           جایگزینی در همین بودجه، شعاع و شرایط ثبت نشده است. بودجه یا شعاع به‌طور خودکار افزایش داده نشد؛ برای تغییر آن‌ها از «شرایط جست‌وجو» در بالای صفحه استفاده کنید.
         </p>}
-        {alternatives.alternatives.items.map(offer => <AlternativeCard key={offer.offer_id} offer={offer}
+        {alternatives.alternatives.items.map(offer => <AlternativeCard key={offer.offer_id} offer={offer} disabled={stale || reportBusy}
           onChoose={() => {
             dispatch({ type: 'selectOffer', value: offer });
             dispatch({ type: 'plan', primary: offer });
             dispatch({ type: 'navigate', screen: 'trip' });
           }} />)}
-        {alternatives.alternatives.has_more && <p className="ub-meta">جایگزین‌های بیشتری ثبت شده‌اند؛ این صفحه همهٔ آن‌ها را نشان نمی‌دهد. برای دیدن موارد بیشتر، شرایط را محدودتر کنید یا از صفحهٔ فروشندگان ادامه دهید.</p>}
+        {followup.alternatives.status === 'error' && followup.pageMode && <ErrorCard message={followup.alternatives.error}
+          onRetry={!stale ? () => void followup.more(selection) : undefined} />}
+        {alternatives.alternatives.has_more ? <Button tone="secondary" disabled={stale || reportBusy}
+          onClick={() => void followup.more(selection)}>{reportBusy && followup.pageMode ? 'در حال دریافت جایگزین‌های بیشتر…' : 'جایگزین‌های بیشتر'}</Button>
+          : alternatives.alternatives.items.length > 0 && <p className="ub-meta">پایان جایگزین‌های ثبت‌شده با این شرایط.</p>}
+        {alternatives.alternatives.offset > 0 && <p className="ub-meta">ساعت‌های اعلامی هر صفحه هنگام دریافت همان صفحه ارزیابی شده‌اند؛ این اطلاعات تأیید زنده نیستند.</p>}
         <ul className="uv-list">{alternatives.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul>
       </div>}
     </section>
@@ -110,16 +134,16 @@ export function FollowupScreen() {
   </div>;
 }
 
-function AlternativeCard({ offer, onChoose }: { offer: Offer; onChoose: () => void }) {
+function AlternativeCard({ offer, onChoose, disabled }: { offer: Offer; onChoose: () => void; disabled: boolean }) {
   const facts = shopFacts(offer);
   return <article className="uv-alt-card">
     <div className="uv-trip-head">
-      <div><h5>{shopName(offer)}</h5><p className="ub-meta">{facts.name ? `${facts.title} · ` : ''}{facts.address || 'آدرس ثبت نشده'}</p></div>
+      <div><h5 id={`uv-alternative-${encodeURIComponent(offer.offer_id)}`} tabIndex={-1}>{shopName(offer)}</h5><p className="ub-meta">{facts.name ? `${facts.title} · ` : ''}{facts.address || 'آدرس ثبت نشده'}</p></div>
       <Price value={offer.price_toman} />
     </div>
     <div className="uv-draft-badges"><OpenBadge offer={offer} /><CreditBadge offer={offer} />
       <Badge>{formatDistance(offer.direct_distance_meters)} · هوایی</Badge><Badge>موجودی تأییدنشده</Badge></div>
     <FreshTag timestamp={offer.last_price_changed_at} />
-    <Button onClick={onChoose}>ثبت این جایگزین به‌عنوان مقصد</Button>
+    <Button onClick={onChoose} disabled={disabled}>ثبت این جایگزین به‌عنوان مقصد</Button>
   </article>;
 }

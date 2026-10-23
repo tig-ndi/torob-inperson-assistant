@@ -1,4 +1,4 @@
-import type { Alternatives, AssistantTurn, CataloguePage, CatalogueProduct, CatalogueSearch, Filters, NeedState, Offer, OfferPage, Position, PreparedFollowup, ProductResults, Screen } from '../domain/contracts.ts';
+import type { Alternatives, AlternativeSearch, AssistantTurn, CataloguePage, CatalogueProduct, CatalogueSearch, Filters, NeedState, Offer, OfferPage, Position, PreparedFollowup, ProductResults, Screen } from '../domain/contracts.ts';
 import { ContractError, money, pairedCoordinates } from '../domain/validation.ts';
 
 export type WorkspaceState = {
@@ -23,7 +23,7 @@ export type WorkspaceState = {
   focusedShopId: string | null;
   cameraIntent: { revision: number; kind: 'all' | 'user' | 'selection' } | null;
   visitPlan: { primary: Offer; alternative: Offer | null } | null;
-  followups: Record<string, { prepared: PreparedFollowup | null; alternatives: Alternatives | null }>;
+  followups: Record<string, { prepared: PreparedFollowup | null; alternatives: Alternatives | null; alternativesSearch?: AlternativeSearch }>;
   theme: 'system' | 'light' | 'dark';
   notice: string | null;
 };
@@ -57,7 +57,7 @@ export type WorkspaceAction =
   | { type: 'mapCamera'; kind: 'all' | 'user' | 'selection' }
   | { type: 'plan'; primary: Offer; alternative?: Offer | null }
   | { type: 'prepared'; result: PreparedFollowup; expectedRevision: number }
-  | { type: 'alternatives'; result: Alternatives; expectedRevision: number }
+  | { type: 'alternatives'; result: Alternatives; expectedRevision: number; search?: AlternativeSearch; base?: Alternatives }
   | { type: 'theme'; value: WorkspaceState['theme'] }
   | { type: 'notice'; value: string | null };
 
@@ -149,12 +149,14 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
     case 'prepared': {
       if (action.expectedRevision !== state.revision || action.result.product.product_id !== state.product?.product_id) return state;
       const key = action.result.selected_offer.offer_id;
-      return { ...state, followups: { ...state.followups, [key]: { prepared: action.result, alternatives: state.followups[key]?.alternatives ?? null } } };
+      return { ...state, followups: { ...state.followups, [key]: { ...state.followups[key], prepared: action.result, alternatives: state.followups[key]?.alternatives ?? null } } };
     }
     case 'alternatives': {
       if (action.expectedRevision !== state.revision || action.result.product_id !== state.product?.product_id) return state;
       const key = action.result.reported_offer_id;
-      return { ...state, followups: { ...state.followups, [key]: { prepared: state.followups[key]?.prepared ?? null, alternatives: action.result } } };
+      if (action.base && state.followups[key]?.alternatives !== action.base) return state;
+      return { ...state, followups: { ...state.followups, [key]: { prepared: state.followups[key]?.prepared ?? null,
+        alternatives: action.result, alternativesSearch: action.search } } };
     }
     case 'theme': return { ...state, theme: action.value };
     case 'notice': return { ...state, notice: action.value };
