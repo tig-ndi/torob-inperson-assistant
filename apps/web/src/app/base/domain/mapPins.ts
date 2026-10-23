@@ -9,10 +9,14 @@ export function pinsForWorkspace(state: WorkspaceState): MapPin[] {
   return groupOffers(state.loadedOffers.page.items).flatMap(group => {
     const shop = group.offers[0]?.shop;
     if (!shop || shop.lat === null || shop.lon === null) return [];
+    const firstOffer = group.offers[0]!;
     const statuses = new Set(group.offers.map(o => o.opening_hours.status));
     return [{ id: group.shopId, lat: shop.lat, lon: shop.lon,
       title: shop.name || shop.location_label || shop.address || 'فروشگاه',
       label: `از ${formatMoney(minimumRecordedPrice(group.offers))} · آفرهای بارگذاری‌شده`,
-      offerIds: group.offers.map(o => o.offer_id), state: statuses.size === 1 ? group.offers[0]!.opening_hours.status : 'unknown' as const }];
+      address: shop.address,
+      directDistanceMeters: firstOffer.direct_distance_meters,
+      minPrice: minimumRecordedPrice(group.offers),
+      offerIds: group.offers.map(o => o.offer_id), state: statuses.size === 1 ? firstOffer.opening_hours.status : 'unknown' as const }];
   });
 }

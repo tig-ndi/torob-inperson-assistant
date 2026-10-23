@@ -3,7 +3,7 @@ import type { Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, FreshTag, OpenBadge, Price, SimBadge } from '../../base/ui/primitives.tsx';
 import { ClockIcon, CreditCardIcon, MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
-import { alternativeOrigin, mapLink, shopFacts, shopName, tripAlternatives } from './model.ts';
+import { alternativeOrigin, mapLink, neshanLink, baladLink, googleMapsLink, shopFacts, shopName, tripAlternatives } from './model.ts';
 import { useMapView } from '../../base/shell/MapView.tsx';
 import { ReviewNotice } from './ReviewNotice.tsx';
 import { alternativeSearchKey } from '../../base/state/alternativePages.ts';
@@ -88,6 +88,9 @@ function TripCard({ role, offer, source, onRemove }: {
   const facts = shopFacts(offer);
   const title = shopName(offer);
   const link = mapLink(offer);
+  const neshan = neshanLink(offer);
+  const balad = baladLink(offer);
+  const gmaps = googleMapsLink(offer);
   return <article className="uv-trip-card" aria-label={`${role}: ${title}`}>
     <div className="uv-trip-head">
       <div><Badge tone="brand">{role}</Badge><h3>{title}</h3>
@@ -122,11 +125,15 @@ function TripCard({ role, offer, source, onRemove }: {
         dispatch({ type: 'selectOffer', value: offer });
         dispatch({ type: 'mapCamera', kind: 'selection' });
       }}>نمایش این مقصد روی نقشه</Button>
-      {link
-        ? <a className="uv-link-button" href={link} target="_blank" rel="noopener noreferrer">
-          باز کردن در نقشهٔ OpenStreetMap <span className="ub-sr-only">(برگهٔ تازه؛ فقط با اقدام شما)</span>
-        </a>
-        : <span className="uv-note">مختصات ثبت نشده است؛ بازکردن نقشه ممکن نیست.</span>}
+      <div className="uv-routing-group" role="group" aria-label="مسیریابی با اپلیکیشن‌ها">
+        <span className="uv-routing-title">مسیریابی مستقیم:</span>
+        <div className="uv-routing-buttons">
+          {neshan && <a className="uv-link-button uv-link-button--brand" href={neshan} target="_blank" rel="noopener noreferrer">نشان</a>}
+          {balad && <a className="uv-link-button" href={balad} target="_blank" rel="noopener noreferrer">بلد</a>}
+          {gmaps && <a className="uv-link-button" href={gmaps} target="_blank" rel="noopener noreferrer">Google Maps</a>}
+          {link && <a className="uv-link-button" href={link} target="_blank" rel="noopener noreferrer">OpenStreetMap</a>}
+        </div>
+      </div>
       {onRemove && <Button tone="ghost" onClick={onRemove}>حذف جایگزین</Button>}
     </div>
     <p className="uv-note">نقشه خط مستقیم هوایی را نشان می‌دهد؛ این مسیر خیابانی یا ETA نیست. بازکردن نقشه فقط با همین دکمه انجام می‌شود.</p>
