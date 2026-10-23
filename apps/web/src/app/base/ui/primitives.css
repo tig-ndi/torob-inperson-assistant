@@ -1,0 +1,107 @@
+/* Component-owned polish only. Palette and page geometry remain with the shell owner. */
+.ub-button.up-button {
+  min-width: 0;
+  border-radius: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  transition: background-color .2s, color .2s, box-shadow .2s;
+}
+
+.up-button > .tia-icon,
+.up-badge > .tia-icon,
+.up-fresh-label > .tia-icon,
+.up-error-message > .tia-icon {
+  flex-shrink: 0;
+}
+
+.ub-button.up-button:hover:not(:disabled) { filter: none; }
+.up-button.ub-button--primary:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--ub-on-brand) 8%, transparent);
+}
+.up-button.ub-button--secondary:hover:not(:disabled),
+.up-button.ub-button--ghost:hover:not(:disabled) { background: var(--ub-line); }
+.ub-button.up-button:active:not(:disabled) {
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--ub-ink) 12%, transparent);
+}
+.up-button[aria-pressed=true] { border-color: var(--ub-brand); }
+
+.ub-badge.up-badge {
+  width: fit-content;
+  max-width: 100%;
+  font-weight: 500;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.up-hours { display: inline-flex; max-width: 100%; }
+.up-hours--unknown > .up-badge {
+  border: 1px dashed var(--ub-muted);
+  background: transparent;
+}
+
+.ub-price.up-price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ub-price.up-price--unknown {
+  border: 1px dashed var(--ub-muted);
+  border-radius: 6px;
+  padding-inline: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ub-muted);
+}
+.up-fresh {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.up-fresh-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+  font-size: 12px;
+}
+
+.up-error-message { display: flex; align-items: start; gap: 8px; }
+.up-error-message > .tia-icon { margin-top: 4px; color: var(--ub-warning); }
+.ub-empty.up-empty { display: grid; justify-items: center; gap: 12px; padding: 28px 16px; }
+.up-empty .up-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+}
+.up-empty > h2 { font-size: 16px; }
+.up-empty > p { margin-top: 0; max-width: 40ch; }
+
+.ub-skeleton.up-skeleton { gap: 8px; padding: 16px; justify-items: stretch; }
+.up-skeleton > span { text-align: center; }
+.up-skeleton-shape { display: grid; gap: 8px; }
+.up-skeleton-shape > span {
+  display: block;
+  height: 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--ub-soft) 0%, var(--ub-line) 50%, var(--ub-soft) 100%);
+  background-size: 200% 100%;
+  animation: up-shimmer 1.4s linear infinite;
+}
+.up-skeleton-shape > span:nth-child(2) { width: 72%; }
+.up-skeleton-shape > span:nth-child(3) { width: 45%; height: 20px; }
+@keyframes up-shimmer { to { background-position: -200% 0; } }
+
+/* Keep the working bottom placement; the future shell owns overlay geometry. */
+.ub-toast.up-toast { border-radius: 28px; gap: 12px; pointer-events: none; }
+.up-toast > span { min-width: 0; overflow-wrap: anywhere; }
+.up-toast > .up-button { flex-shrink: 0; pointer-events: auto; }
+.ub-dialog.up-dialog { border-radius: 24px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ub-button.up-button { transition: none; }
+  .up-skeleton-shape > span { animation: none; }
+}

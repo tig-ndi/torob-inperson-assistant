@@ -1,43 +1,53 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { CloseIcon } from '../../../presentation/icons-motion/icons.tsx';
+import { AlertTriangleIcon, ClockIcon, CloseIcon, CreditCardIcon, SearchIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { formatMoney } from '../domain/presentation.ts';
 import { formatDistance, formatTehranDateTime, HOURS_REASON_TEXT } from '../../../api.ts';
 import type { Offer, RequestFailure } from '../domain/contracts.ts';
+import './primitives.css';
 
 export function Button({ tone = 'primary', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
   tone?: 'primary' | 'secondary' | 'ghost';
-}) { return <button {...props} className={`ub-button ub-button--${tone} ${className}`} />; }
+}) { return <button {...props} className={`ub-button up-button ub-button--${tone} ${className}`} />; }
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'warning' | 'positive' | 'brand' }) {
-  return <span className={`ub-badge ub-badge--${tone}`}>{children}</span>;
+  return <span className={`ub-badge up-badge ub-badge--${tone}`}>{children}</span>;
 }
 export function Price({ value }: { value: string | null }) {
-  return <bdi className="ub-price">{formatMoney(value)}</bdi>;
+  const label = formatMoney(value);
+  const known = label.endsWith(' تومان');
+  // Keep the amount and unit in one text node for existing comparison layout checks.
+  return <bdi className={`ub-price up-price${known ? '' : ' up-price--unknown'}`}>{label}</bdi>;
 }
 export function OpenBadge({ offer }: { offer: Offer }) {
   const hours = offer.opening_hours;
   const label = { declared_open: 'طبق برنامه باز', declared_closed: 'طبق برنامه بسته', unknown: 'ساعت نامشخص' }[hours.status];
-  return <Badge tone={hours.status === 'declared_open' ? 'positive' : hours.status === 'unknown' ? 'neutral' : 'warning'}>
-    <span title={HOURS_REASON_TEXT[hours.reason]}>{label}</span>
-  </Badge>;
+  return <span className={`up-hours${hours.status === 'unknown' ? ' up-hours--unknown' : ''}`}>
+    <Badge tone={hours.status === 'declared_open' ? 'positive' : hours.status === 'unknown' ? 'neutral' : 'warning'}>
+      <ClockIcon size={13} /><span title={HOURS_REASON_TEXT[hours.reason]}>{label}</span>
+    </Badge>
+  </span>;
 }
 export function FreshTag({ timestamp }: { timestamp: string | null }) {
-  return <p className="ub-meta">آخرین تغییر قیمت ثبت‌شده: <bdi>{formatTehranDateTime(timestamp)}</bdi></p>;
+  return <p className="ub-meta up-fresh"><span className="up-fresh-label"><ClockIcon size={13} />آخرین تغییر قیمت ثبت‌شده:</span>{' '}
+    <bdi>{formatTehranDateTime(timestamp)}</bdi></p>;
 }
 export function CreditBadge({ offer }: { offer: Offer }) {
   return <Badge tone={offer.in_person_credit.status === 'matches_declared_terms' ? 'positive' : 'neutral'}>
+    <CreditCardIcon size={13} />
     {offer.in_person_credit.status === 'matches_declared_terms' ? 'منطبق با شرایط اعتبار حضوری'
       : offer.in_person_credit.status === 'unknown' ? 'شرایط اعتبار نامشخص' : 'نامنطبق با شرایط اعتبار حضوری'}
   </Badge>;
 }
-export function SimBadge() { return <Badge tone="warning">شبیه‌سازی — تماس واقعی انجام نشد</Badge>; }
+export function SimBadge() { return <Badge tone="warning"><AlertTriangleIcon size={13} />شبیه‌سازی — تماس واقعی انجام نشد</Badge>; }
 export function ErrorCard({ message, onRetry, failure }: { message: string; onRetry?: () => void; failure?: RequestFailure }) {
-  return <div className="ub-error" role="alert"><p>{message}</p>{onRetry && failure?.retryable !== false && <Button tone="secondary" onClick={onRetry}>تلاش مجدد</Button>}</div>;
+  return <div className="ub-error up-error" role="alert"><div className="up-error-message"><AlertTriangleIcon size={20} /><p>{message}</p></div>
+    {onRetry && failure?.retryable !== false && <Button tone="secondary" onClick={onRetry}>تلاش مجدد</Button>}</div>;
 }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
-  return <div className="ub-empty"><h2>{title}</h2>{children}</div>;
+  return <div className="ub-empty up-empty"><span className="up-empty-icon" aria-hidden="true"><SearchIcon size={24} /></span><h2>{title}</h2>{children}</div>;
 }
 export function Skeleton() {
-  return <div role="status" aria-label="در حال دریافت" className="ub-skeleton"><span>در حال دریافت…</span></div>;
+  return <div role="status" aria-label="در حال دریافت" className="ub-skeleton up-skeleton">
+    <div className="up-skeleton-shape" aria-hidden="true"><span /><span /><span /></div><span>در حال دریافت…</span></div>;
 }
 export function OfferCard({ offer, selected, onSelect, onCompare }: {
   offer: Offer; selected: boolean; onSelect: () => void; onCompare?: () => void;
@@ -56,7 +66,7 @@ export function OfferCard({ offer, selected, onSelect, onCompare }: {
   </article>;
 }
 export function Toast({ message, onClose }: { message: string | null; onClose: () => void }) {
-  return message ? <div className="ub-toast" role="status"><span>{message}</span>
+  return message ? <div className="ub-toast up-toast" role="status"><span>{message}</span>
     <Button tone="ghost" onClick={onClose} aria-label="بستن پیام"><CloseIcon /></Button></div> : null;
 }
 export function Dialog({ title, children, onClose, className = '' }: { title: string; children: ReactNode; onClose: () => void; className?: string }) {
@@ -67,7 +77,7 @@ export function Dialog({ title, children, onClose, className = '' }: { title: st
     dialog?.showModal();
     return () => { dialog?.close(); queueMicrotask(() => { if (trigger?.isConnected) trigger.focus(); }); };
   }, [trigger]);
-  return <dialog ref={ref} className={`ub-dialog ${className}`} aria-labelledby={id}
+  return <dialog ref={ref} className={`ub-dialog up-dialog ${className}`} aria-labelledby={id}
     onKeyDown={event => {
       if (event.key !== 'Tab') return;
       const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>(
