@@ -10,6 +10,7 @@ import { LocationDialog } from '../ui/LocationDialog.tsx';
 import { formatMoney } from '../domain/presentation.ts';
 import type { Screen } from '../domain/contracts.ts';
 import { pinsForWorkspace } from '../domain/mapPins.ts';
+import { catalogueSearchForWorkspace } from '../state/model.ts';
 
 export function WorkspaceShell() {
   const { state, dispatch } = useWorkspace();
@@ -25,11 +26,7 @@ export function WorkspaceShell() {
   }, [state.theme]);
   const search = async (event: FormEvent) => {
     event.preventDefault();
-    const context = state.needState?.topic_query === state.query ? state.needState : null;
-    const page = await catalogue.search({ query: state.query, maxPrice: state.filters.maxPrice,
-      categoryName: context?.category_name, categoryCleared: context?.category_cleared,
-      minimumBattery: context?.battery_requirement.status === 'minimum' ? context.battery_requirement.minimum_mah : null,
-      sort: state.filters.sort === 'nearest' ? 'nearest' : 'relevance', position: state.position });
+    const page = await catalogue.search(catalogueSearchForWorkspace(state));
     if (page) dispatch({ type: 'navigate', screen: 'results' });
   };
   const steps: { label: string; screen: Screen }[] = [
