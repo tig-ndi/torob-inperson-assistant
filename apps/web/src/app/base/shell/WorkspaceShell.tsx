@@ -35,7 +35,7 @@ export function WorkspaceShell() {
     { label: 'انتخاب محصول', screen: 'results' }, { label: 'فروشندگان', screen: 'stores' },
     { label: 'مقایسه', screen: 'compare' }, { label: 'پیگیری و مراجعه', screen: 'contact' },
   ];
-  const visit = ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
+  const visit = state.product !== null && ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
   const revealMap = () => {
     setSheet('half');
     requestAnimationFrame(() => {
@@ -51,10 +51,10 @@ export function WorkspaceShell() {
     });
   };
   return <MapViewProvider value={{ revealMap, showList }}><div className="ub-app" data-sheet={sheet} data-visit={visit}
-    data-layout={visit && state.product ? 'visit' : 'discovery'} data-resolved-theme={theme}>
+    data-layout={visit ? 'visit' : 'discovery'} data-screen={state.screen} data-resolved-theme={theme}>
     <a href="#workspace-panel" className="ub-skip">رفتن به محتوای اصلی</a>
     <header className="ub-header">
-      <button type="button" className="ub-brand" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}><span aria-hidden="true">ت</span><div>خرید حضوری<small>دستیار انتخاب در تهران</small></div></button>
+      <button type="button" className="ub-brand" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}><span aria-hidden="true">ت</span><div>دستیار خرید حضوری<small>از انتخاب کالا تا مراجعه</small></div></button>
       <div className="ub-header-actions"><label className="ub-theme">نمایش<select aria-label="تم نمایش" value={state.theme}
         onChange={e => dispatch({ type: 'theme', value: e.target.value === 'dark' ? 'dark' : e.target.value === 'light' ? 'light' : 'system' })}>
         <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تیره</option></select></label>
@@ -76,17 +76,19 @@ export function WorkspaceShell() {
       </div>
     </section>
     <main className="ub-workspace">
-      <div className="ub-map" ref={mapElement} tabIndex={-1} aria-label="فضای نقشهٔ فروشندگان"><MapLayer userPosition={state.position} radiusKm={state.filters.radiusKm} pins={pinsForWorkspace(state)}
+      {/* Keep the initialized map alive across navigation while this purchase exists. */}
+      {state.product && <div className="ub-map" hidden={!visit} ref={mapElement} tabIndex={-1} aria-label="فضای نقشهٔ فروشندگان"><MapLayer userPosition={state.position} radiusKm={state.filters.radiusKm} pins={pinsForWorkspace(state)}
         selectedPinId={state.selectedOffer?.shop_id ?? null} onPinSelect={shopId => dispatch({ type: 'focusShop', shopId })} cameraIntent={state.cameraIntent}
-        padding={{ top: 20, left: 20, right: 20, bottom: 20 }} /></div>
+        padding={{ top: 20, left: 20, right: 20, bottom: 20 }} /></div>}
       <section id="workspace-panel" ref={panelElement} className="ub-panel" aria-label="فضای انتخاب کالا" tabIndex={-1}>
-        <div className="ub-panel-top"><Button tone="ghost" disabled={!state.navigation.length} onClick={() => dispatch({ type: 'back' })} aria-label="بازگشت به مرحلهٔ قبل"><ChevronRightIcon /></Button>
+        <div className="ub-panel-top" hidden={state.screen === 'home' && !state.navigation.length}><Button tone="ghost" disabled={!state.navigation.length} onClick={() => dispatch({ type: 'back' })} aria-label="بازگشت به مرحلهٔ قبل"><ChevronRightIcon /></Button>
+          {visit && <Button className="ub-home-control" tone="ghost" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}>شروع</Button>}
           <strong>{screenLabels[state.screen]}</strong>{visit && <Button className="ub-sheet-control" tone="ghost" aria-expanded={sheet === 'full'}
             onClick={() => setSheet(s => s === 'full' ? 'half' : 'full')}>{sheet === 'full' ? 'نقشه و فهرست' : 'فهرست کامل'}</Button>}</div>
-        <nav className="ub-stepper" aria-label="مسیر خرید">{steps.map((step, i) => <button key={step.screen}
+        {state.screen !== 'home' && <nav className="ub-stepper" aria-label="مسیر خرید">{steps.map((step, i) => <button key={step.screen}
           aria-current={state.screen === step.screen || (i === 0 && ['home', 'decide'].includes(state.screen)) ||
             (i === 3 && state.screen === 'trip') ? 'step' : undefined}
-          onClick={() => dispatch({ type: 'navigate', screen: step.screen })}><span>{new Intl.NumberFormat('fa').format(i + 1)}</span>{step.label}</button>)}</nav>
+          onClick={() => dispatch({ type: 'navigate', screen: step.screen })}><span>{new Intl.NumberFormat('fa').format(i + 1)}</span>{step.label}</button>)}</nav>}
         <div className="ub-panel-body">
           {catalogue.result.status === 'loading' && <Skeleton />}
           {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} failure={catalogue.result.failure} />}

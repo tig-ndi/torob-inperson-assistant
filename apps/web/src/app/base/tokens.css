@@ -277,6 +277,19 @@ bdi {
   min-height:570px;
   align-items:stretch
 }
+.ub-app[data-layout=discovery] .ub-workspace {
+  grid-template-columns:minmax(0,1fr);
+  width:min(1240px,100%);
+  margin-inline:auto;
+  min-height:0
+}
+.ub-app[data-layout=discovery] .ub-panel {
+  max-height:none;
+  min-height:0
+}
+.ub-app[data-layout=discovery] .ub-panel-body {
+  overflow:visible
+}
 .ub-map {
   grid-column:2;
   grid-row:1;
@@ -286,6 +299,11 @@ bdi {
   overflow:hidden;
   border:1px solid var(--ub-line);
   min-height:450px
+}
+.ub-map[hidden] { display:none!important }
+.ub-home-control { display:none }
+@media(min-width:960px) {
+  .ub-home-control { display:inline-flex }
 }
 .ub-map-placeholder {
   height:100%;
@@ -330,6 +348,7 @@ bdi {
   padding:8px 12px;
   border-bottom:1px solid var(--ub-line)
 }
+.ub-panel-top[hidden] { display:none }
 .ub-panel-top>strong {
   flex:1;
   font-size:16px
@@ -689,6 +708,7 @@ bdi {
   }
 }
 @media(max-width:374px) {
+  .ub-brand { font-size:14px }
   .ub-header {
     padding:10px 12px
   }

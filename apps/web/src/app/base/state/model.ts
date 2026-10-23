@@ -35,6 +35,22 @@ export function initialWorkspace(): WorkspaceState {
     compareOffers: [], loadedOffers: null, focusedShopId: null, cameraIntent: null,
     visitPlan: null, followups: {}, theme: 'system', notice: null };
 }
+
+export function resumeScreen(state: WorkspaceState): Screen | null {
+  const previous = state.navigation.filter(screen => screen !== 'home').at(-1);
+  if (previous === 'results' && state.productResults) return 'results';
+  if (previous === 'decide' && (state.needState || state.lastTurn || state.history.length)) return 'decide';
+  if (previous === 'stores' && state.product) return 'stores';
+  if (previous === 'compare' && state.compareOffers.length >= 2) return 'compare';
+  if (previous === 'contact' && state.selectedOffer) return 'contact';
+  if (previous === 'trip' && state.visitPlan) return 'trip';
+  if (state.visitPlan) return 'trip';
+  if (state.selectedOffer) return 'contact';
+  if (state.product) return 'stores';
+  if (state.productResults) return 'results';
+  if (state.needState || state.lastTurn || state.history.length) return 'decide';
+  return null;
+}
 export type WorkspaceAction =
   | { type: 'navigate'; screen: Screen }
   | { type: 'restoreNavigation'; screen: Screen; navigation: Screen[] }
