@@ -22,7 +22,7 @@ from apps.api.explanations import explain_search
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
 from apps.api.visit_intent import is_constraint_followup, has_unsupported_modifier
-from apps.api.need_state import resolve_need_state, visit_sort, is_need_control
+from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, is_need_control
 from tools.prepare_data import normalize_text
 
 
@@ -104,6 +104,22 @@ class AgentSettings:
         if key and (not key.isascii() or len(key) > 1024 or any(c.isspace() for c in key)):
             raise ValueError('invalid credential format')
         return cls(get('TOROB_ASSISTANT_ENABLED', '0') == '1', key, model, limit)
+
+
+def field_only_topic(topic: str | None, category_names) -> bool:
+    """A field value such as 'رنگ آبی' is a constraint, not a product name.
+
+    A catalogue category may itself begin with a field word ('رنگ مو',
+    'رم لپ تاپ'); only a full category prefix keeps such a phrase a topic.
+    """
+    if not topic:
+        return False
+    normalized = normalize_text(topic)
+    tokens = re.findall(r'[^\W_]+', normalized, flags=re.UNICODE)
+    if not tokens or not FIELD_PATTERN.fullmatch(tokens[0]):
+        return False
+    return not any(normalized == normalize_text(name) or normalized.startswith(normalize_text(name) + ' ')
+                   for name in category_names)
 
 
 class BoxProvider:
@@ -447,6 +463,16 @@ class AssistantService:
             needs = await resolve_need_state(self.catalogue, request, plan.query, effective_category,
                                              budget, requirement, offer_sort, fallback,
                                              budget_needs_input=budget_uncertain)
+            if needs.state.pending_requirements and field_only_topic(
+                    needs.state.topic_query, category_names):
+                # The span detector can start at a category head that is also a
+                # field word ('رنگ' heads 'رنگ مو'), turning 'رنگ آبی' into a
+                # fake product. Pending needs may never attach to it; ask for
+                # the product and require a new grounded topic instead.
+                needs = replace(needs, state=needs.state.model_copy(
+                    update={'topic_query': None, 'category_name': None, 'pending_requirements': []}))
+                plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
+                effective_category = None
             if not budget_uncertain:
                 question = needs.clarification
                 if question is None and needs.state.pending_requirements and plan.question not in {'product_kind', 'battery_capacity', 'battery_scope'}:

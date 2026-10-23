@@ -4,6 +4,7 @@ import json
 import unittest
 from uuid import uuid4
 
+from apps.api.assistant import field_only_topic
 from apps.api.intent import QUESTIONS
 import test_assistant
 
@@ -285,6 +286,33 @@ class PreTopicConditionTests(unittest.TestCase):
                          ['رنگ', 'گارانتی'])
         self.assertTrue(all(item['source_text'] == 'رنگ آبی و گارانتی اصلی می‌خوام'
                             for item in result['need_state']['pending_requirements']))
+
+    def test_field_value_phrase_before_a_topic_is_not_accepted_as_the_product(self):
+        result = self.answer('رنگ آبی و گارانتی اصلی می‌خوام', query='رنگ آبی')
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'product_kind')
+        self.assertIsNone(result['query'])
+        self.assertIsNone(result['category_name'])
+        self.assertIsNone(result['need_state']['topic_query'])
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertIsNone(result['products'])
+
+    def test_conditions_of_a_field_value_phrase_survive_the_product_clarification(self):
+        first = self.answer('رنگ آبی و گارانتی اصلی می‌خوام', query='رنگ آبی')
+        second = self.answer('رنگ آبی و گارانتی اصلی می‌خوام', QUESTIONS['product_kind'],
+                             'گوشی سامسونگ', needs=first['need_state'])
+        self.assertEqual(second['question_code'], 'unsupported_filter')
+        self.assertEqual(second['need_state']['topic_query'], 'گوشی سامسونگ')
+        self.assertEqual([item['key'] for item in second['need_state']['pending_requirements']],
+                         ['رنگ', 'گارانتی'])
+        self.assertIsNone(second['products'])
+
+    def test_a_field_word_led_catalogue_category_is_still_a_grounded_topic(self):
+        names = ('رنگ مو', 'گوشی موبایل')
+        self.assertTrue(field_only_topic('رنگ آبی', names))
+        self.assertFalse(field_only_topic('رنگ مو', names))
+        self.assertFalse(field_only_topic('رنگ مو قهوه‌ای', names))
+        self.assertFalse(field_only_topic('گوشی سامسونگ', names))
 
     def test_absence_before_the_topic_is_not_revived_as_a_requirement(self):
         for condition in ['بدون گارانتی', 'گارانتی نمی‌خوام', 'گارانتی لازم نیست']:
