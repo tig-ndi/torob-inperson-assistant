@@ -67,6 +67,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const pickCallback = useRef(onPositionPick);
   const live = useRef({ pins, userPosition, selectedPinId, padding });
   const titles = useRef(new Map<string, string>());
+  const lastUserPosition = useRef<string | null>(null);
   const framed = useRef(false);
   const framedAtZero = useRef(false);
   const reduced = useRef(false);
@@ -77,7 +78,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const darkMode = state.theme !== 'light';
   titles.current = new Map((state.loadedOffers?.page.items ?? []).map(offer => [
     offer.shop_id,
-    offer.shop.location_label || offer.shop.address || offer.shop.name || 'فروشگاه',
+    offer.shop.name || offer.shop.location_label || offer.shop.address || 'فروشگاه',
   ]));
   pinCallback.current = onPinSelect;
   pickCallback.current = onPositionPick;
@@ -104,6 +105,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   };
   const applySelection = () => {
     selectedCluster.current?.getElement()?.classList.remove('is-selected');
+    selectedCluster.current?.getElement()?.removeAttribute('aria-label');
     selectedCluster.current = null;
     for (const [id, marker] of markers.current) {
       const icon = marker.getElement();
@@ -119,7 +121,9 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       if (parent && parent !== selected) {
         // The selected shop is inside a cluster; mark the cluster so the current choice stays visible.
         selectedCluster.current = parent;
-        parent.getElement()?.classList.add('is-selected');
+        const clusterIcon = parent.getElement();
+        clusterIcon?.classList.add('is-selected');
+        clusterIcon?.setAttribute('aria-label', 'خوشهٔ فروشگاه‌ها؛ شامل انتخاب فعلی');
       }
     }
   };
@@ -160,6 +164,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       instance.remove();
       map.current = null; tiles.current = null; cluster.current = null; overlay.current = null;
       line.current = null; markers.current.clear(); selectedCluster.current = null; framed.current = false; framedAtZero.current = false;
+      lastUserPosition.current = null;
     };
   }, []);
 
@@ -168,8 +173,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     const instance = map.current, layer = tiles.current;
     if (!instance || !layer) return;
     const shouldLoad = pins.length > 0 || userPosition !== null;
+    // Once loaded, keep the tile layer to avoid refetching on every filter change.
     if (shouldLoad && !instance.hasLayer(layer)) layer.addTo(instance);
-    if (!shouldLoad && instance.hasLayer(layer)) instance.removeLayer(layer);
   }, [pins.length, userPosition]);
 
   useEffect(() => {
@@ -225,6 +230,13 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     const layer = overlay.current;
     if (!layer) return;
     layer.clearLayers();
+    const positionKey = validPosition(userPosition) ? `${userPosition.lat},${userPosition.lon}` : null;
+    if (positionKey && positionKey !== lastUserPosition.current && map.current) {
+      // A newly chosen position is a clear camera intent; later manual movement is preserved.
+      map.current.setView(coordinates(userPosition!), Math.max(map.current.getZoom(), 13),
+        { animate: !reduced.current });
+    }
+    lastUserPosition.current = positionKey;
     if (validPosition(userPosition)) {
       const marker = L.marker(coordinates(userPosition), { interactive: false, keyboard: false,
         icon: L.divIcon({ className: 'um-user', html: '<span aria-hidden="true"></span>',
@@ -298,7 +310,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   return <section className="um-map-shell" aria-label="نقشهٔ فروشندگان">
     <div ref={container} className="um-map" role="region" aria-label="نقشهٔ خیابان با کاشی‌های OpenStreetMap" />
     <div className="um-controls" role="group" aria-label="کنترل‌های نقشه">
-      <button type="button" className="um-control" onClick={locate} disabled={locating} aria-label="موقعیت من">
+      <button type="button" className="um-control" onClick={locate} disabled={locating} aria-label="موقعیت من" aria-busy={locating}>
         <CrosshairIcon size={20} />
       </button>
       <button type="button" className="um-control" onClick={() => dispatch({ type: 'theme', value: darkMode ? 'light' : 'dark' })}

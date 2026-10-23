@@ -11,11 +11,13 @@ export function StoreOfferCard({ offer, selected, compared, needsReview, onSelec
   onFollowup: () => void; onPlan: () => void; onMap: () => void;
 }) {
   const facts = shopFacts(offer);
-  return <article className={`uv-card ub-offer${selected ? ' is-selected' : ''}`} aria-label={facts.title}>
+  const displayName = facts.name || facts.title;
+  return <article className={`uv-card ub-offer${selected ? ' is-selected' : ''}`} aria-label={displayName}>
     <div className="uv-card-head">
       <div className="uv-card-title">
-        {offer.seller_title && <span className="uv-card-kicker">{offer.seller_title}</span>}
-        <h4>{facts.title}</h4>
+        {offer.seller_title && <span className="uv-card-kicker" title={offer.seller_title}>{offer.seller_title}</span>}
+        <h4>{displayName}</h4>
+        {facts.name && <span className="uv-card-location">{facts.title}</span>}
         <p className="uv-card-address"><MapPinIcon size={14} /><span>{facts.address || 'آدرس ثبت نشده'}</span></p>
       </div>
       <div className="uv-card-price">
@@ -55,6 +57,7 @@ export function StoreOfferCard({ offer, selected, compared, needsReview, onSelec
       </dl>
       <p className="uv-small">فاصلهٔ هوایی: {formatDistance(offer.direct_distance_meters)}؛ {HOURS_REASON_TEXT[offer.opening_hours.reason]}.</p>
       <CreditBadge offer={offer} />
+      <p className="uv-small">نام فروشگاه، نام نمایشی دیتاست است و هویت حقوقی یا تأییدشده را نشان نمی‌دهد.</p>
       <p className="uv-small">اطلاعات ساعت/اعتبار اعلامی است؛ قیمت تاریخی موجودی یا قیمت روز را تأیید نمی‌کند.</p>
     </details>
   </article>;

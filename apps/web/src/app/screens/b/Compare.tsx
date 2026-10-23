@@ -3,7 +3,7 @@ import { useWorkspace } from '../../base/state/Workspace.tsx';
 import type { Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, formatTehranDateTime, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, OpenBadge, Price } from '../../base/ui/primitives.tsx';
-import { formatCount, shopFacts } from './model.ts';
+import { formatCount, shopFacts, shopName } from './model.ts';
 
 export function CompareScreen() {
   const { state, dispatch } = useWorkspace();
@@ -22,19 +22,20 @@ export function CompareScreen() {
     <header>
       <h2>مقایسهٔ آفرهای همین محصول</h2>
       <p className="ub-meta">قیمت‌ها و ساعت‌های ثبت‌شده‌اند، نه موجودی یا تأیید فروشنده. هر آفر مستقل مقایسه می‌شود و چند آفر یک فروشگاه جدا می‌مانند.</p>
+      <p className="uv-small">نام فروشگاه‌ها نمایشی‌اند و هویت حقوقی یا تأییدشده نیستند.</p>
       <p className="uv-note uv-compare-hint">در موبایل جدول را افقی بکشید تا ستون آفرهای دیگر دیده شود.</p>
     </header>
     <div className="uv-compare-scroll" role="region" aria-label="جدول مقایسهٔ آفرها" tabIndex={0}>
       <table className="uv-table">
         <caption className="ub-sr-only">مقایسهٔ {formatCount(offers.length)} آفر از یک محصول</caption>
         <thead><tr><th scope="col">ویژگی</th>{offers.map(offer => <th scope="col" key={offer.offer_id}>
-          <span className="uv-table-title">{shopFacts(offer).title}</span>
+          <span className="uv-table-title">{shopName(offer)}</span>
           <Price value={offer.price_toman} />
         </th>)}</tr></thead>
         <tbody>
           <Row label="فروشگاه" offers={offers}>{offer => <>
-            <span>{shopFacts(offer).title}</span>
-            <Small>{shopFacts(offer).address || 'آدرس ثبت نشده'}</Small>
+            <span>{shopName(offer)}</span>
+            <Small>{shopFacts(offer).title} · {shopFacts(offer).address || 'آدرس ثبت نشده'}</Small>
           </>}</Row>
           <Row label="قیمت ثبت‌شده" offers={offers}>{offer => <><Price value={offer.price_toman} /><Small>موجودی تأییدنشده</Small></>}</Row>
           <Row label="آخرین تغییر قیمت" offers={offers}>{offer => <Small>{formatTehranDateTime(offer.last_price_changed_at)}</Small>}</Row>

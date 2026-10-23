@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { alternativeOrigin, mapLink, offerCoordinates, selectionReview, shopFacts, storeGroups,
+import { alternativeOrigin, mapLink, offerCoordinates, selectionReview, shopFacts, shopName, storeGroups,
   tripAlternatives } from '../../src/app/screens/b/model.ts';
 import { offer, offers } from '../ui-base/fixtures.mjs';
 
@@ -11,8 +11,8 @@ test('store grouping keeps every offer_id of one shop without collapsing rows', 
     { ...offer('o3', 's2'), price_toman: null },
   ]);
   assert.deepEqual(groups.map(group => group.offers.map(item => item.offer_id)), [['o1', 'o2'], ['o3']]);
-  assert.equal(groups[0].title, 'محدودهٔ آزمون');
-  assert.equal(groups[1].title, 'محدودهٔ آزمون');
+  assert.equal(groups[0].title, 'نام نمایشی آزمون');
+  assert.equal(groups[1].title, 'نام نمایشی آزمون');
   assert.equal(groups[1].address, offer('o3', 's2').shop.address);
 });
 
@@ -51,6 +51,8 @@ test('trip coordinates and external map links require a real coordinate pair', (
 
 test('mall and floor quotes come only from the literal address text', () => {
   const facts = shopFacts(offer('o1', 's1'));
+  assert.equal(facts.name, 'نام نمایشی آزمون');
+  assert.equal(shopName(offer('o1', 's1')), 'نام نمایشی آزمون');
   assert.equal(facts.mall.value, 'نمونه');
   assert.equal(facts.floor.value, 'دوم');
   assert.equal(facts.unit.value, '۱۲');

@@ -4,7 +4,7 @@ import { useSellerFollowup } from '../../base/state/hooks.ts';
 import type { FollowupOutcome, Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, formatTehranDateTime } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, ErrorCard, FreshTag, OpenBadge, Price, SimBadge, Skeleton } from '../../base/ui/primitives.tsx';
-import { formatCount, OUTCOME_LABEL, SOURCE_LABEL, shopFacts } from './model.ts';
+import { formatCount, OUTCOME_LABEL, SOURCE_LABEL, shopFacts, shopName } from './model.ts';
 import { ReviewNotice } from './ReviewNotice.tsx';
 
 const outcomes: FollowupOutcome[] = ['no_answer', 'closed', 'out_of_stock'];
@@ -30,14 +30,17 @@ export function FollowupScreen() {
     <header className="uv-contact-head">
       <div>
         <h2>پیگیری همین آفر</h2>
-        <p className="ub-meta">{selected.shop.location_label || selected.shop.address || 'موقعیت ثبت نشده'} · {selected.seller_title || 'آفر انتخاب‌شده'}</p>
+        <p className="ub-meta">{shopName(selected)}
+          {selected.shop.name ? ` · ${selected.shop.location_label || selected.shop.address || 'موقعیت ثبت نشده'}` : ''}
+          {selected.seller_title ? ` · ${selected.seller_title}` : ''}</p>
       </div>
       <SimBadge />
     </header>
+    <p className="uv-small">نام فروشگاه، نام نمایشی دیتاست است و هویت حقوقی یا تأییدشده را نشان نمی‌دهد.</p>
     <p className="uv-note">شماره‌های دیتاست مصنوعی‌اند. این صفحه هیچ شماره، لینک تماس، واتساپ یا کانال پیام نمی‌سازد و هیچ تماس یا پیامی انجام نمی‌دهد. وضعیت بارگذاری و خطا مربوط به درخواست برنامه است، نه تماس با فروشنده.</p>
     <ReviewNotice />
 
-    <section className="uv-panel-section" aria-labelledby="uv-draft-title">
+    <section className="uv-panel-section" aria-labelledby="uv-draft-title" aria-busy={draftBusy}>
       <h3 id="uv-draft-title">پیش‌نویس پیگیری</h3>
       <p className="ub-meta">پیش‌نویس پرسش موجودی/قیمت روز است و ارسال نمی‌شود. این عملیات هیچ تأیید موجودی یا پاسخ فروشنده‌ای تولید نمی‌کند.</p>
       {draftBusy && <><Skeleton /><Button tone="ghost" onClick={followup.cancel}>لغو درخواست پیش‌نویس</Button></>}
@@ -52,7 +55,7 @@ export function FollowupScreen() {
       </article>}
     </section>
 
-    <section className="uv-panel-section" aria-labelledby="uv-outcome-title">
+    <section className="uv-panel-section" aria-labelledby="uv-outcome-title" aria-busy={reportBusy}>
       <h3 id="uv-outcome-title">ثبت نتیجه و دیدن جایگزین‌ها</h3>
       <p className="ub-meta">نتیجه و منبع را انتخاب کنید؛ جایگزین‌ها فقط از سرویس جایگزین‌ها برای همان محصول و با حفظ بودجه/شعاع/ساعت/اعتبار می‌آیند.</p>
       <fieldset className="uv-fieldset"><legend>نتیجه</legend>
@@ -75,7 +78,7 @@ export function FollowupScreen() {
       </div>
       {followup.alternatives.status === 'error' && <ErrorCard message={followup.alternatives.error}
         onRetry={() => void followup.report(selection, outcome, source)} />}
-      {alternatives && <div className="uv-alternatives">
+      {alternatives && <div className="uv-alternatives" aria-live="polite">
         <div className="uv-alternatives-head">
           <h4>{alternatives.status === 'alternatives_available' ? 'جایگزین‌های همین محصول' : 'جایگزینی با این شرایط نیست'}</h4>
           <Badge tone={alternatives.status === 'alternatives_available' ? 'positive' : 'warning'}>
@@ -111,7 +114,7 @@ function AlternativeCard({ offer, onChoose }: { offer: Offer; onChoose: () => vo
   const facts = shopFacts(offer);
   return <article className="uv-alt-card">
     <div className="uv-trip-head">
-      <div><h5>{facts.title}</h5><p className="ub-meta">{facts.address || 'آدرس ثبت نشده'}</p></div>
+      <div><h5>{shopName(offer)}</h5><p className="ub-meta">{facts.name ? `${facts.title} · ` : ''}{facts.address || 'آدرس ثبت نشده'}</p></div>
       <Price value={offer.price_toman} />
     </div>
     <div className="uv-draft-badges"><OpenBadge offer={offer} /><CreditBadge offer={offer} />

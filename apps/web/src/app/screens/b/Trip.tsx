@@ -3,7 +3,7 @@ import type { Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, FreshTag, OpenBadge, Price, SimBadge } from '../../base/ui/primitives.tsx';
 import { ClockIcon, CreditCardIcon, MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
-import { alternativeOrigin, mapLink, shopFacts, tripAlternatives } from './model.ts';
+import { alternativeOrigin, mapLink, shopFacts, shopName, tripAlternatives } from './model.ts';
 import { revealMapOnMobile } from './revealMap.ts';
 import { ReviewNotice } from './ReviewNotice.tsx';
 
@@ -62,7 +62,8 @@ function Candidate({ offer }: { offer: Offer }) {
   const { state, dispatch } = useWorkspace();
   const facts = shopFacts(offer);
   return <article className="uv-candidate">
-    <h3>{facts.title}</h3>
+    <h3>{shopName(offer)}</h3>
+    {facts.name && <span className="uv-card-location">{facts.title}</span>}
     <Price value={offer.price_toman} />
     <div className="uv-draft-badges"><OpenBadge offer={offer} /><CreditBadge offer={offer} /><Badge>موجودی تأییدنشده</Badge></div>
     <p className="ub-meta">{facts.address || 'آدرس ثبت نشده'}</p>
@@ -77,10 +78,12 @@ function TripCard({ role, offer, source, onRemove }: {
 }) {
   const { dispatch } = useWorkspace();
   const facts = shopFacts(offer);
+  const title = shopName(offer);
   const link = mapLink(offer);
-  return <article className="uv-trip-card" aria-label={`${role}: ${facts.title}`}>
+  return <article className="uv-trip-card" aria-label={`${role}: ${title}`}>
     <div className="uv-trip-head">
-      <div><Badge tone="brand">{role}</Badge><h3>{facts.title}</h3></div>
+      <div><Badge tone="brand">{role}</Badge><h3>{title}</h3>
+        {facts.name && <span className="uv-card-location">{facts.title}</span>}</div>
       <Price value={offer.price_toman} />
     </div>
     <div className="uv-draft-badges">
@@ -95,6 +98,7 @@ function TripCard({ role, offer, source, onRemove }: {
     {role === 'مقصد اصلی' && <Indoor facts={facts} />}
     <p className="ub-meta">{HOURS_REASON_TEXT[offer.opening_hours.reason]}{offer.opening_hours.status === 'unknown' ? '؛ ساعت نامعلوم به معنی بسته‌بودن نیست.' : ''}</p>
     <p className="ub-meta">آدرس ثبت‌شده: {facts.address || 'ثبت نشده'}</p>
+    <p className="uv-small">نام فروشگاه، نام نمایشی دیتاست است و هویت حقوقی یا تأییدشده را نشان نمی‌دهد.</p>
     {role !== 'مقصد اصلی' && <dl className="uv-evidence">
       <Evidence label="پاساژ" part={facts.mall} />
       <Evidence label="طبقه" part={facts.floor} />
@@ -139,6 +143,9 @@ function Indoor({ facts }: { facts: ReturnType<typeof shopFacts> }) {
       {facts.unit && <span>واحد {facts.unit.value}</span>}
       {!facts.floor && !facts.unit && <span>طبقه/واحد در آدرس مشخص نیست</span>}
     </div>
+    {(facts.mall || facts.floor || facts.unit) && <p className="uv-small">شاهدهای متن آدرس: {[facts.mall, facts.floor, facts.unit]
+      .filter((part): part is { value: string; matchedText: string } => part !== null)
+      .map(part => `«${part.matchedText}»`).join(' · ')}</p>}
     <p className="uv-small">این اطلاعات فقط از متن آدرس ثبت‌شده استخراج شده‌اند؛ نقشهٔ داخلی، تعداد کل مغازه‌ها یا تأیید ساختمان را نشان نمی‌دهند.</p>
   </section>;
 }

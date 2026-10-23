@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useWorkspace } from '../../base/state/Workspace.tsx';
 import { useOffers } from '../../base/state/hooks.ts';
 import type { Offer } from '../../base/domain/contracts.ts';
-import { Badge, Button, Empty, ErrorCard, Skeleton } from '../../base/ui/primitives.tsx';
+import { Button, Empty, ErrorCard, Skeleton } from '../../base/ui/primitives.tsx';import { MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { formatCount, storeGroups } from './model.ts';
 import { revealMapOnMobile } from './revealMap.ts';
 import { ReviewNotice } from './ReviewNotice.tsx';
@@ -29,7 +29,13 @@ export function StoresScreen() {
           <span className="uv-kicker">مدل انتخاب‌شده</span>
           <h3 className="uv-product-title">{state.product?.persian_title ?? 'فروشندگان همین محصول'}</h3>
         </div>
-        <Button tone="ghost" onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>تغییر مدل</Button>
+        <div className="uv-product-actions">
+          <Button tone="ghost" onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>تغییر مدل</Button>
+          <Button className="uv-map-all-icon" tone="ghost" aria-label="نمایش همهٔ فروشگاه‌ها روی نقشه"
+            onClick={() => { revealMapOnMobile(); dispatch({ type: 'mapCamera', kind: 'all' }); }}>
+            <MapPinIcon size={18} />
+          </Button>
+        </div>
       </div>
       <p className="ub-meta">{formatCount(offers.loadedCount)} آفر، {formatCount(shops)} فروشگاه</p>
       <div className="uv-sort" role="group" aria-label="مرتب‌سازی آفرها">
@@ -37,7 +43,6 @@ export function StoresScreen() {
           onClick={() => dispatch({ type: 'filters', value: { sort: 'price' } })}>کمترین قیمت</button>
         <button type="button" aria-pressed={state.filters.sort === 'nearest'}
           onClick={() => dispatch({ type: 'filters', value: { sort: 'nearest' } })}>نزدیک‌ترین</button>
-        <Button className="uv-map-all" tone="ghost" onClick={() => dispatch({ type: 'mapCamera', kind: 'all' })}>همه روی نقشه</Button>
       </div>
     </header>
     <ReviewNotice />
@@ -69,14 +74,8 @@ function ShopGroup({ groupId, title, offers, focused }: {
   groupId: string; title: string; offers: Offer[]; focused: boolean;
 }) {
   const { state, dispatch } = useWorkspace();
-  return <section id={`uv-shop-${groupId}`} className={`uv-shop${focused ? ' is-focused' : ''}`}
-    aria-labelledby={`uv-shop-${groupId}-title`}>
-    <header className="uv-shop-head">
-      <div className="uv-shop-title-line">
-        <h3 id={`uv-shop-${groupId}-title`}>{title}</h3>
-        <Badge tone="brand">{formatCount(offers.length)} آفر</Badge>
-      </div>
-    </header>
+  return <section id={`uv-shop-${groupId}`} className={`uv-shop${focused ? ' is-focused' : ''}`} aria-label={title}>
+    {offers.length > 1 && <p className="uv-shop-count">{formatCount(offers.length)} آفر در همین فروشگاه</p>}
     <div className="uv-shop-offers">
       {offers.map(offer => {
         const selected = state.selectedOffer?.offer_id === offer.offer_id;

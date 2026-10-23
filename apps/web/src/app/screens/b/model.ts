@@ -14,7 +14,7 @@ export function storeGroups(offers: readonly Offer[]): StoreGroup[] {
     const first = group.offers[0]!;
     return {
       shopId: group.shopId,
-      title: first.shop.location_label || first.shop.address || first.shop.name || 'موقعیت ثبت نشده',
+      title: first.shop.name || first.shop.location_label || first.shop.address || 'موقعیت ثبت نشده',
       address: first.shop.address,
       offers: group.offers,
     };
@@ -89,6 +89,7 @@ export const SOURCE_LABEL: Record<'simulated' | 'user_report', string> = {
 };
 
 export type ShopFacts = {
+  name: string | null;
   title: string;
   address: string | null;
   mall: ReturnType<typeof addressEvidence>['mall'];
@@ -98,8 +99,14 @@ export type ShopFacts = {
 
 export function shopFacts(offer: Offer): ShopFacts {
   return {
+    name: offer.shop.name,
     title: offer.shop.location_label || offer.shop.address || offer.shop.name || 'موقعیت ثبت نشده',
     address: offer.shop.address,
     ...addressEvidence(offer.shop.address),
   };
+}
+
+export function shopName(offer: Offer): string {
+  const facts = shopFacts(offer);
+  return facts.name || facts.title;
 }

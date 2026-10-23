@@ -77,7 +77,7 @@ test('map pins stay in sync with the grouped list and never auto-select an offer
   await showMap(page);
   await expect(page.locator('.um-cluster')).toHaveCount(1);
   await expect(page.locator('.um-cluster')).toContainText('۲');
-  const pin = page.locator('.um-pin[aria-label*="محدودهٔ s2"]');
+  const pin = page.locator('.um-pin[aria-label*="نام نمایشی s2"]');
   await expect(pin).toHaveCount(1);
   await pin.click();
   await expect(page.locator('#uv-shop-s2')).toHaveClass(/is-focused/);
@@ -117,8 +117,8 @@ test('co-located shops stay clustered and every member is reachable without fake
     await page.locator('.um-cluster').first().click({ force: true });
     await page.waitForTimeout(250);
   }
-  await expect(page.locator('.um-pin[aria-label*="محدودهٔ s1"]')).toHaveCount(1);
-  await expect(page.locator('.um-pin[aria-label*="محدودهٔ s4"]')).toHaveCount(1);
+  await expect(page.locator('.um-pin[aria-label*="نام نمایشی s1"]')).toHaveCount(1);
+  await expect(page.locator('.um-pin[aria-label*="نام نمایشی s4"]')).toHaveCount(1);
   await page.screenshot({ path: path.join(qa, 'map-spiderfy-390.png') });
 });
 
@@ -126,7 +126,9 @@ test('map controls switch theme, locate and reveal the seller list', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
   await openStores(page);
-  await showMap(page);
+  await expect(page.locator('.um-map')).toBeHidden();
+  await page.getByRole('button', { name: 'نمایش همهٔ فروشگاه‌ها روی نقشه' }).click();
+  await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
   await page.getByRole('button', { name: 'تغییر به تم روشن' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'light');
   await expect(page.locator('.uv-visit')).toHaveAttribute('data-theme-mode', 'light');
@@ -134,10 +136,23 @@ test('map controls switch theme, locate and reveal the seller list', async ({ pa
   await page.screenshot({ path: path.join(qa, 'stores-light-390.png') });
   await page.getByRole('button', { name: 'تغییر به تم تیره' }).click();
   await page.getByRole('button', { name: 'موقعیت من' }).click();
+  await expect(page.locator('.ub-toast')).toBeVisible();
   await expect(page.locator('.ub-toast')).toContainText('موقعیت دریافت نشد');
   await page.getByRole('button', { name: 'نمایش فهرست فروشندگان' }).click();
   await expect(page.locator('.um-map')).toBeHidden();
   await expect(page.getByRole('button', { name: 'نقشه و فهرست', exact: true })).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('map locate uses an allowed position and draws the user marker', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().grantPermissions(['geolocation']);
+  await page.context().setGeolocation({ latitude: 35.7, longitude: 51.4 });
+  await mockApi(page);
+  await openStores(page);
+  await showMap(page);
+  await page.getByRole('button', { name: 'موقعیت من' }).click();
+  await expect(page.locator('.um-user')).toHaveCount(1);
+  await expect(page.locator('.ub-toast')).toHaveCount(0);
 });
 
 test('tile failure is visible and the seller list still completes a selection', async ({ page }) => {
@@ -203,7 +218,7 @@ test('comparison scrolls locally, does not create a trip, and one shop can be a 
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'برنامهٔ مراجعه', exact: true }).click();
   await expect(page.getByText('مقصد اصلی')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'محدودهٔ s1' }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'نام نمایشی s1' }).first()).toBeVisible();
   await page.screenshot({ path: path.join(qa, 'trip-one-shop-320.png') });
 });
 
@@ -217,7 +232,7 @@ test('a non-first offer can become the destination from comparison', async ({ pa
   const secondColumn = page.locator('.uv-table tbody tr').last().locator('td').nth(1);
   await secondColumn.getByRole('button', { name: 'برنامهٔ مراجعه' }).click();
   await expect(page.getByText('مقصد اصلی')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'محدودهٔ s2' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'نام نمایشی s2' })).toBeVisible();
 });
 
 test('simulated outcome uses alternatives, survives a return, and labels the new destination', async ({ page }) => {
@@ -242,7 +257,7 @@ test('simulated outcome uses alternatives, survives a return, and labels the new
   expect(requests).toHaveLength(1);
   await page.getByRole('button', { name: 'ثبت این جایگزین به‌عنوان مقصد' }).click();
   await expect(page.getByText('مقصد اصلی')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'محدودهٔ s2' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'نام نمایشی s2' })).toBeVisible();
   await expect(page.getByText('منبع انتخاب: شبیه‌سازی')).toBeVisible();
   await expect(page.getByText('شبیه‌سازی — تماس واقعی انجام نشد')).toBeVisible();
   await page.screenshot({ path: path.join(qa, 'trip-alternative-390.png') });
@@ -351,7 +366,7 @@ test('reduced motion keeps the map and keyboard pin activation working', async (
   await mockApi(page);
   await openStores(page);
   await showMap(page);
-  const pin = page.locator('.um-pin[aria-label*="محدودهٔ s2"]');
+  const pin = page.locator('.um-pin[aria-label*="نام نمایشی s2"]');
   await expect(pin).toHaveCount(1);
   await pin.focus();
   await expect(pin).toBeFocused();

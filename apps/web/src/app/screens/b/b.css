@@ -27,7 +27,7 @@
   --ub-ink: #1f2027;
   --ub-muted: #60616d;
   --ub-line: #dedee6;
-  --ub-brand: #d92c46;
+  --ub-brand: #b8233c;
   --ub-brand-soft: #fff0f2;
   --ub-on-brand: #ffffff;
   --ub-positive: #176b47;
@@ -36,6 +36,24 @@
   --ub-warning-soft: #fff3d8;
   --ub-focus: #235eae;
   color-scheme: light;
+}
+
+body:has(.uv-visit) {
+  background: #0b0c10;
+  color-scheme: dark;
+}
+
+html:has(.uv-visit) {
+  background: #0b0c10;
+}
+
+body:has(.uv-visit[data-theme-mode=light]) {
+  background: #f4f5f7;
+  color-scheme: light;
+}
+
+html:has(.uv-visit[data-theme-mode=light]) {
+  background: #f4f5f7;
 }
 
 .ub-base-note:has(+ .uv-visit) {
@@ -90,6 +108,19 @@
   gap: 8px;
 }
 
+.uv-product-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.uv-map-all-icon {
+  min-height: 40px;
+  padding: 6px;
+  border-radius: 999px;
+}
+
 .uv-product-head > div {
   min-width: 0;
 }
@@ -115,6 +146,14 @@
   font-size: 12px;
   font-weight: 400;
   color: var(--ub-muted);
+}
+
+.ub-app:has(.uv-visit) .ub-toast {
+  z-index: 1200;
+}
+
+.ub-app:has(.uv-visit) .ub-skip {
+  z-index: 1300;
 }
 
 .uv-tray {
@@ -164,7 +203,7 @@
 }
 
 .uv-sort button:not(.ub-button) {
-  min-height: 36px;
+  min-height: 40px;
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--ub-line);
@@ -274,32 +313,15 @@
   min-width: 0;
 }
 
-.uv-shop.is-focused .uv-shop-title-line h3 {
-  color: var(--ub-brand);
+.uv-shop.is-focused .uv-card {
+  border-color: var(--ub-brand);
 }
 
-.uv-shop-head {
-  min-width: 0;
-}
-
-.uv-shop-title-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.uv-shop-title-line h3 {
-  font-size: 12px;
-  font-weight: 400;
+.uv-shop-count {
+  margin: 0;
+  padding-inline: 2px;
+  font-size: 11px;
   color: var(--ub-muted);
-  overflow-wrap: anywhere;
-}
-
-.uv-shop-title-line .ub-badge {
-  font-size: 9px;
-  padding: 1px 7px;
 }
 
 .uv-shop-offers {
@@ -338,8 +360,18 @@
 }
 
 .uv-card-kicker {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10px;
   color: var(--ub-brand);
+}
+
+.uv-card-location {
+  font-size: 10px;
+  color: var(--ub-muted);
 }
 
 .uv-card-title h4 {
@@ -388,7 +420,7 @@
 }
 
 .uv-card-price > span {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--ub-muted);
   white-space: nowrap;
 }
@@ -408,7 +440,7 @@
   border-radius: 999px;
   background: var(--ub-soft);
   color: var(--ub-muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
@@ -419,7 +451,7 @@
 }
 
 .uv-card-tags .ub-badge {
-  font-size: 9px;
+  font-size: 10px;
   padding: 2px 8px;
 }
 
@@ -429,7 +461,7 @@
 }
 
 .uv-card-details summary {
-  min-height: 32px;
+  min-height: 40px;
   padding-block: 4px;
   color: var(--ub-brand);
   cursor: pointer;
@@ -738,7 +770,7 @@
   background: var(--ub-soft);
   color: var(--ub-muted);
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -971,10 +1003,6 @@
     bottom: 68px;
   }
 
-  .uv-sort .uv-map-all {
-    display: none;
-  }
-
   .ub-app:has(.uv-visit) .ub-header {
     background: var(--ub-surface);
     border-bottom-color: var(--ub-line);
@@ -996,10 +1024,6 @@
 
   .ub-app:has(.uv-visit) .ub-stepper {
     background: var(--ub-surface);
-  }
-
-  .uv-map-all {
-    display: none;
   }
 
   .uv-card {
@@ -1025,6 +1049,7 @@
   }
 
   .uv-kicker,
+  .uv-card-location,
   .uv-card-address {
     display: none;
   }
@@ -1048,6 +1073,11 @@
 }
 
 @media (max-width: 374px) {
+  .uv-product-head .uv-kicker,
+  .uv-card-location {
+    display: none;
+  }
+
   .uv-visit-screen {
     padding: 10px 12px 84px;
   }
