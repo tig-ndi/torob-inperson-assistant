@@ -7,10 +7,12 @@ import { CompareScreen } from './Compare.tsx';
 import { FollowupScreen } from './Followup.tsx';
 import { TripScreen } from './Trip.tsx';
 import { JourneySteps } from './JourneySteps.tsx';
+import { useResolvedTheme } from '../../base/state/useResolvedTheme.ts';
 import './b.css';
 
 /** Stable mount point. B owns this file, screens/b and map. */
 export function VisitScreen({ screen }: { screen: Screen }) {
+  const theme = useResolvedTheme();
   const { state, dispatch } = useWorkspace();
   useEffect(() => {
     const panel = document.getElementById('workspace-panel');
@@ -29,7 +31,7 @@ export function VisitScreen({ screen }: { screen: Screen }) {
     <p>آفرها همیشه برای یک محصول مشخص‌اند؛ انتخاب محصول در بخش کشف/نتایج انجام می‌شود.</p>
     <Button onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>رفتن به انتخاب محصول</Button>
   </Empty>;
-  return <div className="uv-visit" data-theme-mode={state.theme} data-screen={screen}>
+  return <div className="uv-visit" data-theme-mode={theme} data-screen={screen}>
     <JourneySteps />
     <div className="uv-visit-screen">
       {screen === 'stores' ? <StoresScreen /> : screen === 'compare' ? <CompareScreen />

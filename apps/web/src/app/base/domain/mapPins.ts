@@ -11,6 +11,7 @@ export function pinsForWorkspace(state: WorkspaceState): MapPin[] {
     if (!shop || shop.lat === null || shop.lon === null) return [];
     const statuses = new Set(group.offers.map(o => o.opening_hours.status));
     return [{ id: group.shopId, lat: shop.lat, lon: shop.lon,
+      title: shop.name || shop.location_label || shop.address || 'فروشگاه',
       label: `از ${formatMoney(minimumRecordedPrice(group.offers))} · آفرهای بارگذاری‌شده`,
       offerIds: group.offers.map(o => o.offer_id), state: statuses.size === 1 ? group.offers[0]!.opening_hours.status : 'unknown' as const }];
   });

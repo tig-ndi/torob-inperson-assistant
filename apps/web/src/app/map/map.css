@@ -17,11 +17,11 @@
   font-size: 13px;
 }
 
-.ub-app:has(.uv-visit) .um-map .leaflet-tile-pane {
+.ub-app[data-layout=visit] .um-map .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(.52) contrast(1.12) saturate(.42);
 }
 
-.ub-app:has(.uv-visit[data-theme-mode=light]) .um-map .leaflet-tile-pane {
+.ub-app[data-layout=visit][data-resolved-theme=light] .um-map .leaflet-tile-pane {
   filter: none;
 }
 

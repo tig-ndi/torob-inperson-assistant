@@ -123,6 +123,7 @@ test('co-located shops stay clustered and every member is reachable without fake
 });
 
 test('map controls switch theme, locate and reveal the seller list', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
   await openStores(page);
@@ -452,13 +453,16 @@ test('real snapshot B path: offers, unsent follow-up and alternatives without mo
   await page.goto('/design.html');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
-  await expect(page.locator('.ub-product').first()).toBeVisible();
+  await expect(page.locator('.ua-product-card').first()).toBeVisible();
   let found = false;
   for (let index = 0; index < 5 && !found; index++) {
-    const card = page.locator('.ub-product').nth(index);
+    const card = page.locator('.ua-product-card').nth(index);
     if (await card.count() === 0) break;
+    const response = page.waitForResponse(r => /\/api\/products\/[^/]+\/offers\?/.test(r.url()));
     await card.getByRole('button', { name: 'دیدن فروشندگان' }).click();
-    await page.waitForTimeout(400);
+    expect((await response).ok()).toBe(true);
+    await expect(page.locator('.uv-stores')).toBeVisible();
+    await expect(page.locator('.uv-stores')).toHaveAttribute('aria-busy', 'false');
     found = await page.locator('.uv-card').count() > 0;
     if (!found) await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
   }

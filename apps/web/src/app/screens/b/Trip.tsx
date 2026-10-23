@@ -4,7 +4,7 @@ import { formatDistance, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, FreshTag, OpenBadge, Price, SimBadge } from '../../base/ui/primitives.tsx';
 import { ClockIcon, CreditCardIcon, MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { alternativeOrigin, mapLink, shopFacts, shopName, tripAlternatives } from './model.ts';
-import { revealMapOnMobile } from './revealMap.ts';
+import { useMapView } from '../../base/shell/MapView.tsx';
 import { ReviewNotice } from './ReviewNotice.tsx';
 
 export function TripScreen() {
@@ -76,6 +76,7 @@ function Candidate({ offer }: { offer: Offer }) {
 function TripCard({ role, offer, source, onRemove }: {
   role: string; offer: Offer; source?: 'simulated' | 'user_report'; onRemove?: () => void;
 }) {
+  const { revealMap } = useMapView();
   const { dispatch } = useWorkspace();
   const facts = shopFacts(offer);
   const title = shopName(offer);
@@ -110,7 +111,7 @@ function TripCard({ role, offer, source, onRemove }: {
       <bdi key={`${shift.start_time}-${shift.end_time}`} dir="ltr">{shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}{shift.ends_next_day ? ' (+۱)' : ''} </bdi>)}</p>}
     <div className="uv-inline-actions">
       <Button tone="secondary" onClick={() => {
-        revealMapOnMobile();
+        revealMap();
         dispatch({ type: 'selectOffer', value: offer });
         dispatch({ type: 'mapCamera', kind: 'selection' });
       }}>نمایش این مقصد روی نقشه</Button>

@@ -9,12 +9,15 @@ import type { Position } from '../base/domain/contracts.ts';
 import { useWorkspace } from '../base/state/Workspace.tsx';
 import { Button } from '../base/ui/primitives.tsx';
 import { CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
+import { useMapView } from '../base/shell/MapView.tsx';
+import { useResolvedTheme } from '../base/state/useResolvedTheme.ts';
 
 export type MapPin = {
   id: string;
   lat: number;
   lon: number;
   label: string;
+  title?: string;
   offerIds: string[];
   state: 'declared_open' | 'declared_closed' | 'unknown';
 };
@@ -66,7 +69,6 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const pinCallback = useRef(onPinSelect);
   const pickCallback = useRef(onPositionPick);
   const live = useRef({ pins, userPosition, selectedPinId, padding });
-  const titles = useRef(new Map<string, string>());
   const lastUserPosition = useRef<string | null>(null);
   const framed = useRef(false);
   const framedAtZero = useRef(false);
@@ -74,12 +76,10 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const [tileFailed, setTileFailed] = useState(false);
   const [locating, setLocating] = useState(false);
   const { state, dispatch } = useWorkspace();
+  const { showList } = useMapView();
+  const theme = useResolvedTheme();
   const visit = ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
-  const darkMode = state.theme !== 'light';
-  titles.current = new Map((state.loadedOffers?.page.items ?? []).map(offer => [
-    offer.shop_id,
-    offer.shop.name || offer.shop.location_label || offer.shop.address || 'فروشگاه',
-  ]));
+  const darkMode = theme === 'dark';
   pinCallback.current = onPinSelect;
   pickCallback.current = onPositionPick;
   live.current = { pins, userPosition, selectedPinId, padding };
@@ -168,7 +168,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     };
   }, []);
 
-  const signature = pins.map(pin => `${pin.id}\u0000${pin.lat}\u0000${pin.lon}\u0000${pin.state}\u0000${pin.label}\u0000${pin.offerIds.join(',')}`).join('\u0001');
+  const signature = pins.map(pin => `${pin.id}\u0000${pin.lat}\u0000${pin.lon}\u0000${pin.state}\u0000${pin.label}\u0000${pin.title ?? ''}\u0000${pin.offerIds.join(',')}`).join('\u0001');
   useEffect(() => {
     const instance = map.current, layer = tiles.current;
     if (!instance || !layer) return;
@@ -182,7 +182,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     if (!group || !instance) return;
     group.clearLayers(); markers.current.clear();
     for (const pin of live.current.pins) {
-      const title = titles.current.get(pin.id);
+      const title = pin.title;
       const display = title ? `${title} · ${pin.label}` : pin.label;
       const tag = document.createElement('span');
       tag.className = 'um-tag';
@@ -297,11 +297,6 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       setLocating(false);
       dispatch({ type: 'locationDenied' });
     }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 });
-  };
-  const showList = () => {
-    const control = document.querySelector<HTMLButtonElement>('.ub-sheet-control');
-    if (control?.getAttribute('aria-expanded') === 'false') control.click();
-    requestAnimationFrame(() => document.getElementById('workspace-panel')?.scrollIntoView({ block: 'start' }));
   };
   const legend = userPosition && pins.some(pin => pin.id === selectedPinId)
     ? 'خط‌چین سرخ: فاصلهٔ هوایی · دایرهٔ قرمز: شعاع انتخابی'

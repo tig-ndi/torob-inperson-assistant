@@ -4,11 +4,12 @@ import { useOffers } from '../../base/state/hooks.ts';
 import type { Offer } from '../../base/domain/contracts.ts';
 import { Button, Empty, ErrorCard, Skeleton } from '../../base/ui/primitives.tsx';import { MapPinIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { formatCount, storeGroups } from './model.ts';
-import { revealMapOnMobile } from './revealMap.ts';
+import { useMapView } from '../../base/shell/MapView.tsx';
 import { ReviewNotice } from './ReviewNotice.tsx';
 import { StoreOfferCard } from './StoreOfferCard.tsx';
 
 export function StoresScreen() {
+  const { revealMap } = useMapView();
   const { state, dispatch } = useWorkspace();
   const offers = useOffers(state.product?.product_id ?? null, state.filters, state.position);
   const page = offers.result.data;
@@ -21,7 +22,7 @@ export function StoresScreen() {
     document.getElementById(`uv-shop-${state.focusedShopId}`)?.scrollIntoView({ block: 'nearest' });
   }, [state.focusedShopId, groups.length]);
 
-  return <div className="uv-stores">
+  return <div className="uv-stores" aria-busy={offers.result.status === 'loading'}>
     <header className="uv-stores-head">
       <h2>فروشگاه‌های نزدیک</h2>
       <div className="uv-product-head">
@@ -32,7 +33,7 @@ export function StoresScreen() {
         <div className="uv-product-actions">
           <Button tone="ghost" onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>تغییر مدل</Button>
           <Button className="uv-map-all-icon" tone="ghost" aria-label="نمایش همهٔ فروشگاه‌ها روی نقشه"
-            onClick={() => { revealMapOnMobile(); dispatch({ type: 'mapCamera', kind: 'all' }); }}>
+            onClick={() => { revealMap(); dispatch({ type: 'mapCamera', kind: 'all' }); }}>
             <MapPinIcon size={18} />
           </Button>
         </div>
@@ -79,6 +80,7 @@ export function StoresScreen() {
 function ShopGroup({ groupId, title, offers, focused }: {
   groupId: string; title: string; offers: Offer[]; focused: boolean;
 }) {
+  const { revealMap } = useMapView();
   const { state, dispatch } = useWorkspace();
   return <section id={`uv-shop-${groupId}`} className={`uv-shop${focused ? ' is-focused' : ''}`} aria-label={title}>
     {offers.length > 1 && <p className="uv-shop-count">{formatCount(offers.length)} آفر در همین فروشگاه</p>}
@@ -96,7 +98,7 @@ function ShopGroup({ groupId, title, offers, focused }: {
             dispatch({ type: 'navigate', screen: 'trip' });
           }}
           onMap={() => {
-            revealMapOnMobile();
+            revealMap();
             dispatch({ type: 'mapCamera', kind: 'selection' });
           }} />;
       })}
