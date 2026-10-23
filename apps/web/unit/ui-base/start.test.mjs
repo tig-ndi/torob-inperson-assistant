@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialWorkspace, resumeScreen, workspaceReducer } from '../../src/app/base/state/model.ts';
-import { product, offer, turn } from './fixtures.mjs';
+import { initialWorkspace, resumeScreen, workspaceReducer, offerQueryKey } from '../../src/app/base/state/model.ts';
+import { product, offer, offers, turn } from './fixtures.mjs';
 
 test('home resumes the most advanced saved purchase without changing its data', () => {
   let state = initialWorkspace();
@@ -12,6 +12,7 @@ test('home resumes the most advanced saved purchase without changing its data', 
   assert.equal(resumeScreen(state), 'stores');
   state = workspaceReducer(state, { type: 'selectOffer', value: offer() });
   assert.equal(resumeScreen(state), 'contact');
+  state = workspaceReducer(state, { type: 'offersLoaded', key: offerQueryKey('p1', state.filters, state.position), page: offers() });
   state = workspaceReducer(state, { type: 'plan', primary: offer() });
   const before = structuredClone(state);
   assert.equal(resumeScreen(state), 'trip');

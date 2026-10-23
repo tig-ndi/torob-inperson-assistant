@@ -31,14 +31,14 @@ export function TripScreen() {
   const alternatives = tripAlternatives(currentFollowups, plan.primary)
     .filter(item => item.offer.shop_id !== plan.primary.shop_id && item.offer.shop_id !== plan.alternative?.shop_id);
   const alternativeSource = plan.alternative ? alternativeOrigin(state.followups, plan.alternative) : undefined;
-  const primarySource = alternativeOrigin(state.followups, plan.primary);
+  const primarySource = plan.source ?? alternativeOrigin(state.followups, plan.primary);
   return <div className="uv-trip">
     <header>
       <h2>برنامهٔ مراجعه</h2>
       {primarySource === 'simulated' ? <SimBadge />
         : primarySource === 'user_report' ? <Badge tone="warning">گزارش شما — تأیید بیرونی نشده</Badge> : null}
       <p className="ub-meta">فاصله‌ها هوایی‌اند. مسیر خیابانی، زمان رانندگی یا زمان پیاده‌روی بدون سرویس معتبر نمایش داده نمی‌شود.</p>
-      {primarySource && <p className="uv-note">این مقصد از نتیجهٔ {primarySource === 'simulated' ? 'شبیه‌سازی' : 'گزارش خودتان'} در سرویس جایگزین‌ها انتخاب شده است؛ تأیید بیرونی نیست.</p>}
+      {primarySource && <p className="uv-note">این مقصد از نتیجهٔ {primarySource === 'simulated' ? 'شبیه‌سازی' : 'گزارش خودتان'} ثبت شده است؛ تأیید بیرونی نیست.</p>}
       {state.selectedOffer && state.selectedOffer.offer_id !== plan.primary.offer_id && <div className="uv-review" role="status">
         <p>انتخاب فعلی با مقصد ثبت‌شده متفاوت است. این برنامه خودکار عوض نمی‌شود.</p>
         <Button tone="secondary" disabled={state.selectionNeedsReview}

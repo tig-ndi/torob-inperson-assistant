@@ -27,6 +27,7 @@ from apps.api.intent import AssistantRequest
 from apps.api.battery import MAX_CAPACITY_MAH
 from apps.api.voice import voice_router
 from apps.api.deployment import readiness
+from apps.api.guidance import Guidance, guidance
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +54,13 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     web = (web_dist if web_dist is not None else Path(
         os.environ.get('TOROB_WEB_DIST', str(ROOT / 'apps/web/dist')))).resolve()
     application.state.readiness_check = lambda: readiness(catalogue, agent.ledger, web)
+
+    @application.get('/api/assistant/guidance', response_model=Guidance)
+    def assistant_guidance(q: Annotated[str | None, Query(min_length=1, max_length=120)] = None):
+        try:
+            return guidance(catalogue, q)
+        except InvalidQuery as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @application.get('/api/health/live')
     def liveness():

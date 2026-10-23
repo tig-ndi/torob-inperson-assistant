@@ -23,7 +23,9 @@ test('product changes invalidate offer selection, followup and visit plan, witho
   let state = reduce(initialWorkspace(), { type: 'product', value: product() });
   state = reduce(state, { type: 'selectOffer', value: offer() });
   state = reduce(state, { type: 'prepared', result: prepared(), expectedRevision: state.revision });
+  state = reduce(state, { type: 'offersLoaded', key: offerQueryKey('p1', state.filters, state.position), page: offers() });
   state = reduce(state, { type: 'plan', primary: offer() });
+  assert.ok(state.visitPlan);
   state = reduce(state, { type: 'product', value: product('p2') });
   assert.equal(state.selectedOffer, null); assert.equal(state.visitPlan, null); assert.deepEqual(state.followups, {});
 });

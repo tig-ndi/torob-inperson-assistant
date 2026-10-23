@@ -1,0 +1,116 @@
+/* One map, one panel, one conversation throughout the purchase. */
+.ub-app.uc-map-workspace { height:100dvh; min-height:0; overflow:hidden; background:var(--ub-bg); }
+.uc-map-workspace .uc-workspace-header { height:62px; flex:0 0 62px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 20px; border-bottom:1px solid var(--ub-line); background:var(--ub-surface); z-index:500; }
+.uc-map-workspace .uc-workspace-header .ub-brand { font-size:13px; }
+.uc-map-workspace .uc-workspace-header .ub-brand>span { font-size:35px; }
+.ub-app.uc-map-workspace .ub-workspace { position:relative; display:block; width:100%; max-width:none; height:calc(100dvh - 62px); min-height:0; padding:0; margin:0; flex:1; }
+.ub-app.uc-map-workspace .ub-map { display:block; position:absolute; inset:0; width:100%; height:100%; min-height:0; border:0; border-radius:0; }
+.uc-map-workspace .um-map-shell,.uc-map-workspace .um-map { width:100%; height:100%; min-height:0; }
+.ub-app.uc-map-workspace .ub-panel { position:absolute; inset:12px 12px 12px auto; width:clamp(390px,39vw,560px); max-width:calc(100% - 24px); height:auto; max-height:none; min-height:0; display:flex; flex-direction:column; padding:0; border:1px solid var(--ub-line); border-radius:24px; background:var(--ub-surface); overflow:hidden; z-index:450; box-shadow:0 14px 60px #0004; transform:none; }
+.ub-app.uc-map-workspace .ub-panel-top { display:flex; flex-wrap:nowrap; flex:0 0 auto; gap:5px; align-items:center; padding:9px 12px; min-height:54px; border-bottom:1px solid var(--ub-line); }
+.uc-map-workspace .ub-panel-top h2 { flex:1; font-size:12px; color:var(--ub-muted); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.uc-map-workspace .ub-panel-top .ub-button { min-height:36px; padding:5px 9px; font-size:12px; }
+.uc-map-workspace .uc-agent-tab[aria-current=page] { color:var(--ub-brand); background:var(--ub-brand-soft); }
+.ub-app.uc-map-workspace .ub-sheet-steps { display:block; flex:0 0 auto; padding:8px 8px 2px; }
+.uc-map-workspace .ub-stepper { margin:0; }
+.uc-map-workspace .ub-stepper button { min-height:48px; font-size:10px; gap:4px; padding:4px; }
+.ub-app.uc-map-workspace .ub-panel-body { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px; scrollbar-width:thin; scrollbar-color:var(--ub-line) transparent; }
+.ub-app.uc-map-workspace .ub-panel-footer { display:flex; justify-content:space-between; align-items:center; flex:0 0 auto; gap:8px; min-height:48px; padding:8px 14px; border-top:1px solid var(--ub-line); background:var(--ub-surface); }
+.uc-map-workspace .ub-panel-footer>span { font-size:10px; color:var(--ub-muted); }
+.uc-map-workspace .ub-panel-footer .ub-button { min-height:40px; font-size:12px; padding:7px 13px; }
+.uc-map-workspace .uc-agent-slot[hidden] { display:none; }
+.uc-map-workspace .uc-agent-slot { height:100%; min-height:0; }
+.uc-map-workspace .uc-discovery { display:block; max-width:none; height:100%; min-height:0; }
+.uc-map-workspace .uc-chat.ua-decide { width:100%; height:100%; min-height:0; border:0; box-shadow:none; border-radius:0; }
+.uc-map-workspace .uc-chat-head { display:none; }
+.uc-map-workspace .uc-chat-head h2 { font-size:15px; }
+.uc-map-workspace .uc-chat-head p { font-size:10px; }
+.uc-map-workspace .uc-service.ua-status { padding:9px 0; }
+.uc-map-workspace .uc-stream { flex:1; min-height:48px; max-height:none; overflow:auto; padding:6px 0 0; }
+.uc-map-workspace .uc-chat-head,.uc-map-workspace .uc-service { flex-shrink:0; }
+.uc-map-workspace .uc-greeting { padding-block:4px 16px; }
+.uc-map-workspace .uc-greeting h3 { font-size:clamp(25px,2.4vw,34px); margin:5px 0 10px; }
+.uc-map-workspace .uc-greeting>p { font-size:12px; }
+.uc-map-workspace .uc-composer { padding:10px 0 4px; flex:0 0 auto; max-height:64%; overflow:auto; }
+.uc-map-workspace .uc-compose-form textarea { min-height:64px; height:84px; }
+.uc-map-workspace .uc-product { padding:12px; }
+.uc-map-workspace .uc-product-actions .ub-button { font-size:10px; }
+.uc-map-tools { position:absolute; z-index:440; left:24px; right:calc(clamp(390px,39vw,560px) + 40px); top:18px; max-width:780px; margin-inline:auto; display:grid; gap:10px; pointer-events:none; }
+.uc-map-tools>* { pointer-events:auto; }
+.uc-map-agent { display:flex; width:100%; align-items:center; gap:12px; padding:14px 18px; background:var(--ub-surface); color:var(--ub-ink); border:1px solid var(--ub-line); border-radius:22px; text-align:start; box-shadow:0 6px 24px #0002; }
+.uc-map-agent>svg { color:var(--ub-brand); }
+.uc-map-agent>span:first-of-type { flex:1; min-width:0; }
+.uc-map-agent strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.uc-map-agent small { color:var(--ub-muted); font-size:11px; }
+.uc-map-tools>div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+.uc-map-tools .ub-button { min-height:36px; padding:7px 12px; font-size:11px; background:var(--ub-surface); box-shadow:0 3px 12px #0001; }
+.uc-map-workspace .uc-followup-chips { margin-block:12px; }
+.uc-followup-chips>p { color:var(--ub-muted); font-size:11px; margin-bottom:7px; }
+.uc-followup-chips>div { display:flex; flex-wrap:wrap; gap:6px; }
+.uc-followup-chips .ub-button { min-height:34px; padding:6px 10px; font-size:11px; }
+.uc-map-workspace .um-controls { inset:auto auto 115px 14px; }
+.uc-map-workspace .leaflet-top.leaflet-left { top:auto; bottom:20px; left:10px; }
+.uc-map-workspace .um-legend { inset:auto auto 8px 100px; max-width:55%; font-size:9px; }
+.uc-map-workspace .um-empty-note { inset:auto calc(clamp(390px,39vw,560px) + 30px) 8px 100px; max-width:none; font-size:10px; }
+@media(max-width:959px) {
+  .uc-map-workspace .uc-workspace-header { height:54px; flex-basis:54px; padding:5px 12px; }
+  .uc-map-workspace .uc-workspace-header .ub-brand { font-size:11px; }
+  .uc-map-workspace .uc-workspace-header .ub-brand>span { font-size:28px; }
+  .uc-map-workspace .uc-workspace-header .ub-brand small { font-size:9px; }
+  .uc-map-workspace .uc-workspace-header>.ub-badge { display:none; }
+  .ub-app.uc-map-workspace .ub-workspace { height:calc(100dvh - 54px); display:flex; flex-direction:column; padding:0; }
+  .ub-app.uc-map-workspace .ub-map { position:relative; inset:auto; width:100%; flex:0 0 42%; height:42%; min-height:130px; }
+  .ub-app.uc-map-workspace .ub-panel { position:relative; inset:auto; margin:0; width:100%; max-width:none; height:auto; max-height:none; flex:1; min-height:0; border-radius:18px 18px 0 0; border-inline:0; box-shadow:0 -5px 24px #0002; }
+  .ub-app.uc-map-workspace .ub-panel-top { min-height:42px; padding:5px 9px; }
+  .ub-app.uc-map-workspace .ub-sheet-steps { padding:3px 6px; }
+  .uc-map-workspace .ub-stepper button { min-height:42px; }
+  .uc-map-workspace .ub-stepper .ub-step-label { display:block; font-size:10px; }
+  .ub-app.uc-map-workspace .ub-panel-body { padding:12px; }
+  .ub-app.uc-map-workspace .ub-panel-footer { min-height:40px; padding:5px 10px; }
+  .uc-map-workspace .ub-panel-footer .ub-button { min-height:34px; font-size:11px; }
+  .uc-map-tools { inset:8px 8px auto; max-width:none; gap:5px; }
+  .uc-map-agent { padding:9px 12px; border-radius:15px; gap:8px; }
+  .uc-map-agent strong { font-size:12px; }
+  .uc-map-agent small { display:none; }
+  .uc-map-tools .ub-button { min-height:32px; padding:4px 9px; font-size:10px; }
+  .uc-map-workspace .uc-greeting h3 { font-size:26px; }
+  .uc-map-workspace .uc-greeting h3 { font-size:20px; line-height:1.6; margin:0; }
+  .uc-map-workspace .uc-greeting>p,.uc-map-workspace .uc-starters>p { display:none; }
+  .uc-map-workspace .um-empty-note { inset:auto 10px 8px 70px; }
+  .uc-map-workspace .uc-composer { gap:5px; max-height:64%; padding-top:6px; }
+  .uc-map-workspace .uc-context { flex-wrap:nowrap; overflow-x:auto; }
+  .uc-map-workspace .uc-context .ub-button { white-space:nowrap; font-size:10px; }
+  .uc-map-workspace .uc-help { font-size:9px; line-height:1.5; }
+  .uc-map-workspace .uc-chat-head p { display:none; }
+  .uc-map-workspace .uc-greeting { padding-bottom:8px; }
+  .uc-map-workspace .uc-chat-head { padding-bottom:7px; }
+  .uc-map-workspace .uc-chat-head>div>svg { width:32px; height:32px; padding:6px; }
+  .uc-map-workspace .uc-greeting h3 br { display:none; }
+  .uc-map-workspace .uc-greeting h3 em { margin-inline-start:5px; }
+  .uc-map-workspace .uc-starters>div { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+  .uc-map-workspace .uc-starters .ub-button { flex:0 0 auto; white-space:nowrap; }
+}
+
+/* The transcript owns the only chat scroll; the composer never scrolls or clips. */
+.uc-map-workspace .uc-chat.ua-decide { display:flex; flex-direction:column; }
+.uc-map-workspace .uc-stream { flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:10px; }
+.uc-map-workspace .uc-composer { flex:0 0 auto; max-height:none; overflow:visible; padding:8px 0 0; border-top:1px solid var(--ub-line); }
+.uc-map-workspace .uc-compose-form { display:grid; grid-template-columns:minmax(0,1fr); gap:0; padding:0; }
+.uc-map-workspace .uc-compose-form textarea { resize:none; height:62px; min-height:62px; max-height:62px; padding:10px 12px; font-size:13px; }
+.uc-map-workspace .uc-icon-actions { display:flex; gap:5px; padding:4px 8px 7px; align-items:center; }
+.uc-map-workspace .uc-icon-actions>.ub-button { width:38px; height:38px; min-height:38px; flex:0 0 38px; padding:7px; border-radius:12px; }
+.uc-map-workspace .uc-icon-actions>.ub-button:first-child { margin-inline-end:auto; }
+.uc-map-workspace .uc-stream .uc-details { margin-block:10px; }
+.uc-map-workspace .uc-service.ua-status { padding:4px 0 7px; font-size:10px; }
+@media(max-width:959px) {
+  .ub-app.uc-map-workspace .ub-map { flex-basis:36%; height:36%; min-height:110px; }
+  .ub-app.uc-map-workspace .ub-panel-top { min-height:36px; padding-block:2px; }
+  .uc-map-workspace .ub-stepper button { min-height:34px; padding-block:2px; }
+  .ub-app.uc-map-workspace .ub-panel-body { padding:7px 10px; }
+  .uc-map-workspace .uc-compose-form textarea { height:54px; min-height:54px; max-height:54px; }
+  .uc-map-workspace .uc-icon-actions>.ub-button { width:36px; height:36px; min-height:36px; flex-basis:36px; }
+  .uc-map-workspace .uc-composer { padding-top:5px; }
+}
+@media(max-width:959px) and (max-height:700px) {
+  .ub-app.uc-map-workspace .ub-map { flex-basis:28%; height:28%; min-height:110px; }
+}

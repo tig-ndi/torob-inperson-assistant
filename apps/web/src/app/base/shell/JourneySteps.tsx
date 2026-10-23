@@ -4,7 +4,7 @@ import type { Screen } from '../domain/contracts.ts';
 export function JourneySteps() {
   const { state, dispatch } = useWorkspace();
   const steps: { screen: Screen; label: string; short: string; available: boolean }[] = [
-    { screen: state.productResults ? 'results' : 'decide', label: 'انتخاب محصول', short: 'انتخاب کالا', available: true },
+    { screen: state.productResults ? 'results' : 'decide', label: 'گفت‌وگو و انتخاب محصول', short: 'گفت‌وگو و کالا', available: true },
     { screen: 'stores', label: 'فروشندگان', short: 'فروشگاه‌ها', available: state.product !== null },
     { screen: 'compare', label: 'مقایسه', short: 'مقایسه', available: state.compareOffers.length >= 2 },
     { screen: state.visitPlan ? 'trip' : 'contact', label: 'پیگیری و مراجعه', short: 'مراجعه', available: state.selectedOffer !== null || state.visitPlan !== null },

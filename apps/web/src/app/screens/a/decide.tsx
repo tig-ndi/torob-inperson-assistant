@@ -2,9 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AssistantTurn, RequestFailure, RequestState } from '../../base/domain/contracts.ts';
 import { assistantStatus } from '../../base/domain/client.ts';
 import { conversationInput } from '../../base/state/conversation.ts';
-import { useAssistant, useCommand } from '../../base/state/hooks.ts';
+import { useAssistant, useCommand, useCatalogue } from '../../base/state/hooks.ts';
 import { useWorkspace } from '../../base/state/Workspace.tsx';
 import { Badge, Button, ErrorCard } from '../../base/ui/primitives.tsx';
+import { LocationDialog } from '../../base/ui/LocationDialog.tsx';
+import { formatMoney } from '../../base/domain/presentation.ts';
+import { catalogueSearchForWorkspace } from '../../base/state/model.ts';
+import { useGuidance } from './guidance.ts';
+import { ChatProducts } from './ChatProducts.tsx';
 import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
@@ -46,7 +51,6 @@ const blockedCopy: Record<'disabled' | 'missing_key' | 'invalid_config' | 'attem
 };
 
 function Outcome({ turn }: { turn: AssistantTurn }) {
-  const { state, dispatch } = useWorkspace();
   const outcome = assistantOutcome(turn);
   const response = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -77,8 +81,7 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
     <p className="ub-meta">{outcome.kind === 'question'
       ? 'این پرسش فقط برای روشن‌شدن نیاز است؛ تا ارسال پاسخ شما شرط تازه‌ای اعمال نمی‌شود.'
       : 'این خلاصه جای تأیید موجودی، قیمت یا تناسب کالا با نیاز شما را نمی‌گیرد.'}</p>
-    {outcome.kind !== 'question' && state.productResults?.source === 'assistant' &&
-      <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'results' })}>دیدن محصولات این پاسخ</Button>}
+
   </section>;
 }
 
@@ -91,6 +94,10 @@ export function DecideScreen({ start = false }: { start?: boolean }) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const localCatalogue = useCatalogue();
+  const guidanceQuery = state.needState?.topic_query ?? null;
+  const guidance = useGuidance(guidanceQuery);
   const [blockedFailure, setBlockedFailure] = useState<RequestFailure | null>(null);
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -213,104 +220,88 @@ export function DecideScreen({ start = false }: { start?: boolean }) {
 
   const tone = availability.phase === 'ready' ? 'ready' : availability.phase === 'unknown' ? 'unknown'
     : availability.phase === 'checking' ? 'checking' : 'blocked';
-  return <section className={`ua-decide${start ? ' ua-decide--start' : ''}`} aria-labelledby={start ? 'ua-start-title' : 'ua-decide-title'}>
-    {!start && <header className="ua-decide-head">
-      <h2 id="ua-decide-title">نیازتان را بگویید</h2>
-      <p>نیاز و کاربردتان را بنویسید؛ دستیار در صورت نیاز پرسش بعدی را همین‌جا می‌پرسد.</p>
-    </header>}
-
-
-    <div className={`ua-status ua-status--${tone}`}>
-      <p className="ua-status-text" role="status" aria-live="polite"><strong>وضعیت دستیار: </strong>
-        {availability.phase === 'ready'
-          ? <>آمادهٔ بررسی نیاز است · درخواست مجاز باقی‌مانده: <bdi>{numbers.format(availability.remaining)}</bdi></>
-          : availability.phase === 'checking' ? 'در حال بررسی…'
-          : availability.phase === 'unknown'
-            ? 'نامشخص است. ارسال صریح نیاز همچنان ممکن است؛ سرویس در هر حال سقف خودش را اعمال می‌کند.'
-            : blockedCopy[availability.reason]}</p>
-      {(availability.phase === 'unknown' || availability.phase === 'blocked') && <Button tone="secondary" className="ua-status-retry"
-        onClick={() => void refreshStatus(true)}><RefreshIcon />بررسی مجدد وضعیت</Button>}
+  const hasHistory = state.history.length > 0;
+  const displayedHistory = lastTurn ? state.history.slice(0, -1) : state.history;
+  const continueScreen = state.visitPlan ? 'trip' : state.selectedOffer ? 'contact' : state.product ? 'stores' : state.productResults ? 'results' : null;
+  const localSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    const page = await localCatalogue.search(catalogueSearchForWorkspace(state));
+    if (page) dispatch({ type: 'navigate', screen: 'results' });
+  };
+  return <section className={`ua-decide uc-chat${hasHistory ? ' uc-chat--active' : ''}`} aria-labelledby="ua-decide-title">
+    <header className="uc-chat-head"><div><SparklesIcon size={22} /><div><h2 id="ua-decide-title">دستیار خرید حضوری</h2><p>از انتخاب کالا تا پیدا کردن فروشگاه</p></div></div>
+      {hasHistory && <Button tone="ghost" disabled={pending} onClick={resetConversation} aria-label="گفت‌وگوی تازه"><RestartIcon size={18} /></Button>}
+    </header>
+    <div className={`ua-status ua-status--${tone} uc-service`}>
+      <p role="status" aria-live="polite">{availability.phase === 'ready' ? <><span className="uc-status-dot" />آمادهٔ گفت‌وگو · {numbers.format(availability.remaining)} درخواست مجاز باقی است</>
+        : availability.phase === 'checking' ? 'در حال بررسی دستیار…'
+        : availability.phase === 'unknown' ? 'وضعیت سرویس نامشخص است؛ ارسال صریح ممکن است.' : blockedCopy[availability.reason]}</p>
+      {(availability.phase === 'unknown' || availability.phase === 'blocked') && <Button tone="ghost" onClick={() => void refreshStatus(true)} aria-label="بررسی مجدد وضعیت"><RefreshIcon size={17} /></Button>}
     </div>
+    <div className="uc-stream">
+      {!hasHistory && <div className="uc-greeting"><p>سلام، خوش اومدی!</p><h3>برای چه خریدی<br /><em>کمکت کنم؟</em></h3><p>بگو چه می‌خواهی و چه چیزی برایت مهم است؛ گزینه‌های ثبت‌شده را با هم بررسی می‌کنیم.</p></div>}
+      {displayedHistory.length > 0 && <ol className="uc-messages" aria-label="تاریخچهٔ گفت‌وگو">{displayedHistory.map((message, index) =>
+        <li className={`uc-message uc-message--${message.role}`} key={`${index}-${message.role}`}><strong>{message.role === 'user' ? 'شما' : 'دستیار'}</strong><p dir="auto">{message.content}</p></li>)}</ol>}
+      {lastTurn && <Outcome turn={lastTurn} />}
+      {pending && <div className="uc-thinking" role="status"><SparklesIcon size={18} /><span>در حال بررسی نیازت…</span><Button tone="ghost" onClick={cancel}><StopCircleIcon size={16} />لغو</Button></div>}
+      {localError && <ErrorCard message={localError} />}
+      {assistant.result.status === 'error' && <ErrorCard message={assistant.result.error} failure={assistant.result.failure} onRetry={canSend && draft.trim() ? () => void send() : undefined} />}
+      {notice && <p className="ua-notice" role="status">{notice}</p>}
+      {!!need?.pending_requirements.length && <p className="uc-pending-warning" role="status">{numbers.format(need.pending_requirements.length)} خواسته هنوز اعمال نشده است؛ جزئیات در شرایط گفت‌وگو.</p>}
+      <ChatProducts />
+      {hasHistory && <div className="uc-followup-chips"><p>قدم بعدی را با هم انتخاب کنیم</p><div>
+        {guidance.data?.brands.filter(brand => !need?.topic_query?.includes(brand)).slice(0, 3).map(brand =>
+          <Button key={brand} tone="secondary" disabled={pending || !canSend} onClick={() => void send(`${need?.topic_query ?? ''} ${brand}`)}>{brand} را بررسی کن</Button>)}
+        <Button tone="secondary" disabled={pending} onClick={() => setFiltersOpen(true)}>بودجه‌ام را تنظیم کنم</Button>
+        {!state.position && <Button tone="secondary" disabled={pending} onClick={() => setLocationOpen(true)}>فروشگاه نزدیک من</Button>}
+      </div></div>}
 
-    <form className="ua-decide-form" onSubmit={submit} aria-busy={pending}>
-      <label htmlFor="ua-need">نیاز و کاربرد موردنظر</label>
-      <textarea ref={textarea} id="ua-need" value={draft} maxLength={1000} rows={3} aria-describedby="ua-need-help"
-        onChange={event => { setDraft(event.target.value); if (localError) setLocalError(null); }}
-        placeholder="مثلاً گوشی برای عکاسی می‌خواهم؛ سقف بودجه‌ام ۱۰ میلیون تومان است." />
-      <div className="ua-decide-actions">
-        <Button type="submit" disabled={pending || !canSend || !draft.trim()}><SparklesIcon />بررسی نیاز</Button>
-    <div className="ua-voice-entry">
-      <button
-        type="button"
-        className="uv-voice-launcher-btn"
-        aria-label="گفت‌وگوی صوتی با دستیار هوشمند"
-        onClick={() => setVoiceModalOpen(true)}
-        title="گفت‌وگوی صوتی با دستیار خرید"
-      >
-        <span className="uv-voice-launcher-mic" aria-hidden="true">🎙️</span>
-        <span>گفت‌وگوی صوتی با دستیار هوشمند</span>
-        <span className="uv-voice-launcher-badge" aria-hidden="true">صوتی</span>
-      </button>
+      {!hasHistory && <div className="uc-starters"><p>برای شروع، یکی از دسته‌های کاتالوگ را انتخاب کن</p>
+        <div>{guidance.data?.starters.map(category => <Button key={category} tone="secondary" disabled={pending || !canSend} onClick={() => { setDraft(category); void send(category); }}><SparklesIcon size={15} />{category}</Button>)}</div>
+        {guidance.error && <Button tone="ghost" onClick={guidance.retry}>تلاش مجدد برای دریافت پیشنهادها</Button>}</div>}
+      {lastTurn?.question_code === 'budget' && guidance.data?.budget_samples.length ? <div className="uc-budget-choices"><p>سقف بودجه‌ات چقدر باشد؟</p><div>{guidance.data.budget_samples.map(value =>
+        <Button key={value} tone="secondary" disabled={pending || !canSend} onClick={() => void send(`بودجه من تا ${value} تومان است`)}>تا {formatMoney(value)}</Button>)}</div>
+        <small>نمونهٔ قیمت‌های تاریخی حداکثر ۴۰ محصول؛ بودجهٔ دلخواهت را هم می‌توانی بنویسی.</small></div> : null}
+
+      {start && continueScreen && <div className="uc-resume"><strong>خرید فعلی‌ات محفوظ است</strong><p>{state.product?.persian_title ?? state.needState?.topic_query}</p>
+        <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: continueScreen })}>ادامهٔ خرید</Button></div>}
+      <p id="ua-need-help" className="ub-sr-only">ارسال فقط با انتخاب شماست؛ موقعیت به مدل فرستاده نمی‌شود. اطلاعات شخصی ننویسید.</p>
+      {need && <details className="uc-details"><summary>شرایط ثبت‌شدهٔ گفت‌وگو</summary><dl className="ua-need-list">{needSummary(need).map(row => <div className="ua-need-row" key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
+        {need.max_price_toman !== state.filters.maxPrice && <p>بودجهٔ فعال در ارسال بعدی: {activeBudgetLabel(state.filters.maxPrice)}</p>}
+        {need.pending_requirements.length > 0 && <><h4>درخواست‌های اعمال‌نشده</h4><ul>{need.pending_requirements.map(requirement => <li key={requirement.key}>{requirement.source_text} · <Badge tone="warning">هنوز اعمال نشده</Badge>{pendingRequirementBadge(requirement.status) && <Badge>{pendingRequirementBadge(requirement.status)}</Badge>}</li>)}</ul></>}
+      </details>}
+      {(availability.phase === 'blocked' || assistant.result.status === 'error') && <details className="uc-details uc-local"><summary>ادامه با کاتالوگ، بدون مدل</summary><p>این مسیر جست‌وجوی مستقیم است و پاسخ هوش مصنوعی تولید نمی‌کند.</p>
+        <form onSubmit={event => void localSearch(event)}><label htmlFor="uc-local-query">نام کالا</label><input id="uc-local-query" maxLength={120} value={state.query} onChange={event => dispatch({ type: 'query', value: event.target.value })} placeholder="مثلاً گوشی سامسونگ" />
+          <Button tone="secondary" type="submit" disabled={!state.query.trim() || localCatalogue.result.status === 'loading'}>جست‌وجوی کاتالوگ</Button></form>
+        {localCatalogue.result.status === 'loading' && <p role="status">در حال جست‌وجوی کاتالوگ…</p>}
+        {localCatalogue.result.status === 'error' && <ErrorCard message={localCatalogue.result.error} failure={localCatalogue.result.failure} />}
+      </details>}
     </div>
-        {start && <><Button tone="secondary" type="button" onClick={() => setFiltersOpen(true)}>بودجه و شرایط</Button>
-          <Button tone="ghost" type="button" onClick={() => { dispatch({ type: 'navigate', screen: 'decide' }); requestAnimationFrame(() => textarea.current?.focus()); }}>کمک برای انتخاب</Button></>}
-        {pending && <Button tone="secondary" type="button" onClick={cancel}><StopCircleIcon />لغو درخواست</Button>}
-        {!pending && (state.history.length > 0 || need !== null) && <Button tone="secondary" type="button" onClick={resetConversation}>
-          <RestartIcon />گفت‌وگوی تازه</Button>}
-      </div>
-      {pending && <p className="ua-pending-text" role="status">در حال ارسال به دستیار… پاسخ پس از دریافت، همین‌جا نمایش داده می‌شود.</p>}
-      <p id="ua-need-help" className="ub-meta">فقط با زدن «بررسی نیاز» درخواست فرستاده می‌شود؛ نوشتن متن یا تغییر بودجه به‌تنهایی درخواستی نمی‌فرستد.
-        اطلاعات تماس یا شخصی ننویسید. تغییر عبارت جست‌وجو یا شرایط، ارسال در حال انجام را متوقف می‌کند.</p>
-    </form>
+    <div className="uc-composer">
+      <form className="ua-decide-form uc-compose-form" onSubmit={submit} aria-busy={pending}>
+        <label className="ub-sr-only" htmlFor="ua-need">نیاز و کاربرد موردنظر</label>
+        <textarea ref={textarea} id="ua-need" value={draft} maxLength={1000} rows={3} aria-describedby="ua-need-help"
+          onChange={event => { setDraft(event.target.value); if (localError) setLocalError(null); }}
+          placeholder={hasHistory ? 'پاسخت را بنویس یا نیازت را دقیق‌تر کن…' : 'مثلاً یک گوشی برای استفادهٔ روزمره می‌خواهم…'} />
+        <div className="uc-send-row uc-icon-actions">
+          <Button type="submit" aria-label={hasHistory ? 'ارسال پاسخ' : 'شروع گفت‌وگو'} title="ارسال پیام" disabled={pending || !canSend || !draft.trim()}>
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg>
+          </Button>
+          <Button tone="ghost" type="button" disabled={pending || !canSend} onClick={() => setVoiceModalOpen(true)} aria-label="گفت‌وگوی صوتی با دستیار هوشمند" title="گفت‌وگوی صوتی">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg>
+          </Button>
+          <Button tone="ghost" type="button" disabled={pending} onClick={() => setFiltersOpen(true)} aria-label="بودجه و شرایط" title="بودجه و شرایط">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 7h18M3 17h18M8 4v6m8 4v6"/></svg>
+          </Button>
+          <Button tone="ghost" type="button" disabled={pending} onClick={() => setLocationOpen(true)} aria-label="انتخاب موقعیت در گفت‌وگو" title="موقعیت">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg>
+          </Button>
+        </div>
+      </form>
 
-    {localError && <ErrorCard message={localError} />}
-    {assistant.result.status === 'error' && <ErrorCard message={assistant.result.error} failure={assistant.result.failure}
-      onRetry={canSend && draft.trim() ? () => void send() : undefined} />}
-    {notice && <p className="ua-notice" role="status">{notice}</p>}
-
-    {lastTurn && <Outcome turn={lastTurn} />}
-
-    {!start && <section className="ua-conditions" aria-labelledby="ua-conditions-title">
-      <div className="ua-section-head">
-        <h3 id="ua-conditions-title">شرایط جست‌وجو</h3>
-        <Button tone="secondary" onClick={() => setFiltersOpen(true)} disabled={pending}>بودجه و شرایط</Button>
-      </div>
-      <p className="ua-active-budget">بودجهٔ فعال در ارسال بعدی: <bdi>{activeBudgetLabel(state.filters.maxPrice)}</bdi></p>
-      {need ? <>
-        <dl className="ua-need-list">{needSummary(need).map(row => <div className="ua-need-row" key={row.label}>
-          <dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
-        {need.max_price_toman !== state.filters.maxPrice && <p className="ua-override-note">بودجهٔ فعال با بودجهٔ ثبت‌شده در گفت‌وگو
-          (<bdi>{activeBudgetLabel(need.max_price_toman)}</bdi>) تفاوت دارد؛ در ارسال بعدی بودجهٔ فعال فرستاده می‌شود.</p>}
-        {need.pending_requirements.length > 0 && <div className="ua-pending" aria-labelledby="ua-pending-title">
-          <h4 id="ua-pending-title">درخواست‌های اعمال‌نشده</h4>
-          <ul className="ua-pending-list">{need.pending_requirements.map(requirement => <li key={requirement.key}>
-            <span className="ua-pending-source" dir="auto">{requirement.source_text}</span>
-            <span className="ua-pending-labels"><Badge tone="warning">هنوز اعمال نشده</Badge>
-              {pendingRequirementBadge(requirement.status) && <Badge>{pendingRequirementBadge(requirement.status)}</Badge>}</span>
-          </li>)}</ul>
-          <p className="ub-meta">این خواسته‌ها در جست‌وجو و آفرهای فعلی اعمال نشده‌اند.</p>
-        </div>}
-        <p className="ub-meta">این شرایط از آخرین پاسخ دستیار ثبت شده‌اند؛ تغییر بودجه، تاریخچهٔ گفت‌وگو را پاک نمی‌کند.</p>
-      </> : <p className="ub-meta">هنوز شرطی از گفت‌وگو ثبت نشده است؛ بودجه و شرایط فعال در اولین ارسال لحاظ می‌شوند.</p>}
-    </section>}
-
-    {state.history.length > 0 && <details className="ua-history">
-      <summary>تاریخچهٔ گفت‌وگو ({numbers.format(state.history.length)} پیام)</summary>
-      <ol className="ua-history-list">{state.history.map((message, index) => <li key={`${index}-${message.role}`}
-        className={`ua-message ua-message--${message.role}`}>
-        <strong>{message.role === 'user' ? 'شما' : 'دستیار'}</strong>
-        <p dir="auto">{message.content}</p>
-      </li>)}</ol>
-    </details>}
-
-    <p className="ub-meta">پاسخ‌ها به کاتالوگ ثبت‌شده محدودند؛ موجودی و تناسب تأیید نشده است. سقف و وضعیت سرویس، جدا از متن گفت‌وگو، توسط سرویس اعمال می‌شوند.</p>
+    </div>
     {filtersOpen && <FiltersDialog onClose={() => setFiltersOpen(false)} />}
-    {voiceModalOpen && <VoiceAssistantModal
-      disabled={pending || !canSend}
-      onClose={() => setVoiceModalOpen(false)}
-      onSubmitPrompt={send}
-      currentAssistantResponse={modalAssistantResponse}
-    />}
+    {locationOpen && <LocationDialog onClose={() => setLocationOpen(false)} />}
+    {voiceModalOpen && <VoiceAssistantModal disabled={pending || !canSend} onClose={() => setVoiceModalOpen(false)} onSubmitPrompt={send} currentAssistantResponse={modalAssistantResponse} />}
   </section>;
-
 }
