@@ -9,6 +9,8 @@ import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
 import { assistantBlockReason } from '../../base/domain/errors.ts';
+import { VoiceAssistantModal, VoiceSpeakerButton } from '../../voice/index.ts';
+
 
 const numbers = new Intl.NumberFormat('fa-IR');
 type AssistantStatus = Awaited<ReturnType<typeof assistantStatus>>;
@@ -51,6 +53,12 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
     response.current?.focus({ preventScroll: true });
     response.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   }, [turn.request_id]);
+  const speechText = outcome.kind === 'question'
+    ? outcome.question
+    : outcome.summary
+      ? `${outcome.title}؛ ${outcome.summary}`
+      : outcome.title;
+
   return <section ref={response} tabIndex={-1} className={`ua-outcome ua-outcome--${outcome.kind}`} aria-labelledby="ua-outcome-title" aria-live="polite">
     <p className="ua-eyebrow">{outcome.kind === 'question' ? 'پرسش دستیار' : outcome.kind === 'results' ? 'خلاصهٔ نتیجه' : 'بدون نتیجه'}</p>
     <h3 id="ua-outcome-title">{outcome.title}</h3>
@@ -59,6 +67,9 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
       {outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.kind === 'empty' && <p>برای این درخواست، محصولی در پاسخ ثبت‌شده برنگشت.{outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.summary && <p className="ua-summary">{outcome.summary}</p>}
+    <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+      <VoiceSpeakerButton text={speechText} />
+    </div>
     {outcome.limitations.length > 0 && <div className="ua-limitations">
       <h4>محدودیت‌های پاسخ</h4>
       <ul>{outcome.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>
@@ -80,9 +91,12 @@ export function DecideScreen() {
   const [notice, setNotice] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [blockedFailure, setBlockedFailure] = useState<RequestFailure | null>(null);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
+  const sending = useRef(false);
   const awaiting = useRef<{ text: string; previousTurnId: string | null } | null>(null);
+
 
   useEffect(() => {
     mounted.current = true;
@@ -130,20 +144,26 @@ export function DecideScreen() {
     }
   };
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text || pending || !canSend) return;
+  const send = async (value = draft): Promise<string | null> => {
+    const text = value.trim();
+    if (!text || pending || sending.current || !canSend) return null;
     let input;
     try { input = conversationInput(state, text); }
     catch (error: unknown) {
       setLocalError(error instanceof Error ? error.message : 'متن نیاز قابل ارسال نیست.');
-      return;
+      return null;
     }
     awaiting.current = { text, previousTurnId: state.lastTurn?.request_id ?? null };
     setLocalError(null);
     setNotice('');
-    await assistant.submit(input);
-    if (mounted.current) refreshStatus();
+    sending.current = true;
+    let turn;
+    try { turn = await assistant.submit(input); }
+    finally { sending.current = false; }
+    if (mounted.current) void refreshStatus();
+    if (!turn) return null;
+    const outcome = assistantOutcome(turn);
+    return outcome.kind === 'question' ? outcome.question ?? null : [outcome.title, outcome.summary].filter(Boolean).join('. ');
   };
 
   const cancel = () => {
@@ -169,13 +189,38 @@ export function DecideScreen() {
     void send();
   };
 
+  const modalAssistantResponse = lastTurn ? {
+    title: assistantOutcome(lastTurn).title,
+    text: assistantOutcome(lastTurn).kind === 'question'
+      ? assistantOutcome(lastTurn).question!
+      : [assistantOutcome(lastTurn).title, assistantOutcome(lastTurn).summary].filter(Boolean).join('. '),
+    summary: assistantOutcome(lastTurn).summary ?? undefined,
+    hasResults: assistantOutcome(lastTurn).kind === 'results',
+    productCount: assistantOutcome(lastTurn).count ?? undefined,
+    onViewResults: () => dispatch({ type: 'navigate', screen: 'results' }),
+  } : null;
+
   const tone = availability.phase === 'ready' ? 'ready' : availability.phase === 'unknown' ? 'unknown'
     : availability.phase === 'checking' ? 'checking' : 'blocked';
   return <section className="ua-decide" aria-labelledby="ua-decide-title">
+    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+      <button
+        type="button"
+        className="uv-voice-launcher-btn"
+        aria-label="گفت‌وگوی صوتی با دستیار هوشمند"
+        onClick={() => setVoiceModalOpen(true)}
+        title="گفت‌وگوی صوتی با دستیار خرید"
+      >
+        <span className="uv-voice-launcher-mic" aria-hidden="true">🎙️</span>
+        <span>گفت‌وگوی صوتی با دستیار هوشمند</span>
+        <span className="uv-voice-launcher-badge" aria-hidden="true">صوتی</span>
+      </button>
+    </div>
     <header className="ua-decide-head">
       <h2 id="ua-decide-title">نیازتان را بگویید</h2>
       <p>نیاز و کاربردتان را بنویسید؛ دستیار در صورت نیاز پرسش بعدی را همین‌جا می‌پرسد.</p>
     </header>
+
 
     <div className={`ua-status ua-status--${tone}`}>
       <p className="ua-status-text" role="status" aria-live="polite"><strong>وضعیت دستیار: </strong>
@@ -247,5 +292,12 @@ export function DecideScreen() {
 
     <p className="ub-meta">پاسخ‌ها به کاتالوگ ثبت‌شده محدودند؛ موجودی و تناسب تأیید نشده است. سقف و وضعیت سرویس، جدا از متن گفت‌وگو، توسط سرویس اعمال می‌شوند.</p>
     {filtersOpen && <FiltersDialog onClose={() => setFiltersOpen(false)} />}
+    {voiceModalOpen && <VoiceAssistantModal
+      disabled={pending || !canSend}
+      onClose={() => setVoiceModalOpen(false)}
+      onSubmitPrompt={send}
+      currentAssistantResponse={modalAssistantResponse}
+    />}
   </section>;
+
 }

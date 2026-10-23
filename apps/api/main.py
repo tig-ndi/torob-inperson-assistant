@@ -24,6 +24,7 @@ from apps.api.assistant import AssistantService
 from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
 from apps.api.battery import MAX_CAPACITY_MAH
+from apps.api.voice import voice_router
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -238,6 +239,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                 body.outcome_source, selection['shop_offer_count'], has_alternatives),
         }
 
+    application.include_router(voice_router)
     return application
 
 
