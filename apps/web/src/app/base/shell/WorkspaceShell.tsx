@@ -13,16 +13,18 @@ import { catalogueSearchForWorkspace } from '../state/model.ts';
 import { useResolvedTheme } from '../state/useResolvedTheme.ts';
 import { MapViewProvider } from './MapView.tsx';
 import { JourneySteps } from './JourneySteps.tsx';
+import { useMapPadding } from './useMapPadding.ts';
+import { useMobileSheet } from './useMobileSheet.ts';
+import './mobileSheet.css';
 
 export function WorkspaceShell() {
   const { state, dispatch } = useWorkspace();
   const catalogue = useCatalogue();
   const [overlay, setOverlay] = useState<'filters' | 'location' | null>(null);
-  const [sheet, setSheet] = useState<'half' | 'full'>('half');
   const mapElement = useRef<HTMLDivElement>(null);
   const panelElement = useRef<HTMLElement>(null);
+  const searchElement = useRef<HTMLElement>(null);
   const theme = useResolvedTheme();
-  useEffect(() => { if (state.screen === 'stores') setSheet('full'); }, [state.screen]);
   useEffect(() => {
     document.documentElement.dataset.uiTheme = theme;
   }, [theme]);
@@ -32,6 +34,10 @@ export function WorkspaceShell() {
     if (page) dispatch({ type: 'navigate', screen: 'results' });
   };
   const visit = state.product !== null && ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
+  const mobileSheet = useMobileSheet(searchElement, visit);
+  const { size: sheet, setSize: setSheet } = mobileSheet;
+  useEffect(() => { if (state.screen === 'stores') setSheet('full'); }, [state.screen, setSheet]);
+  const mapPadding = useMapPadding(mapElement, panelElement, searchElement, visit, sheet);
   const themeControl = <label className="ub-theme">نمایش<select aria-label="تم نمایش" value={state.theme}
     onChange={e => dispatch({ type: 'theme', value: e.target.value === 'dark' ? 'dark' : e.target.value === 'light' ? 'light' : 'system' })}>
     <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تیره</option></select></label>;
@@ -49,14 +55,14 @@ export function WorkspaceShell() {
       panelElement.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
     });
   };
-  return <MapViewProvider value={{ revealMap, showList }}><div className="ub-app" data-sheet={sheet} data-visit={visit}
+  return <MapViewProvider value={{ revealMap, showList }}><div className="ub-app" data-sheet={sheet} data-visit={visit} style={mobileSheet.style}
     data-layout={visit ? 'visit' : 'discovery'} data-screen={state.screen} data-resolved-theme={theme}>
     <a href="#workspace-panel" className="ub-skip">رفتن به محتوای اصلی</a>
     <header className="ub-header">
       <button type="button" className="ub-brand" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}><span aria-hidden="true">ت</span><div>دستیار خرید حضوری<small>از انتخاب کالا تا مراجعه</small></div></button>
       {!visit && <div className="ub-header-actions">{themeControl}</div>}
     </header>
-    <section className="ub-search-area" aria-label="جست‌وجو و شرایط">
+    <section ref={searchElement} className="ub-search-area" aria-label="جست‌وجو و شرایط">
       <form className="ub-search" onSubmit={search}>
         <SearchIcon size={22} /><label className="ub-sr-only" htmlFor="workspace-query">نام کالا در کاتالوگ</label>
         <input id="workspace-query" value={state.query} onChange={e => dispatch({ type: 'query', value: e.target.value })}
@@ -75,20 +81,22 @@ export function WorkspaceShell() {
       {/* Keep the initialized map alive across navigation while this purchase exists. */}
       {state.product && <div className="ub-map" hidden={!visit} ref={mapElement} tabIndex={-1} aria-label="فضای نقشهٔ فروشندگان"><MapLayer userPosition={state.position} radiusKm={state.filters.radiusKm} pins={pinsForWorkspace(state)}
         selectedPinId={state.selectedOffer?.shop_id ?? null} onPinSelect={shopId => dispatch({ type: 'focusShop', shopId })} cameraIntent={state.cameraIntent}
-        padding={{ top: 20, left: 20, right: 20, bottom: 20 }} /></div>}
+        padding={mapPadding} /></div>}
       <section id="workspace-panel" ref={panelElement} className="ub-panel" aria-label="فضای انتخاب کالا" tabIndex={-1}>
+        {visit && <div className="ub-sheet-handle" {...mobileSheet.handle}><span aria-hidden="true" /></div>}
         <div className="ub-panel-top" hidden={state.screen === 'home' && !state.navigation.length}><Button tone="ghost" disabled={!state.navigation.length} onClick={() => dispatch({ type: 'back' })} aria-label="بازگشت به مرحلهٔ قبل"><ChevronRightIcon /></Button>
           {visit && <Button className="ub-home-control" tone="ghost" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}>شروع</Button>}
+          {visit && <Button className="ub-sheet-filters" tone="ghost" aria-label="شرایط جست‌وجو" onClick={() => setOverlay('filters')}>شرایط</Button>}
           <strong>{screenLabels[state.screen]}</strong>{visit && <div className="ub-panel-theme">{themeControl}</div>}{visit && <Button className="ub-sheet-control" tone="ghost" aria-expanded={sheet === 'full'}
             aria-label={sheet === 'full' ? 'نقشه و فهرست' : 'فهرست کامل'}
-            onClick={() => setSheet(s => s === 'full' ? 'half' : 'full')}>{sheet === 'full' ? 'نقشه' : 'فهرست'}</Button>}</div>
-        {state.screen !== 'home' && <JourneySteps />}
-        <div className="ub-panel-body">
+            onClick={mobileSheet.toggle}>{sheet === 'full' ? 'نقشه' : 'فهرست'}</Button>}</div>
+        <div className="ub-sheet-steps" hidden={mobileSheet.collapsed}>{state.screen !== 'home' && <JourneySteps />}</div>
+        <div id="workspace-panel-content" className="ub-panel-body" hidden={mobileSheet.collapsed} inert={mobileSheet.collapsed}>
           {catalogue.result.status === 'loading' && <Skeleton />}
           {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} failure={catalogue.result.failure} />}
           <ScreenOutlet screen={state.screen} catalogue={catalogue.result.data} />
         </div>
-        <footer className="ub-panel-footer">
+        <footer className="ub-panel-footer" hidden={mobileSheet.collapsed}>
           <span>قیمت تاریخی ≠ موجودی قطعی</span>
           {state.selectedOffer && <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'contact' })}>پیگیری انتخاب</Button>}</footer>
       </section>

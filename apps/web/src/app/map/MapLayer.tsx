@@ -10,7 +10,6 @@ import { useWorkspace } from '../base/state/Workspace.tsx';
 import { Button } from '../base/ui/primitives.tsx';
 import { CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
 import { useMapView } from '../base/shell/MapView.tsx';
-import { useResolvedTheme } from '../base/state/useResolvedTheme.ts';
 
 export type MapPin = {
   id: string;
@@ -45,15 +44,6 @@ function coordinates(value: Position) { return L.latLng(value.lat, value.lon); }
 function shortPrice(label: string) {
   return label.split(' · ')[0]!.replace(/^از\s+/, '').replace(/\s*تومان$/, '');
 }
-function ThemeIcon({ dark }: { dark: boolean }) {
-  return dark
-    ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </svg>
-    : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />
-    </svg>;
-}
 
 /** B's real map. The list stays the complete path when tiles or the map fail. */
 export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSelect, onPositionPick,
@@ -77,19 +67,16 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   const [locating, setLocating] = useState(false);
   const { state, dispatch } = useWorkspace();
   const { showList } = useMapView();
-  const theme = useResolvedTheme();
   const visit = ['stores', 'compare', 'contact', 'trip'].includes(state.screen);
-  const darkMode = theme === 'dark';
   pinCallback.current = onPinSelect;
   pickCallback.current = onPositionPick;
   live.current = { pins, userPosition, selectedPinId, padding };
 
   const paddingOptions = (animate: boolean) => {
-    const desktop = window.matchMedia('(min-width: 960px)').matches;
-    const panel = desktop ? Math.min(520, Math.max(380, window.innerWidth * 0.35)) + 24 : 20;
+    const inset = live.current.padding;
     return {
-      paddingTopLeft: L.point(padding.left + 18, padding.top + (desktop ? 92 : 16)),
-      paddingBottomRight: L.point(padding.right + panel, padding.bottom + 18),
+      paddingTopLeft: L.point(inset.left, inset.top),
+      paddingBottomRight: L.point(inset.right, inset.bottom),
       animate,
     };
   };
@@ -144,11 +131,11 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     const group = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 64,
       spiderfyOnMaxZoom: true, zoomToBoundsOnClick: true, spiderfyDistanceMultiplier: 1.8,
       animate, chunkedLoading: true, iconCreateFunction: clusterIcon => L.divIcon({ className: 'um-cluster',
-        html: `<span>${clusterIcon.getChildCount().toLocaleString('fa-IR')}</span>`, iconSize: L.point(36, 36), iconAnchor: L.point(18, 18) }) });
+        html: `<span>${clusterIcon.getChildCount().toLocaleString('fa-IR')}</span>`, iconSize: L.point(44, 44), iconAnchor: L.point(22, 22) }) });
     group.addTo(instance);
     cluster.current = group;
     overlay.current = L.layerGroup().addTo(instance);
-    line.current = L.polyline([], { color: '#ff5d70', weight: 2, dashArray: '7 9', interactive: true }).addTo(instance);
+    line.current = L.polyline([], { color: 'var(--um-route-color)', weight: 2, dashArray: '7 9', interactive: true }).addTo(instance);
     instance.on('click', event => { pickCallback.current?.(event.latlng.lat, event.latlng.lng); });
     const resize = new ResizeObserver(() => {
       instance.invalidateSize();
@@ -183,14 +170,15 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     group.clearLayers(); markers.current.clear();
     for (const pin of live.current.pins) {
       const title = pin.title;
-      const display = title ? `${title} · ${pin.label}` : pin.label;
+      const hours = { declared_open: 'طبق برنامه باز', declared_closed: 'طبق برنامه بسته', unknown: 'ساعت نامشخص' }[pin.state];
+      const display = `${title ? `${title} · ` : ''}${pin.label} · ${hours}`;
       const tag = document.createElement('span');
       tag.className = 'um-tag';
       tag.textContent = shortPrice(pin.label);
-      const width = Math.min(176, Math.max(74, 28 + tag.textContent.length * 7));
+      const width = Math.min(208, Math.max(74, 32 + tag.textContent.length * 8));
       const marker = L.marker([pin.lat, pin.lon], { keyboard: true, title: display, alt: display, riseOnHover: true,
         icon: L.divIcon({ className: `um-pin um-pin--${pin.state}`, html: tag,
-          iconSize: L.point(width, 30), iconAnchor: L.point(width / 2, 30) }) });
+          iconSize: L.point(width, 44), iconAnchor: L.point(width / 2, 44) }) });
       marker.on('click', () => pinCallback.current(pin.id));
       const tooltip = document.createElement('span');
       tooltip.textContent = display;
@@ -223,6 +211,15 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
   }, [signature]);
 
   useEffect(() => {
+    const instance = map.current;
+    if (!instance || !container.current?.clientWidth || !container.current.clientHeight || !framed.current) return;
+    instance.invalidateSize({ pan: false });
+    const selected = live.current.pins.find(pin => pin.id === live.current.selectedPinId);
+    if (selected) instance.panInside(L.latLng(selected.lat, selected.lon), paddingOptions(false));
+    else frameAll(false);
+  }, [padding.top, padding.right, padding.bottom, padding.left]);
+
+  useEffect(() => {
     applySelection();
   }, [selectedPinId]);
 
@@ -246,8 +243,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
       marker.bindTooltip(positionTooltip);
       marker.addTo(layer);
       if (radiusKm !== null && Number.isFinite(radiusKm) && radiusKm > 0) {
-        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: '#ff5d70', weight: 1,
-          fillColor: '#ff5d70', fillOpacity: 0.05, dashArray: '5 9', interactive: false }).addTo(layer);
+        L.circle(coordinates(userPosition), { radius: radiusKm * 1000, color: 'var(--um-route-color)', weight: 1,
+          fillColor: 'var(--um-route-color)', fillOpacity: 0.05, dashArray: '5 9', interactive: false }).addTo(layer);
       }
     }
     const destination = live.current.pins.find(pin => pin.id === selectedPinId);
@@ -307,10 +304,6 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     <div className="um-controls" role="group" aria-label="کنترل‌های نقشه">
       <button type="button" className="um-control" onClick={locate} disabled={locating} aria-label="موقعیت من" aria-busy={locating}>
         <CrosshairIcon size={20} />
-      </button>
-      <button type="button" className="um-control" onClick={() => dispatch({ type: 'theme', value: darkMode ? 'light' : 'dark' })}
-        aria-label={darkMode ? 'تغییر به تم روشن' : 'تغییر به تم تیره'}>
-        <ThemeIcon dark={darkMode} />
       </button>
       <button type="button" className="um-control um-list-control" onClick={showList} aria-label="نمایش فهرست فروشندگان">
         <StoreIcon size={20} />

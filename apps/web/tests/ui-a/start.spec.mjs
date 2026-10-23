@@ -16,7 +16,12 @@ for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'از کجا شروع کنیم؟' })).toBeVisible();
-    expect(statusRequests).toBe(0);
+    // The actual need form is now on home; readiness checks are free GETs,
+    // while a model turn must still require explicit submission.
+    await expect.poll(() => statusRequests).toBeGreaterThan(0);
+    expect(modelRequests).toBe(0);
+    await expect(page.getByLabel('نیاز و کاربرد موردنظر')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'بررسی نیاز', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'جست‌وجوی کالا', exact: true }).click();
     await expect(page.getByLabel('نام کالا در کاتالوگ')).toBeFocused();
     await expect(page.getByRole('button', { name: 'جست‌وجو', exact: true })).toBeDisabled();

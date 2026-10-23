@@ -1,0 +1,70 @@
+.ub-sheet-handle { display: none; }
+.ub-panel .ub-sheet-filters { display: none; }
+@media (max-width: 959px) {
+  .ub-app[data-layout=visit][data-visit=true] { position: relative; height: var(--ub-mobile-viewport-height, 100dvh); min-height: 0; overflow: hidden; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-header { display: none; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-search-area {
+    position: absolute; z-index: 1100; top: 12px; inset-inline: 12px; padding: 0;
+    background: transparent;
+  }
+  .ub-app[data-layout=visit][data-visit=true] .ub-search {
+    min-height: 52px; border-radius: 999px; padding: 4px 12px; background: var(--ub-surface);
+  }
+  .ub-app[data-layout=visit][data-visit=true] .ub-search > .ub-button {
+    flex-shrink: 0; white-space: nowrap; min-height: 44px; border-radius: 999px;
+  }
+  .ub-app[data-layout=visit][data-visit=true] .ub-workspace { position: absolute; inset: 0; height: 100%; min-height: 0; padding: 0; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-map { position: absolute; inset: 0; height: 100%; min-height: 0; display: block; }
+  .ub-app[data-layout=visit][data-visit=true][data-sheet=full] .ub-map { display: block; visibility: hidden; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-panel {
+    position: absolute; z-index: 1000; inset-inline: 0; bottom: 0; width: 100%;
+    height: var(--ub-sheet-height); max-height: 100%; min-height: 0; flex: none;
+    border-radius: 24px 24px 0 0; box-shadow: 0 -6px 24px color-mix(in srgb, var(--ub-ink) 12%, transparent);
+  }
+  .ub-app[data-layout=visit][data-visit=true] .ub-sheet-handle {
+    display: grid; place-items: center; flex-shrink: 0; min-height: 44px; cursor: ns-resize;
+    touch-action: none; user-select: none; border-radius: 24px 24px 0 0;
+  }
+  .ub-sheet-handle > span { width: 40px; height: 4px; border-radius: 999px; background: var(--ub-muted); }
+  .ub-sheet-handle:focus-visible { outline: 3px solid var(--ub-focus); outline-offset: -4px; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-panel-top, .ub-app[data-layout=visit][data-visit=true] .ub-panel-footer,
+  .ub-app[data-layout=visit][data-visit=true] .ub-stepper { flex-shrink: 0; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-panel-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .ub-app[data-layout=visit][data-visit=true] [hidden] { display: none; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-sheet-control { display: inline-flex; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-home-control { display: inline-flex; min-width: 44px; padding-inline: 8px; }
+  .ub-app[data-layout=visit][data-visit=true] .ub-panel-top > strong { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ub-app[data-layout=visit][data-visit=true] .um-controls { top: var(--ub-mobile-controls-top); }
+  .ub-app[data-layout=visit][data-visit=true] .um-map .leaflet-top.leaflet-left { top: var(--ub-mobile-controls-top); }
+  .ub-app[data-layout=visit][data-visit=true] .um-tile-failure {
+    top: var(--ub-mobile-controls-top);
+    max-height: max(44px, calc(var(--ub-mobile-viewport-height, 100dvh) - var(--ub-sheet-height) - var(--ub-mobile-controls-top) - 12px));
+  }
+  .ub-app[data-layout=visit][data-visit=true] .um-empty-note { top: calc(var(--ub-mobile-controls-top) + 50px); }
+  @media (max-height: 667px) {
+    .ub-app[data-layout=visit][data-sheet=full] .uv-visit-screen { padding-top: 8px; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-stores,
+    .ub-app[data-layout=visit][data-sheet=full] .uv-stores-head { gap: 4px; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card { padding: 10px; gap: 7px; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card > * { order: 3; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card > .uv-card-head { order: 0; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card > .uv-card-actions { order: 1; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card > .uv-card-facts { order: 2; }
+    .ub-app[data-layout=visit][data-sheet=full] .uv-card-address { display: none; }
+  }
+  @media (max-height: 450px) {
+    .ub-app[data-layout=visit][data-sheet=full] .ub-search-area { display: none; }
+    .ub-app[data-layout=visit][data-sheet=full] .ub-sheet-filters { display: inline-flex; padding-inline: 8px; }
+    .ub-app[data-layout=visit][data-visit=true] .ub-panel-top { gap: 4px; padding: 2px 8px; }
+    .ub-app[data-layout=visit][data-visit=true] .ub-panel { overflow-y: auto; overscroll-behavior: contain; }
+    .ub-app[data-layout=visit][data-visit=true] .ub-panel-body { flex: none; overflow: visible; }
+    .ub-app[data-layout=visit][data-visit=true] .um-controls, .ub-app[data-layout=visit][data-visit=true] .leaflet-control-zoom { display: flex; }
+    @media (min-width: 600px) {
+      .ub-app[data-layout=visit][data-sheet=full] .uv-visit-screen { padding-top: 4px; }
+      .ub-app[data-layout=visit][data-sheet=full] .uv-stores-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+      .ub-app[data-layout=visit][data-sheet=full] .uv-product-head { flex: 1; min-width: 0; }
+    }
+  }
+}
+.ub-sheet-steps { display: contents; }
+.ub-sheet-steps[hidden] { display: none; }

@@ -1,5 +1,7 @@
 import type { Alternatives, FollowupOutcome, Offer, PreparedFollowup } from '../../base/domain/contracts.ts';
 import { addressEvidence, groupOffers } from '../../base/domain/presentation.ts';
+import type { WorkspaceState } from '../../base/state/model.ts';
+import { offerQueryKey } from '../../base/state/model.ts';
 
 export type StoreGroup = {
   shopId: string;
@@ -26,6 +28,18 @@ export type SelectionReview = 'none' | 'visible' | 'outside';
 export function selectionReview(selected: Offer | null, offers: readonly Offer[]): SelectionReview {
   if (!selected) return 'none';
   return offers.some(offer => offer.offer_id === selected.offer_id) ? 'visible' : 'outside';
+}
+
+/** Only the loaded collection of the active conditions can verify a choice; null means it is not loaded. */
+export function currentOffers(state: WorkspaceState): Offer[] | null {
+  if (!state.loadedOffers) return null;
+  const key = offerQueryKey(state.product?.product_id ?? null, state.filters, state.position);
+  return state.loadedOffers.key === key ? state.loadedOffers.page.items : null;
+}
+
+/** A historical comparison row stays visible, but it cannot silently become a current selection. */
+export function offerInCurrentPage(state: WorkspaceState, offer: Offer): boolean {
+  return currentOffers(state)?.some(item => item.offer_id === offer.offer_id) ?? false;
 }
 
 export type TripAlternative = { offer: Offer; source: 'simulated' | 'user_report' };

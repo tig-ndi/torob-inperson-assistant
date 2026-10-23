@@ -36,6 +36,7 @@ export function DiscoveryScreen({ screen }: { screen: Screen; catalogue: Catalog
         <strong>خرید فعلی‌ات محفوظ است</strong>
         <p>{state.product?.persian_title || state.needState?.topic_query || state.productResults?.search.query || 'گفت‌وگو و انتخاب‌های همین نشست را ادامه بده.'}</p>
         <Button onClick={() => dispatch({ type: 'navigate', screen: resume })}>ادامهٔ خرید</Button>
+        <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'decide' })}>کمک برای انتخاب</Button>
       </div>}
       <div hidden={screen === 'home' && active}><DecideScreen start={start} /></div>
       {screen === 'home' && <div className="ua-start-option">
