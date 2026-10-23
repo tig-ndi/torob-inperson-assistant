@@ -21,7 +21,7 @@ export function useMobileSheet(search: RefObject<HTMLElement | null>, active: bo
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
-    if (search.current) observer.observe(search.current);
+    if (search.current) observer.observe(search.current, { box: 'border-box' });
     window.addEventListener('resize', schedule);
     window.visualViewport?.addEventListener('resize', schedule);
     measure();

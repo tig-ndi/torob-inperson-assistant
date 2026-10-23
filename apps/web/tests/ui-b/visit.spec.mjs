@@ -67,6 +67,7 @@ test('compact comparison preserves two offers of one shop and follows the exact 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: path.join(qa, 'compact-compare-320.png') });
   await summary.getByRole('button', { name: 'انتخاب و پیگیری آفر ۲', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByLabel(/گزارش خودم از مراجعه/).check();
   await expect(page.getByText('حالت گزارش شما — تأیید بیرونی نشده', { exact: true })).toBeVisible();
   await expect(page.getByText('شبیه‌سازی — تماس واقعی انجام نشد', { exact: true })).toHaveCount(0);
@@ -205,6 +206,7 @@ test('a second offer keeps its offer_id through prepare, back and return', async
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).nth(1).click();
   await expect(page.locator('#uv-shop-s1 .uv-card').nth(1)).toHaveClass(/is-selected/);
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   expect(preparedBodies).toHaveLength(1);
@@ -217,6 +219,7 @@ test('a second offer keeps its offer_id through prepare, back and return', async
   await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
   await expect(page.locator('#uv-shop-s1 .uv-card').nth(1)).toHaveClass(/is-selected/);
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   expect(preparedBodies).toHaveLength(1);
 });
@@ -272,18 +275,19 @@ test('simulated outcome uses alternatives, survives a return, and labels the new
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByLabel('کالا موجود نبود').check();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();
-  await expect(page.getByRole('heading', { name: 'جایگزین‌های همین محصول' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'فروشگاه‌های جایگزین دارای همین کالا' })).toBeVisible();
   expect(requests[0]).toMatchObject({ product_id: 'p1', offer_id: 'o1', shop_id: 's1',
     outcome: 'out_of_stock', outcome_source: 'simulated' });
   await page.screenshot({ path: path.join(qa, 'contact-alternatives-390.png') });
   await expect(page.getByText('تأیید بیرونی: خیر')).toBeVisible();
-  await expect(page.getByText('۲ آفر ثبت‌شده از فروشگاه گزارش‌شده')).toBeVisible();
+  await expect(page.getByText('۲ آفر ثبت‌شده از فروشگاه قبلی، به‌طور کامل کنار گذاشته شد تا آفر تکراری نبینید.', { exact: true })).toBeVisible();
   expect(await page.locator('a[href^="tel:"]').count()).toBe(0);
   await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'جایگزین‌های همین محصول' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'فروشگاه‌های جایگزین دارای همین کالا' })).toBeVisible();
   expect(requests).toHaveLength(1);
   await page.getByRole('button', { name: 'ثبت این جایگزین به‌عنوان مقصد' }).click();
   await expect(page.getByText('مقصد اصلی')).toBeVisible();
@@ -299,6 +303,7 @@ test('no_alternatives is explicit and never raises budget or radius', async ({ p
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();
   await expect(page.getByRole('heading', { name: 'جایگزینی با این شرایط نیست' })).toBeVisible();
   await expect(page.getByText('بودجه یا شعاع به‌طور خودکار افزایش داده نشد؛')).toBeVisible();
@@ -415,6 +420,7 @@ test('cancel stops a pending draft and leaves no unsent-success claim', async ({
   await openStores(page);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('در حال دریافت…')).toBeVisible();
   await page.getByRole('button', { name: 'لغو درخواست پیش‌نویس' }).click();
@@ -481,7 +487,9 @@ test('real snapshot B path: offers, unsent follow-up and alternatives without mo
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
   await page.getByLabel('نام کالا در کاتالوگ').fill('گوشی');
+  const searchResponse = page.waitForResponse(r => /\/api\/products\?/.test(r.url()));
   await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
+  expect((await searchResponse).ok()).toBe(true);
   await expect(page.locator('.ua-product-card').first()).toBeVisible();
   let found = false;
   for (let index = 0; index < 5 && !found; index++) {
@@ -498,6 +506,7 @@ test('real snapshot B path: offers, unsent follow-up and alternatives without mo
   expect(found).toBe(true);
   await page.getByRole('button', { name: 'انتخاب این آفر', exact: true }).first().click();
   await page.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
   await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'دیدن جایگزین‌ها با این نتیجه' }).click();
