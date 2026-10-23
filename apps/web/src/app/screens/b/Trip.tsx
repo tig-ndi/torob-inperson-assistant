@@ -41,9 +41,11 @@ export function TripScreen() {
       {primarySource && <p className="uv-note">این مقصد از نتیجهٔ {primarySource === 'simulated' ? 'شبیه‌سازی' : 'گزارش خودتان'} در سرویس جایگزین‌ها انتخاب شده است؛ تأیید بیرونی نیست.</p>}
       {state.selectedOffer && state.selectedOffer.offer_id !== plan.primary.offer_id && <div className="uv-review" role="status">
         <p>انتخاب فعلی با مقصد ثبت‌شده متفاوت است. این برنامه خودکار عوض نمی‌شود.</p>
-        <Button tone="secondary" onClick={() => dispatch({ type: 'plan', primary: state.selectedOffer! })}>ثبت انتخاب فعلی به‌عنوان مقصد</Button>
+        <Button tone="secondary" disabled={state.selectionNeedsReview}
+          onClick={() => dispatch({ type: 'plan', primary: state.selectedOffer! })}>ثبت انتخاب فعلی به‌عنوان مقصد</Button>
       </div>}
     </header>
+    <ReviewNotice />
     <TripCard role="مقصد اصلی" offer={plan.primary} source={primarySource} />
     {plan.alternative
       ? <TripCard role="جایگزین" offer={plan.alternative} source={alternativeSource}

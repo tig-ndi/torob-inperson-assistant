@@ -149,7 +149,7 @@ test('co-located shops stay clustered and every member is reachable without fake
   await page.screenshot({ path: path.join(qa, 'map-spiderfy-390.png') });
 });
 
-test('map controls switch theme, locate and reveal the seller list', async ({ page }) => {
+test('shell theme and map controls switch appearance, locate and reveal the seller list', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
@@ -157,12 +157,12 @@ test('map controls switch theme, locate and reveal the seller list', async ({ pa
   await expect(page.locator('.um-map')).toBeHidden();
   await page.getByRole('button', { name: 'نمایش همهٔ فروشگاه‌ها روی نقشه' }).click();
   await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
-  await page.getByRole('button', { name: 'تغییر به تم روشن' }).click();
+  await page.getByRole('combobox', { name: 'تم نمایش', exact: true }).selectOption('light');
   await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'light');
   await expect(page.locator('.uv-visit')).toHaveAttribute('data-theme-mode', 'light');
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(qa, 'stores-light-390.png') });
-  await page.getByRole('button', { name: 'تغییر به تم تیره' }).click();
+  await page.getByRole('combobox', { name: 'تم نمایش', exact: true }).selectOption('dark');
   await page.getByRole('button', { name: 'موقعیت من' }).click();
   await expect(page.locator('.ub-toast')).toBeVisible();
   await expect(page.locator('.ub-toast')).toContainText('موقعیت دریافت نشد');
