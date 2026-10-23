@@ -7,7 +7,9 @@ export default defineConfig({
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
         design: fileURLToPath(new URL('./design.html', import.meta.url)),
+        legacy: fileURLToPath(new URL('./legacy.html', import.meta.url)),
       },
+
     },
   },
   server: {
