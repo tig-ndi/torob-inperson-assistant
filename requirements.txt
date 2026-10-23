@@ -1,0 +1,2 @@
+# Deployment discovery entry; keep exact versions in one lock file.
+-r requirements.lock.txt

@@ -1,5 +1,9 @@
 # معماری جاری
 
+## انتشار یک origin و ذخیره‌سازی پایدار — D53
+
+APIهای موجود قبل از mount نهایی StaticFiles ثبت می‌شوند؛ فرانت buildشده از `apps/web/dist` یا `TOROB_WEB_DIST` ارائه می‌شود. Workspace همان history درون‌صفحه‌ای را دارد و مسیرهای ناشناخته به index بازنویسی نمی‌شوند. `tools.serve` پورت محیطی را روی همهٔ interfaceها می‌گیرد و پیش از bind، build، کاتالوگ منبع‌دار و دفتر قابل‌نوشتن را می‌سنجد. readiness با SELECT فقط‌خواندنی و تراکنش خالی ledger، بدون reservation/provider است. مسیر دفتر با `TOROB_USAGE_DATABASE` قابل انتقال به volume است؛ پیش‌فرض توسعه حفظ شد. image چندمرحله‌ای فقط کد و build را دارد؛ snapshot و ledger موجود جداگانه به دیسک پایدار منتقل می‌شوند. backend schema/منطق مدل و UI تغییر نکردند. نصب دیسک و انتقال داده را مسئول انتشار انجام می‌دهد؛ کد نمی‌تواند نبود این قابلیت در میزبان را جبران کند.
+
 ## ورودی عمومی واحد — D43
 
 `index.html` ورودی React Workspace است و `design.html` فقط alias هدایت به ریشه با `location.replace('/')` و لینک fallback است؛ state دامنه همچنان فقط در حافظه و ناوبری با قرارداد D39 باقی است. query/hash لینک قبلی وارد state نمی‌شود. خروجی build از index و alias تشکیل می‌شود؛ `legacy.html` فقط در dev برای رگرسیون source قبلی وجود دارد و به build inputs اضافه نمی‌شود. هیچ navigation عمومی به آن نیست. حذف کامل source قدیمی به بررسی وابستگی/جایگزینی رگرسیون در برش مستقل نیاز دارد؛ API/سرویس‌ها ثابت‌اند.

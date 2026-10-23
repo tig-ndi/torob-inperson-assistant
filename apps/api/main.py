@@ -11,6 +11,7 @@ from typing import Annotated, Callable, Literal
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import ResponseValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from apps.api.catalogue import Catalogue, CatalogueUnavailable, FollowupSelectionError, InvalidQuery
 from apps.api.category import detect_category_intent
@@ -25,6 +26,7 @@ from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
 from apps.api.battery import MAX_CAPACITY_MAH
 from apps.api.voice import voice_router
+from apps.api.deployment import readiness
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,11 +45,26 @@ def parse_budget(value: str | None) -> int | None:
 
 
 def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | None = None,
-               assistant: AssistantService | None = None) -> FastAPI:
+               assistant: AssistantService | None = None, web_dist: Path | None = None) -> FastAPI:
     catalogue = Catalogue(database if database is not None else Path(
         os.environ.get("TOROB_DATABASE", str(ROOT / ".local/catalogue.sqlite3"))))
     application = FastAPI(title="Torob local historical catalogue", version="0.1.0")
     agent = assistant if assistant is not None else AssistantService.from_root(catalogue, ROOT)
+    web = (web_dist if web_dist is not None else Path(
+        os.environ.get('TOROB_WEB_DIST', str(ROOT / 'apps/web/dist')))).resolve()
+    application.state.readiness_check = lambda: readiness(catalogue, agent.ledger, web)
+
+    @application.get('/api/health/live')
+    def liveness():
+        return {'status': 'alive'}
+
+    @application.get('/api/health/ready')
+    def ready(response: Response):
+        response.headers['Cache-Control'] = 'no-store'
+        checks = application.state.readiness_check()
+        if any(value != 'ready' for value in checks.values()):
+            response.status_code = 503
+        return {'status': 'ready' if response.status_code != 503 else 'unavailable', 'checks': checks}
 
     @application.exception_handler(AgentError)
     async def agent_error(request: Request, exc: AgentError):
@@ -240,6 +257,15 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         }
 
     application.include_router(voice_router)
+    # API routes always win. Missing API endpoints must never return frontend HTML.
+    @application.api_route('/api/{path:path}', methods=['GET', 'HEAD'], include_in_schema=False)
+    def unknown_api(path: str):
+        return JSONResponse(status_code=404, content={'detail': 'Not Found'})
+
+    # Workspace navigation uses same-page history; no catch-all SPA rewrite needed.
+    # Mount last so /api, /docs and /openapi.json retain their existing contracts.
+    if (web / 'index.html').is_file():
+        application.mount('/', StaticFiles(directory=web, html=True), name='web')
     return application
 
 

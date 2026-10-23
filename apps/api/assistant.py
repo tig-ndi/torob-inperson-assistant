@@ -11,6 +11,7 @@ import httpx
 from pydantic import ValidationError
 
 from apps.api.agent_usage import AgentError, UsageLedger, reported_cost
+from apps.api.deployment import usage_database
 from apps.api.catalogue import Catalogue
 from apps.api.category import (
     detect_category_intent,
@@ -172,9 +173,9 @@ class AssistantService:
     @classmethod
     def from_root(cls, catalogue: Catalogue, root: Path):
         try:
-            return cls(catalogue, AgentSettings.load(root), UsageLedger(root / '.local/agent-usage.sqlite3'))
+            return cls(catalogue, AgentSettings.load(root), UsageLedger(usage_database(root)))
         except (OSError, ValueError):
-            service = cls(catalogue, AgentSettings(), UsageLedger(root / '.local/agent-usage.sqlite3'))
+            service = cls(catalogue, AgentSettings(), UsageLedger(usage_database(root)))
             service.config_valid = False
             return service
 

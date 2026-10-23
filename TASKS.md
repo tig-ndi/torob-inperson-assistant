@@ -1,5 +1,9 @@
 # برنامهٔ اجرا
 
+## اولویت تازه — رفع مانع انتشار روی main | ۲۰۲۶-۱۰-۲۳
+
+برنامهٔ قبلی UI/A/B فعلاً متوقف و دو کامیت فقط روی `codex/parked-ui-mvp-20261023` محفوظ‌اند. مبنا main همسان با origin/main@96a3801 است. [x] سرو build فرانت و API از یک origin؛ [x] start ریشه/PORT و requirements ورودی lock؛ [x] Dockerfile و حذف data/secret از context؛ [x] مسیر محیطی دفتر، health/preflight و export جداگانهٔ SQLite بدون reset؛ [x] راهنمای انتقال volume/env و تست۲۹۹ backend + build. [ ] مسئول انتشار: انتقال خصوصی دو دیتابیس موجود، اتصال دیسک پایدار و کلیدهای سرور/HTTPS؛ [ ] build واقعی image و smoke روی میزبان و حفظ داده پس از restart/redeploy. هیچ push/provider/deploy واقعی توسط عامل انجام نشد.
+
 ## شاخهٔ feat/map-and-contact — ارتقای کامل نقشه و شبیه‌ساز تماس هوشمند پیگیری | ۲۰۲۶-۱۰-۲۳
 
 روی شاخهٔ اختصاصی `feat/map-and-contact` (برش تأییدشدهٔ نقشه و تماس پایانی):

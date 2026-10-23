@@ -5,6 +5,7 @@ from collections import Counter
 from contextlib import closing
 from decimal import Decimal, localcontext
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -101,7 +102,8 @@ def render(report: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--database', type=Path, default=ROOT / '.local/agent-usage.sqlite3')
+    parser.add_argument('--database', type=Path, default=Path(os.environ.get(
+        'TOROB_USAGE_DATABASE', str(ROOT / '.local/agent-usage.sqlite3'))))
     parser.add_argument('--initial-credit', type=amount, help='Optional conditional estimate only, in the same unverified cost unit.')
     parser.add_argument('--json', action='store_true', help='Print machine-readable totals without credentials or message content.')
     parser.add_argument('--save', action='store_true', help='Save only to ignored .local/usage/report.json; never changes the ledger.')

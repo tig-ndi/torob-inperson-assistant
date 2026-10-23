@@ -1,5 +1,15 @@
 # تحویل جاری — شاخهٔ طراحی؛ ادغام پوسته و نقشه
 
+## اصلاح انتشار روی مین واقعی؛ UI قبلی کنار گذاشته شد | ۲۰۲۶-۱۰-۲۳
+
+تکمیل شاهد: Chromium با مرورگر نصب‌شدهٔ پروژه، Workspace و عنوان خانهٔ buildشده را از سرور انتشار رندر کرد؛ خطای JS و POST مدل/صوت صفر بود و شبکهٔ بیرونی مسدود شد. readiness فایل ledger غایب را ایجاد نمی‌کند و startup در این حالت رد می‌شود؛ کل۲۹۹ تست پس از این گارد دوباره پاس شد. سرور موقت پس از smoke متوقف شد.
+
+به دستور تازهٔ انسان، کامیت‌های UI `a04511d` و `4ec8a99` بدون حذف روی شاخهٔ محلی `codex/parked-ui-mvp-20261023` حفظ و main به `origin/main@96a3801` برگردانده شد؛ fetch موفق بود و هیچ push انجام نشد. برنامهٔ UI/A/B قبلی فعلاً متوقف است. این برش فقط اصلاح مسیر انتشار است: سرو فرانت buildشده و API از Python، start ریشه `python -m tools.serve` با PORT، requirements ورودی به lock فعلی، Dockerfile چندمرحله‌ای و ignore داده/کلید، مسیر محیطی ledger و health live/ready با preflight. UI و مدل/سقف/schema تغییر نکردند.
+
+راهنمای `docs/DEPLOYMENT.md` و ابزار `tools.export_deploy_data` انتقال خصوصی دو SQLite موجود با backup/checksum و جلوگیری از overwrite را شرح می‌دهند؛ ابزار هیچ آپلودی ندارد. مسئول دیپلوی باید دیسک پایدار واقعی و دو فایل قبلی را فراهم کند، environment/HTTPS را تنظیم و سپس restart/redeploy را بررسی کند. بدون امکان volume/انتقال جدا در مسیر لانچ‌لین، deploy صرفاً با این تغییر کد حل نمی‌شود؛ باید روش مناسب میزبان انتخاب شود.
+
+شواهد: build/typecheck موفق (هشدار قدیمی chunk حدود۶۰۲kB باقی)، ۲۹۹/۲۹۹ تست backend از جمله۶ تست تازهٔ static/API/404/missing-data/ledger-restart/export/preflight. اولین اجرای تست تازه فقط به‌خاطر connection بسته‌نشدهٔ fixture سه خطای cleanup ویندوز داشت؛ fixture اصلاح شد و۶/۶ سپس کل۲۹۹ سبز شدند. سرور واقعی `tools.serve` روی۱۸۰۹۷ با build فعلی و snapshot واقعی بالا آمد؛ `/` و JS هر دو۲۰۰، ready۲۰۰ و products با limit1 یک نتیجهٔ تاریخی unconfirmed داد؛ مدل/صوت خاموش و ledger مستقل تست صفر تلاش است. Docker daemon محلی اجرا نبود؛ بررسی registry image هم به‌دلیل DNS timeout نشد، پس build کانتینر و deploy واقعی تأیید نشده‌اند. snapshot/ledger اصلی/secretها به Git اضافه یا برای انتقال واقعی کپی نشدند. push با انسان؛ ادامهٔ کار UI خودکار شروع نشود.
+
 ## CM-C2 / P5 — پذیرش سه‌آفره و جایگزین سفر | ۲۰۲۶-۱۰-۲۳
 
 از مبنای `2bad328` در شاخهٔ `codex/ui-components-map` (tracked تمیز، فقط `.agents/` untracked) فقط دو spec پذیرش اضافه شد: `tests/ui-b/compare-three.spec.mjs` و `tests/ui-b/trip-alternative.spec.mjs`. هیچ فایل تولیدی تغییر نکرد؛ سناریوهای خواسته‌شده با fixture کنترل‌شده و مسیر واقعی UI اجرا شدند و نقص رفتاری محصول بازتولید نشد. دو شکست اولیه در اجرای تست‌های تازه مربوط به locator خود تست بود (جداکنندهٔ هزارگان فارسی در مقایسه و تطبیق `exact` متن «نامشخص» تکراری در کارت)، نه محصول؛ assertionها دقیق‌تر شدند و هیچ skip، تضعیف یا retry اضافه نشد.
