@@ -1,5 +1,5 @@
-import type { Alternatives, AssistantTurn, CatalogueProduct, Filters, NeedState, Offer, OfferPage, Position, PreparedFollowup, Screen } from '../domain/contracts.ts';
-import { money, pairedCoordinates } from '../domain/validation.ts';
+import type { Alternatives, AssistantTurn, CataloguePage, CatalogueProduct, CatalogueSearch, Filters, NeedState, Offer, OfferPage, Position, PreparedFollowup, ProductResults, Screen } from '../domain/contracts.ts';
+import { ContractError, money, pairedCoordinates } from '../domain/validation.ts';
 
 export type WorkspaceState = {
   revision: number;
@@ -11,6 +11,8 @@ export type WorkspaceState = {
   locationStatus: 'ask' | 'gps' | 'manual' | 'denied';
   needState: NeedState | null;
   lastTurn: AssistantTurn | null;
+  productResults: ProductResults | null;
+  productResultsRequest: string | null;
   history: { role: 'user' | 'assistant'; content: string }[];
   product: CatalogueProduct | null;
   compareProducts: CatalogueProduct[];
@@ -28,7 +30,7 @@ export type WorkspaceState = {
 export function initialWorkspace(): WorkspaceState {
   return { revision: 0, screen: 'home', navigation: [], query: '',
     filters: { maxPrice: null, radiusKm: null, openNowOnly: false, creditOnly: false, sort: 'price' },
-    position: null, locationStatus: 'ask', needState: null, lastTurn: null, history: [],
+    position: null, locationStatus: 'ask', needState: null, lastTurn: null, productResults: null, productResultsRequest: null, history: [],
     product: null, compareProducts: [], selectedOffer: null, selectionNeedsReview: false,
     compareOffers: [], loadedOffers: null, focusedShopId: null, cameraIntent: null,
     visitPlan: null, followups: {}, theme: 'system', notice: null };
@@ -40,7 +42,10 @@ export type WorkspaceAction =
   | { type: 'filters'; value: Partial<Filters> }
   | { type: 'position'; value: Position }
   | { type: 'locationDenied' }
-  | { type: 'assistant'; result: AssistantTurn; userMessage: string; expectedRevision: number }
+  | { type: 'beginProductResults'; token: string }
+  | { type: 'assistant'; result: AssistantTurn; userMessage: string; expectedRevision: number; expectedResultsRequest?: string }
+  | { type: 'catalogue'; page: CataloguePage; search: CatalogueSearch; expectedRevision: number; expectedResultsRequest?: string }
+  | { type: 'moreProducts'; base: ProductResults; page: CataloguePage; expectedRevision: number; expectedResultsRequest: string }
   | { type: 'newConversation' }
   | { type: 'product'; value: CatalogueProduct }
   | { type: 'compareProduct'; value: CatalogueProduct }
@@ -77,11 +82,25 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         selectionNeedsReview: state.selectedOffer !== null };
     }
     case 'locationDenied': return { ...state, locationStatus: 'denied', notice: 'موقعیت دریافت نشد؛ انتخاب دستی همچنان در دسترس است.' };
+    case 'beginProductResults': return { ...state, productResultsRequest: action.token };
+    case 'catalogue':
+      if (action.expectedRevision !== state.revision ||
+        (action.expectedResultsRequest !== undefined && action.expectedResultsRequest !== state.productResultsRequest)) return state;
+      return { ...state, productResults: { source: 'manual', page: action.page, initialOffset: action.page.offset, search: action.search, explanation: null } };
+    case 'moreProducts':
+      if (action.expectedRevision !== state.revision || action.expectedResultsRequest !== state.productResultsRequest || state.productResults !== action.base) return state;
+      return { ...state, productResults: appendProductPage(action.base, action.page) };
     case 'assistant': {
-      if (action.expectedRevision !== state.revision) return state;
+      if (action.expectedRevision !== state.revision ||
+        (action.expectedResultsRequest !== undefined && action.expectedResultsRequest !== state.productResultsRequest)) return state;
       const result = action.result;
       const answer = result.question ?? result.explanation?.summary ?? `نتایج ثبت‌شده برای «${result.query ?? ''}»`;
       return { ...state, needState: result.need_state, lastTurn: result, revision: state.revision + 1,
+        productResults: result.products ? { source: 'assistant', page: result.products, initialOffset: result.products.offset, explanation: result.explanation,
+          search: { query: result.query ?? result.need_state.topic_query ?? '', maxPrice: result.max_price_toman,
+            categoryName: result.products.category_name, categoryCleared: result.need_state.category_cleared,
+            minimumBattery: result.need_state.battery_requirement.status === 'minimum' ? result.need_state.battery_requirement.minimum_mah : null,
+            sort: result.offer_sort === 'nearest' ? 'nearest' : 'relevance', position: state.position } } : null,
         query: result.need_state.topic_query ?? state.query,
         filters: { ...state.filters, maxPrice: result.max_price_toman, sort: result.offer_sort },
         history: [...state.history, { role: 'user' as const, content: action.userMessage },
@@ -89,7 +108,7 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         selectionNeedsReview: state.selectedOffer !== null };
     }
     case 'newConversation':
-      return { ...state, needState: null, lastTurn: null, history: [], query: '', revision: state.revision + 1,
+      return { ...state, needState: null, lastTurn: null, productResults: null, productResultsRequest: null, history: [], query: '', revision: state.revision + 1,
         notice: 'گفت‌وگوی تازه؛ بودجه و موقعیت فعلی حفظ شدند.' };
     case 'product': {
       if (state.product?.product_id === action.value.product_id) return { ...state, product: action.value };
@@ -137,6 +156,39 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
     case 'theme': return { ...state, theme: action.value };
     case 'notice': return { ...state, notice: action.value };
   }
+}
+
+/** Context for a new direct search; unrelated conversation constraints are not silently inherited. */
+export function catalogueSearchForWorkspace(state: WorkspaceState): CatalogueSearch {
+  const context = state.needState?.topic_query === state.query ? state.needState : null;
+  return { query: state.query, maxPrice: state.filters.maxPrice,
+    categoryName: context?.category_name, categoryCleared: context?.category_cleared,
+    minimumBattery: context?.battery_requirement.status === 'minimum' ? context.battery_requirement.minimum_mah : null,
+    sort: state.filters.sort === 'nearest' ? 'nearest' : 'relevance', position: state.position };
+}
+
+// Memory-only comparison. Never log or persist the key: it includes user coordinates.
+export function catalogueSearchKey(search: CatalogueSearch): string {
+  return JSON.stringify([search.query.trim(), search.maxPrice, search.categoryCleared ? null : search.categoryName ?? null,
+    search.categoryCleared ?? false, search.minimumBattery ?? null, search.sort ?? 'relevance',
+    search.position?.lat ?? null, search.position?.lon ?? null]);
+}
+
+/** Merge only the next page of the same snapshot/constraints; keep the original explanation scoped to its IDs. */
+export function appendProductPage(base: ProductResults, page: CataloguePage): ProductResults {
+  const previous = base.page;
+  if (!previous.has_more || page.offset !== previous.offset + previous.limit || page.limit !== previous.limit ||
+    (page.has_more && page.items.length === 0)) throw new ContractError('صفحهٔ برگشتی با ادامهٔ این نتایج سازگار نیست؛ دوباره جست‌وجو کنید.');
+  if (page.provenance.snapshot_id !== previous.provenance.snapshot_id ||
+    page.provenance.dataset !== previous.provenance.dataset || page.provenance.generated_at_utc !== previous.provenance.generated_at_utc) {
+    throw new ContractError('نسخهٔ کاتالوگ تغییر کرده است؛ برای دریافت نتایج یکسان از نو جست‌وجو کنید.');
+  }
+  if (page.category_name !== previous.category_name || page.min_battery_capacity_mah !== previous.min_battery_capacity_mah) {
+    throw new ContractError('شرایط صفحهٔ جدید با نتایج قبلی یکسان نیست؛ از نو جست‌وجو کنید.');
+  }
+  const products = new Map(previous.items.map(product => [product.product_id, product]));
+  for (const product of page.items) products.set(product.product_id, product);
+  return { ...base, page: { ...page, items: [...products.values()] } };
 }
 
 // In-memory key only. Never log, persist or put it in a URL: it contains location.

@@ -59,7 +59,7 @@ export function Toast({ message, onClose }: { message: string | null; onClose: (
   return message ? <div className="ub-toast" role="status"><span>{message}</span>
     <Button tone="ghost" onClick={onClose} aria-label="بستن پیام"><CloseIcon /></Button></div> : null;
 }
-export function Dialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Dialog({ title, children, onClose, className = '' }: { title: string; children: ReactNode; onClose: () => void; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null), id = useId();
   const [trigger] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   useEffect(() => {
@@ -67,7 +67,7 @@ export function Dialog({ title, children, onClose }: { title: string; children: 
     dialog?.showModal();
     return () => { dialog?.close(); queueMicrotask(() => { if (trigger?.isConnected) trigger.focus(); }); };
   }, [trigger]);
-  return <dialog ref={ref} className="ub-dialog" aria-labelledby={id}
+  return <dialog ref={ref} className={`ub-dialog ${className}`} aria-labelledby={id}
     onKeyDown={event => {
       if (event.key !== 'Tab') return;
       const controls = Array.from(ref.current?.querySelectorAll<HTMLElement>(

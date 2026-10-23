@@ -45,6 +45,18 @@ export type CataloguePage = Omit<ProductPage, 'items'> & {
   offset: number;
   provenance: Provenance;
 };
+export type CatalogueSearch = {
+  query: string; offset?: number; limit?: number; maxPrice: string | null;
+  categoryName?: string | null; categoryCleared?: boolean; minimumBattery?: number | null;
+  sort?: 'relevance' | 'nearest'; position?: Position | null;
+};
+export type ProductResults = {
+  source: 'manual' | 'assistant';
+  page: CataloguePage;
+  initialOffset: number;
+  search: CatalogueSearch;
+  explanation: Explanation | null;
+};
 export type Explanation = {
   query: string;
   category_name: string | null;
