@@ -26,6 +26,20 @@ CONTINUE = {'ادامه بده', 'ادامه', 'باشه', 'بله', 'آره', '
 FIELD_PATTERN = re.compile(r'(?<!\w)(' + '|'.join(FIELDS) + r')(?:ش|اش|م|مون|و)?(?!\w)')
 
 
+def field_is_negated(clause: str, literal: str) -> bool:
+    """Distinguish "no warranty" from a positive field request.
+
+    Value negation such as "the blue one is not acceptable" must not discard the
+    field itself; only absence/refusal patterns adjacent to the field do.
+    """
+    before = re.search(r'(?<!\w)(?:بدون|بی)\s+(?:هیچ\s+|این\s*که\s+)?' + literal + r'(?!\w)', clause)
+    after = re.search(
+        literal + r'(?:\s+(?:را|رو))?\s*(?:نمی\s*خواه(?:م|ی|د|یم|ند)|نمی\s*خوام|'
+        r'نمی\s*خوایم|نمی\s*خواین|ندار(?:م|ی|د|ه)|نداشته|نباش(?:ه|د)|'
+        r'لازم\s+نیست|نیازی\s+نیست|نیست)(?!\w)', clause)
+    return bool(before or after)
+
+
 @dataclass(frozen=True)
 class PendingUpdate:
     items: list[PendingRequirement]
@@ -68,14 +82,17 @@ def update_pending(items: list[PendingRequirement], text: str) -> PendingUpdate:
             denied = bool(re.search(r'حذف\s*نکن|بر\s*ندار', tail)
                           or re.search(field + r'(?:همون|همان|قبلی|حفظ\s*کن|نگه\s*دار|تغییر\s*نده)', clause))
             removed = bool(re.search(field + r'(?:حذف\s*کن(?:ید)?|بردار(?:ید)?|مهم\s*نیست)', clause)
-                           or re.search(r'(?:بی\s*خیال|صرف\s*نظر\s*از)\s+' + literal + r'(?!\w)', clause))
+                           or re.search(r'(?:بی\s*خیال|صرف\s*نظر\s*از)\s+' + literal + r'(?!\w)', clause)
+                           or re.search(literal + r'(?:\s+\S+){0,2}\s+(?:برام\s+|برای\s+من\s+)?'
+                                        r'مهم\s*نیست', clause))
+            negated = field_is_negated(clause, literal)
             if denied:
                 operations.setdefault(key, set()).add('keep')
                 controlled = True
-            if removed:
+            if removed or negated and not denied:
                 operations.setdefault(key, set()).add('remove')
                 updated.pop(key, None)
-                controlled = True
+                controlled = controlled or removed
             elif not denied:
                 operations.setdefault(key, set()).add('set')
                 updated[key] = PendingRequirement(key=key, source_text=text)

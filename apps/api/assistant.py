@@ -22,7 +22,7 @@ from apps.api.explanations import explain_search
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
 from apps.api.visit_intent import is_constraint_followup, has_unsupported_modifier
-from apps.api.need_state import resolve_need_state, visit_sort, is_need_control
+from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, is_need_control
 from tools.prepare_data import normalize_text
 
 
@@ -98,12 +98,28 @@ class AgentSettings:
             return os.environ.get(key, values.get(key, default))
         model = get('TOROB_ASSISTANT_MODEL', 'gpt-5.6-luna')
         limit = int(get('TOROB_ASSISTANT_ATTEMPT_LIMIT', '3'))
-        if model not in {'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 200:
+        if model not in {'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 500:
             raise ValueError("unsupported model or attempt limit")
         key = get('BOXAPI_API_KEY', '')
         if key and (not key.isascii() or len(key) > 1024 or any(c.isspace() for c in key)):
             raise ValueError('invalid credential format')
         return cls(get('TOROB_ASSISTANT_ENABLED', '0') == '1', key, model, limit)
+
+
+def field_only_topic(topic: str | None, category_names) -> bool:
+    """A field value such as 'رنگ آبی' is a constraint, not a product name.
+
+    A catalogue category may itself begin with a field word ('رنگ مو',
+    'رم لپ تاپ'); only a full category prefix keeps such a phrase a topic.
+    """
+    if not topic:
+        return False
+    normalized = normalize_text(topic)
+    tokens = re.findall(r'[^\W_]+', normalized, flags=re.UNICODE)
+    if not tokens or not FIELD_PATTERN.fullmatch(tokens[0]):
+        return False
+    return not any(normalized == normalize_text(name) or normalized.startswith(normalize_text(name) + ' ')
+                   for name in category_names)
 
 
 class BoxProvider:
@@ -422,8 +438,19 @@ class AssistantService:
                     if not request.category_cleared or (
                             prior_category is not None and candidate != prior_category):
                         effective_category = candidate
-            fallback = (request.messages[-3].content if len(request.messages) >= 3
-                        and matches_question(request.messages[-2].content, 'unsupported_filter') else None)
+            fallback = None
+            if len(request.messages) >= 3:
+                previous_question = request.messages[-2].content
+                if matches_question(previous_question, 'unsupported_filter'):
+                    fallback = request.messages[-3].content
+                elif (matches_question(previous_question, 'product_kind') and plan.query is not None
+                      and request.context_query is None and request.context_category is None
+                      and not (request.context_need_state and request.context_need_state.pending_requirements)
+                      and detect_category_intent(request.messages[-3].content) is None):
+                    # The integrated client sends the short human history with the
+                    # state. Recover a field-only condition that could not be stored
+                    # before a topic existed; never carry one from an older product.
+                    fallback = request.messages[-3].content
             if coordinated:
                 # A true multi-product request has no single topic. Never project
                 # the model's lexical fragment into a search or the need state.
@@ -436,6 +463,16 @@ class AssistantService:
             needs = await resolve_need_state(self.catalogue, request, plan.query, effective_category,
                                              budget, requirement, offer_sort, fallback,
                                              budget_needs_input=budget_uncertain)
+            if needs.state.pending_requirements and field_only_topic(
+                    needs.state.topic_query, category_names):
+                # The span detector can start at a category head that is also a
+                # field word ('رنگ' heads 'رنگ مو'), turning 'رنگ آبی' into a
+                # fake product. Pending needs may never attach to it; ask for
+                # the product and require a new grounded topic instead.
+                needs = replace(needs, state=needs.state.model_copy(
+                    update={'topic_query': None, 'category_name': None, 'pending_requirements': []}))
+                plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
+                effective_category = None
             if not budget_uncertain:
                 question = needs.clarification
                 if question is None and needs.state.pending_requirements and plan.question not in {'product_kind', 'battery_capacity', 'battery_scope'}:
