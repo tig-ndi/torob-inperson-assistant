@@ -1081,3 +1081,16 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
     padding: 6px;
   }
 }
+
+.uv-compare-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.uv-compare-option { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--ub-line); border-radius: 16px; background: var(--ub-surface); }
+.uv-compare-option h3, .uv-compare-option p, .uv-compare-option dl, .uv-compare-option dd { margin: 0; }
+.uv-compare-option h3 { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.uv-compare-option > .ub-price { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
+.uv-compare-option dl { display: grid; gap: 10px; font-size: 12px; }
+.uv-compare-option dt { color: var(--ub-muted); margin-bottom: 4px; }
+.uv-compare-option dd .ub-badge { white-space: normal; }
+.uv-compare-option > .ub-button { margin-top: auto; min-height: 44px; font-size: 12px; padding-inline: 8px; }
+.uv-compare-detail-title { margin: 8px 0 0; font-size: 14px; }
+.uv-source-details summary { cursor: pointer; min-height: 44px; align-content: center; font-size: 13px; color: var(--ub-muted); }
+@media (min-width: 960px) { .uv-compare-summary { gap: 8px; } }

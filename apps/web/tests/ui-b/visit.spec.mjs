@@ -49,6 +49,33 @@ async function showMap(page) {
   await expect(page.getByRole('region', { name: 'نقشهٔ خیابان با کاشی‌های OpenStreetMap' })).toBeVisible();
 }
 
+test('compact comparison preserves two offers of one shop and follows the exact second offer', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const bodies = [];
+  await mockApi(page, { onPrepare: body => bodies.push(body) });
+  await openStores(page);
+  const cards = page.locator('#uv-shop-s1 .uv-card');
+  await cards.nth(0).getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await cards.nth(1).getByRole('button', { name: 'مقایسه', exact: true }).click();
+  await page.getByRole('button', { name: 'مقایسهٔ ۲ آفر' }).click();
+  const summary = page.getByRole('region', { name: 'خلاصهٔ گزینه‌های مقایسه' });
+  await expect(summary.getByRole('article')).toHaveCount(2);
+  await expect(summary.getByRole('article').nth(1)).toContainText('۱٬۲۰۰٬۰۰۰');
+  const boxes = await summary.getByRole('article').evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, y: element.getBoundingClientRect().y })));
+  expect(boxes[0].y).toBe(boxes[1].y);
+  expect(boxes[0].x).not.toBe(boxes[1].x);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: path.join(qa, 'compact-compare-320.png') });
+  await summary.getByRole('button', { name: 'انتخاب و پیگیری آفر ۲', exact: true }).click();
+  await page.getByLabel(/گزارش خودم از مراجعه/).check();
+  await expect(page.getByText('حالت گزارش شما — تأیید بیرونی نشده', { exact: true })).toBeVisible();
+  await expect(page.getByText('شبیه‌سازی — تماس واقعی انجام نشد', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده' }).click();
+  await expect(page.getByText('پیش‌نویس ارسال‌نشده', { exact: true })).toBeVisible();
+  expect(bodies).toEqual([{ product_id: 'p1', offer_id: 'o2', shop_id: 's1' }]);
+  await expect(page.getByText('مقصد اصلی', { exact: true })).toHaveCount(0);
+});
+
 for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932], [768, 1024], [768, 360],
   [959, 800], [960, 800], [1024, 768], [1440, 900], [1920, 1080]]) {
   test(`stores expose a first decidable offer at ${width}x${height}`, async ({ page }) => {

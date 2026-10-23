@@ -25,6 +25,25 @@ export function CompareScreen() {
       <p className="uv-small">نام فروشگاه‌ها نمایشی‌اند و هویت حقوقی یا تأییدشده نیستند.</p>
       <p className="uv-note uv-compare-hint">در موبایل جدول را افقی بکشید تا ستون آفرهای دیگر دیده شود.</p>
     </header>
+    <section className="uv-compare-summary" aria-label="خلاصهٔ گزینه‌های مقایسه">
+      {offers.map((offer, index) => <article key={offer.offer_id} className="uv-compare-option" aria-label={`آفر ${formatCount(index + 1)}`}>
+        <span className="uv-small">آفر {formatCount(index + 1)}</span>
+        <h3>{shopName(offer)}</h3>
+        {offer.seller_title && <p className="uv-small">{offer.seller_title}</p>}
+        <Price value={offer.price_toman} />
+        <p className="uv-small">آخرین تغییر قیمت: {formatTehranDateTime(offer.last_price_changed_at)}</p>
+        <dl>
+          <div><dt>فاصلهٔ هوایی</dt><dd>{formatDistance(offer.direct_distance_meters)}</dd></div>
+          <div><dt>ساعت اعلامی</dt><dd><OpenBadge offer={offer} /></dd></div>
+          <div><dt>اعتبار حضوری</dt><dd><CreditBadge offer={offer} /></dd></div>
+        </dl>
+        <Button tone="secondary" aria-label={`انتخاب و پیگیری آفر ${formatCount(index + 1)}`} onClick={() => {
+          dispatch({ type: 'selectOffer', value: offer });
+          dispatch({ type: 'navigate', screen: 'contact' });
+        }}>انتخاب و پیگیری</Button>
+      </article>)}
+    </section>
+    <h3 className="uv-compare-detail-title">جزئیات و شواهد هر آفر</h3>
     <div className="uv-compare-scroll" role="region" aria-label="جدول مقایسهٔ آفرها" tabIndex={0}>
       <table className="uv-table">
         <caption className="ub-sr-only">مقایسهٔ {formatCount(offers.length)} آفر از یک محصول</caption>
