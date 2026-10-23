@@ -41,3 +41,5 @@ Thumbs.db
 /MASTER_PROMPT.md
 /.agents/skills/competition-agent-engineer/
 torob-dataset/
+.vite/
+.worktree-*/
