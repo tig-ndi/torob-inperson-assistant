@@ -8,7 +8,7 @@ import './map.css';
 import type { Position } from '../base/domain/contracts.ts';
 import { useWorkspace } from '../base/state/Workspace.tsx';
 import { Button } from '../base/ui/primitives.tsx';
-import { CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
+import { CloseIcon, CrosshairIcon, StoreIcon } from '../../presentation/icons-motion/icons.tsx';
 import { useMapView } from '../base/shell/MapView.tsx';
 
 import { formatDistance } from '../../api.ts';
@@ -237,6 +237,8 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     if (selectedPinId) setPreviewPinId(selectedPinId);
   }, [selectedPinId]);
 
+  useEffect(() => { setPreviewPinId(null); }, [state.screen]);
+
   useEffect(() => {
     const layer = overlay.current;
     if (!layer) return;
@@ -288,6 +290,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     } else if (cameraIntent.kind === 'selection') {
       const destination = live.current.pins.find(pin => pin.id === live.current.selectedPinId);
       if (destination) {
+        setPreviewPinId(destination.id);
         const marker = markers.current.get(destination.id);
         const group = cluster.current;
         if (marker && group) {
@@ -324,6 +327,14 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     : 'قیمت‌ها: فروشگاه‌های بارگذاری‌شده · دایرهٔ قرمز: شعاع انتخابی';
 
   const previewPin = previewPinId ? pins.find(p => p.id === previewPinId) : null;
+  const closePreview = (restoreFocus = false) => {
+    setPreviewPinId(null);
+    if (restoreFocus) {
+      const marker = previewPinId ? markers.current.get(previewPinId) : undefined;
+      const target = marker && cluster.current?.getVisibleParent(marker);
+      (target?.getElement() ?? container.current)?.focus({ preventScroll: true });
+    }
+  };
 
   return <section className="um-map-shell" aria-label="نقشهٔ فروشندگان">
     <div ref={container} className="um-map" role="region" aria-label="نقشهٔ خیابان با کاشی‌های OpenStreetMap" />
@@ -337,8 +348,13 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
     </div>
 
     {previewPin && (
-      <div className="um-preview-card" role="dialog" aria-label={`پیش‌نمایش فروشگاه ${previewPin.title || previewPin.label}`}>
-        <button type="button" className="um-preview-close" onClick={() => setPreviewPinId(null)} aria-label="بستن پیش‌نمایش">✕</button>
+      <div className="um-preview-region" style={{ ...padding,
+        left: `max(${padding.left}px, var(--um-control-clearance))` }}>
+      <div className="um-preview-card" role="dialog" aria-label={`پیش‌نمایش فروشگاه ${previewPin.title || previewPin.label}`}
+        onKeyDown={event => {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closePreview(true); }
+        }}>
+        <button type="button" className="um-preview-close" onClick={() => closePreview(true)} aria-label="بستن پیش‌نمایش"><CloseIcon size={18} /></button>
         <div className="um-preview-content">
           <div className="um-preview-header">
             <h4 className="um-preview-title">{previewPin.title || 'فروشگاه'}</h4>
@@ -356,6 +372,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
           </div>
           <div className="um-preview-actions">
             <Button onClick={() => {
+              closePreview();
               onPinSelect(previewPin.id);
               const offer = state.loadedOffers?.page.items.find(o => o.shop_id === previewPin.id);
               if (offer) {
@@ -367,6 +384,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
               انتخاب این آفر و پیگیری
             </Button>
             <Button tone="secondary" onClick={() => {
+              closePreview();
               onPinSelect(previewPin.id);
               showList();
             }}>
@@ -380,6 +398,7 @@ export function MapLayer({ pins, userPosition, radiusKm, selectedPinId, onPinSel
             </a>
           </div>
         </div>
+      </div>
       </div>
     )}
 

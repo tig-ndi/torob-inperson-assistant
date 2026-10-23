@@ -38,6 +38,8 @@ async function reveal(page) {
   await expect(page.locator('.um-map')).toBeVisible();
 }
 async function expose(page, shop) {
+  const close = page.getByRole('button', { name: 'بستن پیش‌نمایش', exact: true });
+  if (await close.isVisible()) await close.click();
   const pin = page.locator(`.um-pin[aria-label*="نام نمایشی ${shop}"]`);
   for (let n = 0; n < 8 && await pin.count() === 0; n++) {
     await page.locator('.um-cluster').first().click({ force: true });
@@ -108,6 +110,7 @@ test('co-located shops, two offers from one shop, keyboard focus and the non-fir
   await expect(page.locator('.uv-table')).toContainText('قیمت ثبت نشده');
   await page.getByRole('button', { name: 'بازگشت به مرحلهٔ قبل' }).click();
   await second.getByRole('button', { name: 'پیگیری', exact: true }).click();
+  await page.locator('.uv-advanced-details > summary').click();
   await page.getByRole('button', { name: 'ساخت پیش‌نویس ارسال‌نشده', exact: true }).click();
   expect(calls.prepare).toEqual([expect.objectContaining({ product_id: 'p1', offer_id: 'o2', shop_id: 's1' })]);
   expect(calls.paid).toBe(0);

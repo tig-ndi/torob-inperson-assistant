@@ -4,9 +4,13 @@
   --um-route-color: var(--ub-brand);
   --um-user-color: var(--ub-focus);
   --um-shadow: 0 4px 14px color-mix(in srgb, var(--ub-ink) 14%, transparent);
+  --um-control-size: 44px;
+  --um-control-inset: 14px;
+  --um-control-clearance: calc(var(--um-control-inset) + var(--um-control-size) + 20px);
   position: absolute;
   inset: 0;
   min-height: inherit;
+  isolation: isolate;
 }
 
 .um-map {
@@ -81,15 +85,15 @@
 .um-controls {
   position: absolute;
   z-index: 900;
-  left: 14px;
+  left: var(--um-control-inset);
   top: 92px;
   display: grid;
   gap: 8px;
 }
 
 .um-control {
-  width: 44px;
-  height: 44px;
+  width: var(--um-control-size);
+  height: var(--um-control-size);
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -345,13 +349,23 @@
   .um-user::after { animation: none; }
 }
 
-/* Floating Store Preview Card on Map */
-.um-preview-card {
+/* Use the same measured clear area as the camera, including the mobile sheet. */
+.um-preview-region {
   position: absolute;
   z-index: 950;
-  bottom: 24px;
-  right: 16px;
-  max-width: min(420px, calc(100% - 32px));
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.um-preview-card {
+  position: relative;
+  width: min(420px, 100%);
+  min-width: 0;
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
   background: color-mix(in srgb, var(--ub-surface) 94%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -379,8 +393,8 @@
   position: absolute;
   top: 12px;
   left: 12px;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1px solid var(--ub-line);
   background: var(--ub-soft);
@@ -398,8 +412,13 @@
   color: var(--ub-ink);
 }
 
+.um-preview-close:focus-visible {
+  outline: 3px solid var(--ub-focus);
+  outline-offset: -3px;
+}
+
 .um-preview-header {
-  padding-inline-end: 28px;
+  padding-inline-end: 44px;
   margin-bottom: 10px;
 }
 
@@ -505,10 +524,17 @@
 
 @media (max-width: 959px) {
   .um-preview-card {
-    right: 12px;
-    left: 12px;
-    bottom: 12px;
-    max-width: none;
+    width: 100%;
     padding: 12px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-preview-card { animation: none; }
+}
+
+@media (max-width: 959px) and (max-height: 450px) {
+  .um-map-shell {
+    --um-control-clearance: calc(var(--um-control-inset) + 2 * var(--um-control-size) + 8px + 20px);
   }
 }
