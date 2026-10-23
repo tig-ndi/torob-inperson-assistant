@@ -3,7 +3,7 @@
 ## مبنا و شاخه
 
 - SHA پایه: `1fba9c8f178a97d6cbb35cafc154eec7dd2c5632` (Base مشترک UI؛ بررسی شد که ancestorِ `origin/main` است).
-- شاخهٔ کاری: `codex/ui-b-map-visit`، در worktree مستقل `D:\torob-inperson-assistant-b`.
+- شاخهٔ کاری: `ui-b-map-visit`، در worktree مستقل `D:\torob-inperson-assistant-b`.
 - checkout اصلی و شاخهٔ A دست نخوردند؛ هیچ push یا تغییر remote انجام نشد.
 - فایل‌های تغییرکرده فقط در محدودهٔ B هستند: `apps/web/src/app/map/`، `apps/web/src/app/screens/b/`، `apps/web/unit/ui-b/`، `apps/web/tests/ui-b/` و همین دو سند `docs/ui-base/log-B.md` و `requests-B.md`.
 
