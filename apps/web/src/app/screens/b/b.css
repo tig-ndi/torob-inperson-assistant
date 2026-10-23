@@ -223,6 +223,28 @@ html:has(.uv-visit[data-theme-mode=light]) {
   padding-inline: 10px;
 }
 
+.uv-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.uv-quick-filters button {
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+  font-size: 12px;
+}
+
+.uv-quick-filters button[aria-pressed=true] {
+  border-color: var(--ub-brand);
+  background: var(--ub-brand-soft);
+  color: var(--ub-brand);
+}
+
 /* Figma-like journey header, desktop only; mobile keeps the shell stepper. */
 .uv-steps {
   position: sticky;
@@ -1001,6 +1023,10 @@ html:has(.uv-visit[data-theme-mode=light]) {
     left: 12px;
     width: auto;
     bottom: 68px;
+  }
+
+  .uv-quick-filters {
+    display: none;
   }
 
   .ub-app:has(.uv-visit) .ub-header {

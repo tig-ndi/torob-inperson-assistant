@@ -44,6 +44,12 @@ export function StoresScreen() {
         <button type="button" aria-pressed={state.filters.sort === 'nearest'}
           onClick={() => dispatch({ type: 'filters', value: { sort: 'nearest' } })}>نزدیک‌ترین</button>
       </div>
+      <div className="uv-quick-filters" role="group" aria-label="فیلترهای سریع">
+        <button type="button" aria-pressed={state.filters.openNowOnly}
+          onClick={() => dispatch({ type: 'filters', value: { openNowOnly: !state.filters.openNowOnly } })}>الان باز</button>
+        <button type="button" aria-pressed={state.filters.creditOnly}
+          onClick={() => dispatch({ type: 'filters', value: { creditOnly: !state.filters.creditOnly } })}>اعتبار حضوری</button>
+      </div>
     </header>
     <ReviewNotice />
     {offers.result.status === 'loading' && !page && <Skeleton />}
