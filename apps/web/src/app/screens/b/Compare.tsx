@@ -3,7 +3,8 @@ import { useWorkspace } from '../../base/state/Workspace.tsx';
 import type { Offer } from '../../base/domain/contracts.ts';
 import { formatDistance, formatTehranDateTime, HOURS_REASON_TEXT } from '../../../api.ts';
 import { Badge, Button, CreditBadge, Empty, OpenBadge, Price } from '../../base/ui/primitives.tsx';
-import { formatCount, shopFacts, shopName } from './model.ts';
+import { formatCount, offerInCurrentPage, shopFacts, shopName } from './model.ts';
+import { ReviewNotice } from './ReviewNotice.tsx';
 
 export function CompareScreen() {
   const { state, dispatch } = useWorkspace();
@@ -25,23 +26,34 @@ export function CompareScreen() {
       <p className="uv-small">نام فروشگاه‌ها نمایشی‌اند و هویت حقوقی یا تأییدشده نیستند.</p>
       <p className="uv-note uv-compare-hint">در موبایل جدول را افقی بکشید تا ستون آفرهای دیگر دیده شود.</p>
     </header>
+    <ReviewNotice />
     <section className="uv-compare-summary" aria-label="خلاصهٔ گزینه‌های مقایسه">
-      {offers.map((offer, index) => <article key={offer.offer_id} className="uv-compare-option" aria-label={`آفر ${formatCount(index + 1)}`}>
-        <span className="uv-small">آفر {formatCount(index + 1)}</span>
-        <h3>{shopName(offer)}</h3>
-        {offer.seller_title && <p className="uv-small">{offer.seller_title}</p>}
-        <Price value={offer.price_toman} />
-        <p className="uv-small">آخرین تغییر قیمت: {formatTehranDateTime(offer.last_price_changed_at)}</p>
-        <dl>
-          <div><dt>فاصلهٔ هوایی</dt><dd>{formatDistance(offer.direct_distance_meters)}</dd></div>
-          <div><dt>ساعت اعلامی</dt><dd><OpenBadge offer={offer} /></dd></div>
-          <div><dt>اعتبار حضوری</dt><dd><CreditBadge offer={offer} /></dd></div>
-        </dl>
-        <Button tone="secondary" aria-label={`انتخاب و پیگیری آفر ${formatCount(index + 1)}`} onClick={() => {
-          dispatch({ type: 'selectOffer', value: offer });
-          dispatch({ type: 'navigate', screen: 'contact' });
-        }}>انتخاب و پیگیری</Button>
-      </article>)}
+      {offers.map((offer, index) => {
+        // Comparison rows are historical: only offers still in the loaded page can be chosen from here,
+        // and the previously selected offer needs its own review before it is reused.
+        const inPage = offerInCurrentPage(state, offer);
+        const waiting = inPage && state.selectionNeedsReview && state.selectedOffer?.offer_id === offer.offer_id;
+        const selectable = inPage && !waiting;
+        return <article key={offer.offer_id} className="uv-compare-option" aria-label={`آفر ${formatCount(index + 1)}`}>
+          <span className="uv-small">آفر {formatCount(index + 1)}</span>
+          <h3>{shopName(offer)}</h3>
+          {offer.seller_title && <p className="uv-small">{offer.seller_title}</p>}
+          <Price value={offer.price_toman} />
+          <p className="uv-small">آخرین تغییر قیمت: {formatTehranDateTime(offer.last_price_changed_at)}</p>
+          <dl>
+            <div><dt>فاصلهٔ هوایی</dt><dd>{formatDistance(offer.direct_distance_meters)}</dd></div>
+            <div><dt>ساعت اعلامی</dt><dd><OpenBadge offer={offer} /></dd></div>
+            <div><dt>اعتبار حضوری</dt><dd><CreditBadge offer={offer} /></dd></div>
+          </dl>
+          {selectable
+            ? <Button tone="secondary" aria-label={`انتخاب و پیگیری آفر ${formatCount(index + 1)}`} onClick={() => {
+              dispatch({ type: 'selectOffer', value: offer });
+              dispatch({ type: 'navigate', screen: 'contact' });
+            }}>انتخاب و پیگیری</Button>
+            : <><p className="uv-note">{waiting ? 'انتخاب قبلی با شرایط فعلی نیازمند تأیید است.' : 'این آفر با شرایط فعلی بازبینی نشده است؛ مشاهده و مقایسه آزاد است.'}</p>
+              <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'stores' })}>بازبینی در فروشندگان</Button></>}
+        </article>;
+      })}
     </section>
     <h3 className="uv-compare-detail-title">جزئیات و شواهد هر آفر</h3>
     <div className="uv-compare-scroll" role="region" aria-label="جدول مقایسهٔ آفرها" tabIndex={0}>
@@ -69,15 +81,24 @@ export function CompareScreen() {
           <Row label="واحد" offers={offers}>{offer => <Evidence part={shopFacts(offer).unit} />}</Row>
           <Row label="اقدام" offers={offers}>{offer => {
             const selected = state.selectedOffer?.offer_id === offer.offer_id;
+            // A changed condition must not turn a saved row into a selection or a destination by one click.
+            const inPage = offerInCurrentPage(state, offer);
+            const waiting = inPage && state.selectionNeedsReview && selected;
+            const selectable = inPage && !waiting;
             return <div className="uv-column-actions">
-              <Button tone={selected ? 'primary' : 'secondary'} onClick={() => dispatch({ type: 'selectOffer', value: offer })}>
-                {selected ? 'انتخاب‌شده' : 'انتخاب این آفر'}
-              </Button>
-              <Button tone="secondary" onClick={() => {
-                dispatch({ type: 'selectOffer', value: offer });
-                dispatch({ type: 'plan', primary: offer });
-                dispatch({ type: 'navigate', screen: 'trip' });
-              }}>برنامهٔ مراجعه</Button>
+              {selectable ? <>
+                <Button tone={selected ? 'primary' : 'secondary'} onClick={() => dispatch({ type: 'selectOffer', value: offer })}>
+                  {selected ? 'انتخاب‌شده' : 'انتخاب این آفر'}
+                </Button>
+                <Button tone="secondary" onClick={() => {
+                  dispatch({ type: 'selectOffer', value: offer });
+                  dispatch({ type: 'plan', primary: offer });
+                  dispatch({ type: 'navigate', screen: 'trip' });
+                }}>برنامهٔ مراجعه</Button>
+              </> : <>
+                <p className="uv-note">{waiting ? 'انتخاب قبلی نیازمند تأیید است.' : 'این آفر با شرایط فعلی بازبینی نشده است.'}</p>
+                <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'stores' })}>بازبینی در فروشندگان</Button>
+              </>}
               <Button tone="ghost" onClick={() => dispatch({ type: 'compareOffer', value: offer })}>حذف از مقایسه</Button>
             </div>;
           }}</Row>

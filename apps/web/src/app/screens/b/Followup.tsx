@@ -59,6 +59,7 @@ export function FollowupScreen() {
       <p className="ub-meta">این صفحه هیچ شماره، لینک تماس، واتساپ یا کانال پیام نمی‌سازد. وضعیت بارگذاری و خطا مربوط به درخواست برنامه است، نه تماس با فروشنده. شبیه‌سازی و گزارش شما هر دو تأیید بیرونی نشده‌اند.</p>
     </details>
     <ReviewNotice />
+    {state.selectionNeedsReview && <p className="uv-note">این صفحه برای همین آفر انتخاب‌شده است؛ ساخت پیش‌نویس یا دیدن جایگزین‌ها تأیید شرایط فعلی برای این آفر نیست.</p>}
 
     <section className="uv-panel-section" aria-labelledby="uv-draft-title" aria-busy={draftBusy}>
       <h3 id="uv-draft-title">پیش‌نویس پیگیری</h3>
