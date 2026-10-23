@@ -9,6 +9,7 @@ import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
 import { assistantBlockReason } from '../../base/domain/errors.ts';
+import { VoiceInputButton, VoiceSpeakerButton } from '../../voice/index.ts';
 
 const numbers = new Intl.NumberFormat('fa-IR');
 type AssistantStatus = Awaited<ReturnType<typeof assistantStatus>>;
@@ -51,6 +52,12 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
     response.current?.focus({ preventScroll: true });
     response.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   }, [turn.request_id]);
+  const speechText = outcome.kind === 'question'
+    ? outcome.question
+    : outcome.summary
+      ? `${outcome.title}؛ ${outcome.summary}`
+      : outcome.title;
+
   return <section ref={response} tabIndex={-1} className={`ua-outcome ua-outcome--${outcome.kind}`} aria-labelledby="ua-outcome-title" aria-live="polite">
     <p className="ua-eyebrow">{outcome.kind === 'question' ? 'پرسش دستیار' : outcome.kind === 'results' ? 'خلاصهٔ نتیجه' : 'بدون نتیجه'}</p>
     <h3 id="ua-outcome-title">{outcome.title}</h3>
@@ -59,6 +66,9 @@ function Outcome({ turn }: { turn: AssistantTurn }) {
       {outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.kind === 'empty' && <p>برای این درخواست، محصولی در پاسخ ثبت‌شده برنگشت.{outcome.query && <> عبارت پاسخ: <bdi>{outcome.query}</bdi>.</>}</p>}
     {outcome.summary && <p className="ua-summary">{outcome.summary}</p>}
+    <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+      <VoiceSpeakerButton text={speechText} />
+    </div>
     {outcome.limitations.length > 0 && <div className="ua-limitations">
       <h4>محدودیت‌های پاسخ</h4>
       <ul>{outcome.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>
@@ -196,6 +206,10 @@ export function DecideScreen() {
         placeholder="مثلاً گوشی برای عکاسی می‌خواهم؛ سقف بودجه‌ام ۱۰ میلیون تومان است." />
       <div className="ua-decide-actions">
         <Button type="submit" disabled={pending || !canSend || !draft.trim()}><SparklesIcon />بررسی نیاز</Button>
+        <VoiceInputButton disabled={pending || !canSend} onTranscript={text => {
+          setDraft(prev => prev.trim() ? `${prev.trim()} ${text}` : text);
+          if (localError) setLocalError(null);
+        }} />
         {pending && <Button tone="secondary" type="button" onClick={cancel}><StopCircleIcon />لغو درخواست</Button>}
         {!pending && (state.history.length > 0 || need !== null) && <Button tone="secondary" type="button" onClick={resetConversation}>
           <RestartIcon />گفت‌وگوی تازه</Button>}
