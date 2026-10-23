@@ -10,6 +10,7 @@ import { productImageUrl } from './resultPresentation.ts';
 import { productHeadingId } from './pagination.ts';
 import { useProductPages } from './useProductPages.ts';
 import { ProductComparison } from './comparison.tsx';
+import { useResultsReturn } from './useResultsReturn.ts';
 
 const numbers = new Intl.NumberFormat('fa-IR');
 
@@ -54,11 +55,11 @@ function ProductCard({ product, evidence, stale, nearestSort }: {
       <div><h3 id={productHeadingId(product.product_id)} tabIndex={-1}>{title}</h3><p className="ub-meta">{[product.brand_name, product.model, product.category_name].filter(Boolean).join(' · ') || 'برند، مدل و دسته ثبت نشده'}</p></div>
     </div>
     <div className="ua-product-price"><span>کمترین قیمت ثبت‌شدهٔ محصول</span><Price value={summary.min_price_toman} /></div>
-    <Button tone="secondary" disabled={stale} onClick={() => {
+    <Button tone="secondary" data-ua-return={`seller:${product.product_id}`} disabled={stale} onClick={() => {
       dispatch({ type: 'product', value: product });
       dispatch({ type: 'navigate', screen: 'stores' });
     }}>دیدن فروشندگان</Button>
-    <Button tone="ghost" aria-pressed={compared} aria-label={`${compared ? 'حذف' : 'افزودن'} ${title} ${compared ? 'از' : 'به'} مقایسه`}
+    <Button tone="ghost" data-ua-return={`compare:${product.product_id}`} aria-pressed={compared} aria-label={`${compared ? 'حذف' : 'افزودن'} ${title} ${compared ? 'از' : 'به'} مقایسه`}
       disabled={stale && !compared} onClick={() => {
         dispatch({ type: 'notice', value: null });
         dispatch({ type: 'compareProduct', value: product });
@@ -103,7 +104,7 @@ export function ResultsScreen() {
     target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   }, [results]);
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { heading.current?.focus({ preventScroll: true }); heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); }, []);
+  useResultsReturn(results, heading);
   const currentSearch = catalogueSearchForWorkspace(state);
   const stale = results !== null && catalogueSearchKey(results.search) !== catalogueSearchKey(currentSearch);
   const loading = catalogue.result.status === 'loading' || pages.result.status === 'loading';
