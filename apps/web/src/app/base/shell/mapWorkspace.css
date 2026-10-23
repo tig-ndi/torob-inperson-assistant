@@ -114,3 +114,19 @@
 @media(max-width:959px) and (max-height:700px) {
   .ub-app.uc-map-workspace .ub-map { flex-basis:28%; height:28%; min-height:110px; }
 }
+.uc-map-prompt.uc-map-agent { cursor:text; border-radius:999px; padding:7px 10px 7px 14px; gap:8px; }
+.uc-map-prompt input { flex:1; min-width:0; border:0; outline-offset:2px; background:transparent; color:var(--ub-ink); font-size:14px; padding:10px 3px; }
+.uc-map-prompt input::placeholder { color:var(--ub-muted); }
+.uc-map-prompt .ub-button { flex:0 0 38px; width:38px; height:38px; padding:6px; border-radius:50%; min-height:38px; box-shadow:none; }
+.uc-map-prompt .ub-button--primary { background:var(--ub-brand); color:var(--ub-on-brand); }
+.uc-location-nudge { padding:16px; margin:12px 0 18px; border:1px solid var(--ub-line); border-radius:20px; background:var(--ub-soft); }
+.uc-location-nudge>div:first-child { display:flex; align-items:center; gap:12px; margin-bottom:9px; }
+.uc-location-nudge>div:first-child>svg { color:var(--ub-focus); }
+.uc-location-nudge h3 { font-size:17px; }
+.uc-location-nudge p { color:var(--ub-muted); font-size:12px; line-height:1.9; }
+.uc-location-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:13px; }
+.uc-location-actions .ub-button { flex:1; min-height:42px; padding:8px 10px; font-size:12px; }
+@media(max-width:959px) {
+  .uc-map-prompt input { font-size:12px; padding:7px 2px; }
+  .uc-map-prompt .ub-button { width:32px; height:32px; min-height:32px; flex-basis:32px; }
+}

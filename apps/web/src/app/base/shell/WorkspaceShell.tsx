@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ChevronRightIcon, SparklesIcon, MapPinIcon, RestartIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { MapLayer } from '../../map/MapLayer.tsx';
 import { ScreenOutlet, screenLabels } from '../registry.tsx';
@@ -31,6 +31,14 @@ export function WorkspaceShell() {
     requestAnimationFrame(() => document.getElementById('ua-need')?.focus({ preventScroll: false }));
   };
   const revealMap = () => { mapElement.current?.focus({ preventScroll: true }); };
+  const sendMapPrompt = (event: FormEvent) => {
+    event.preventDefault();
+    if (!state.needDraft.trim()) return;
+    dispatch({ type: 'navigate', screen: 'decide' });
+    // Native form submission reuses the sole conversation handler and its guards.
+    const form = document.getElementById('uc-agent-message-form');
+    if (form instanceof HTMLFormElement) form.requestSubmit();
+  };
   const showList = () => { panelElement.current?.focus({ preventScroll: true }); };
   useEffect(() => { if (panelBody.current) panelBody.current.scrollTop = 0; }, [state.screen]);
   return <MapViewProvider value={{ revealMap, showList }}><div className="ub-app uc-map-workspace" data-layout="visit" data-screen={state.screen} data-resolved-theme={theme}>
@@ -45,7 +53,16 @@ export function WorkspaceShell() {
           dispatch({ type: 'notice', value: 'مبدأ روی نقشه تنظیم شد؛ فاصله‌ها بر اساس همین نقطه‌اند.' });
         }} cameraIntent={state.cameraIntent} padding={mapPadding} /></div>
       <aside className="uc-map-tools" ref={toolbar} aria-label="همراه روی نقشه">
-        <button type="button" className="uc-map-agent" onClick={focusAgent}><SparklesIcon size={23} /><span><strong>{state.needState?.topic_query ?? 'با دستیار، خریدت را شروع کن'}</strong><small>{chat ? 'نیازت را در پنل گفت‌وگو بنویس' : 'ادامهٔ گفت‌وگو دربارهٔ همین خرید'}</small></span><span aria-hidden="true">←</span></button>
+        <form className="uc-map-agent uc-map-prompt" onSubmit={sendMapPrompt}>
+          <SparklesIcon size={23} />
+          <input aria-label="پیام به دستیار روی نقشه" placeholder="چی می‌خوای بخری؟" value={state.needDraft} maxLength={1000}
+            onChange={event => dispatch({ type: 'needDraft', value: event.target.value })}
+            onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault(); }} />
+          <Button type="button" tone="ghost" aria-label="گفت‌وگوی صوتی از نقشه" title="گفت‌وگوی صوتی" onClick={() => {
+            focusAgent(); document.querySelector<HTMLButtonElement>('[data-uc-voice]')?.click();
+          }}><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3"/></svg></Button>
+          <Button type="submit" disabled={!state.needDraft.trim()} aria-label="ارسال پیام از نقشه" title="ارسال پیام">←</Button>
+        </form>
         <div><Button tone="secondary" onClick={() => setOverlay('location')}><MapPinIcon size={16} />{state.position?.label ?? 'انتخاب موقعیت'}</Button>
           <Button tone="secondary" onClick={() => setOverlay('filters')}>شرایط خرید</Button>
           {state.filters.radiusKm !== null && <Badge>شعاع {new Intl.NumberFormat('fa-IR').format(state.filters.radiusKm)} کیلومتر</Badge>}</div>

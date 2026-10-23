@@ -86,6 +86,60 @@ test('small phone keeps the prompt and icon send visible below a readable transc
   expect(await page.locator('.uc-composer').evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
 });
 
+test('the map prompt types in place and Enter uses the same conversation and history', async ({ page }) => {
+  const bodies = await setup(page);
+  const prompt = page.getByRole('textbox', { name: 'پیام به دستیار روی نقشه' });
+  await prompt.fill('گوشی برای عکاسی');
+  expect(bodies).toHaveLength(0);
+  await expect(page.getByLabel('نیاز و کاربرد موردنظر')).toHaveValue('گوشی برای عکاسی');
+  await prompt.press('Enter');
+  await expect(page.locator('.ua-question')).toBeVisible();
+  expect(bodies).toHaveLength(1);
+  await expect(prompt).toHaveValue('');
+  await prompt.fill('بودجه من تا 9007199254740993 تومان است');
+  await prompt.press('Enter');
+  await expect(page.locator('.uc-product')).toHaveCount(2);
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1].messages).toHaveLength(3);
+  await page.locator('.uc-product').first().getByRole('button', { name: 'فروشگاه‌ها', exact: true }).click();
+  await expect(page.locator('.ub-app')).toHaveAttribute('data-screen', 'stores');
+  await prompt.fill('همین کالا را با بودجه بیشتر بررسی کن');
+  await prompt.press('Enter');
+  await expect.poll(() => bodies.length).toBe(3);
+  await expect(page.locator('.ub-app')).toHaveAttribute('data-screen', 'decide');
+  expect(bodies[2].messages).toHaveLength(5);
+});
+
+test('location is requested only after consent and successful permission dismisses the card', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__locationCalls = 0;
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      getCurrentPosition(success) { window.__locationCalls++; success({ coords: { latitude: 35.7, longitude: 51.4, accuracy: 50 } }); },
+    } });
+  });
+  const bodies = await setup(page);
+  expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+  await expect(page.getByRole('heading', { name: 'موقعیتت رو بدی؟' })).toBeVisible();
+  await page.getByRole('button', { name: 'بله، موقعیتم رو بده', exact: true }).click();
+  expect(await page.evaluate(() => window.__locationCalls)).toBe(1);
+  await expect(page.locator('.uc-location-nudge')).toHaveCount(0);
+  expect(bodies).toHaveLength(0);
+});
+
+test('manual location opens the existing selector without requesting browser permission', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__locationCalls = 0;
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      getCurrentPosition() { window.__locationCalls++; },
+    } });
+  });
+  await setup(page);
+  await page.getByRole('button', { name: 'انتخاب دستی محله', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByLabel('انتخاب تقریبی منطقه')).toBeVisible();
+  expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+});
+
 test('source price reply retains history and opens real product comparison and stores', async ({ page }) => {
   const bodies = await setup(page);
   await page.locator('.um-map').evaluate(element => element.setAttribute('data-lifetime-test', 'preserved'));
@@ -108,7 +162,7 @@ test('source price reply retains history and opens real product comparison and s
   await page.locator('.uc-product').first().getByRole('button', { name: 'فروشگاه‌ها', exact: true }).click();
   await expect(page.locator('.ub-app')).toHaveAttribute('data-screen', 'stores');
   await expect(page.locator('.um-map')).toHaveAttribute('data-lifetime-test', 'preserved');
-  await page.locator('.uc-map-agent').click();
+  await page.getByRole('button', { name: 'ادامهٔ گفت‌وگو با دستیار', exact: true }).click();
   await expect(page.locator('.uc-messages')).toContainText('گوشی موبایل');
   await expect(page.locator('.um-map')).toHaveAttribute('data-lifetime-test', 'preserved');
   await expect(page.locator('#ua-need')).toHaveAttribute('data-lifetime-test', 'preserved');

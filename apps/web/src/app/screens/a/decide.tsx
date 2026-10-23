@@ -10,6 +10,7 @@ import { formatMoney } from '../../base/domain/presentation.ts';
 import { catalogueSearchForWorkspace } from '../../base/state/model.ts';
 import { useGuidance } from './guidance.ts';
 import { ChatProducts } from './ChatProducts.tsx';
+import { LocationNudge } from './LocationNudge.tsx';
 import { FiltersDialog } from '../../base/ui/FiltersDialog.tsx';
 import { RefreshIcon, RestartIcon, SparklesIcon, StopCircleIcon } from '../../../presentation/icons-motion/icons.tsx';
 import { activeBudgetLabel, assistantOutcome, needSummary, pendingRequirementBadge } from './presentation.ts';
@@ -248,6 +249,7 @@ export function DecideScreen({ start = false }: { start?: boolean }) {
       {assistant.result.status === 'error' && <ErrorCard message={assistant.result.error} failure={assistant.result.failure} onRetry={canSend && draft.trim() ? () => void send() : undefined} />}
       {notice && <p className="ua-notice" role="status">{notice}</p>}
       {!!need?.pending_requirements.length && <p className="uc-pending-warning" role="status">{numbers.format(need.pending_requirements.length)} خواسته هنوز اعمال نشده است؛ جزئیات در شرایط گفت‌وگو.</p>}
+      {!hasHistory && <LocationNudge onManual={() => setLocationOpen(true)} disabled={pending} />}
       <ChatProducts />
       {hasHistory && <div className="uc-followup-chips"><p>قدم بعدی را با هم انتخاب کنیم</p><div>
         {guidance.data?.brands.filter(brand => !need?.topic_query?.includes(brand)).slice(0, 3).map(brand =>
@@ -278,7 +280,7 @@ export function DecideScreen({ start = false }: { start?: boolean }) {
       </details>}
     </div>
     <div className="uc-composer">
-      <form className="ua-decide-form uc-compose-form" onSubmit={submit} aria-busy={pending}>
+      <form id="uc-agent-message-form" className="ua-decide-form uc-compose-form" onSubmit={submit} aria-busy={pending}>
         <label className="ub-sr-only" htmlFor="ua-need">نیاز و کاربرد موردنظر</label>
         <textarea ref={textarea} id="ua-need" value={draft} maxLength={1000} rows={3} aria-describedby="ua-need-help"
           onChange={event => { setDraft(event.target.value); if (localError) setLocalError(null); }}
@@ -287,7 +289,7 @@ export function DecideScreen({ start = false }: { start?: boolean }) {
           <Button type="submit" aria-label={hasHistory ? 'ارسال پاسخ' : 'شروع گفت‌وگو'} title="ارسال پیام" disabled={pending || !canSend || !draft.trim()}>
             <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg>
           </Button>
-          <Button tone="ghost" type="button" disabled={pending || !canSend} onClick={() => setVoiceModalOpen(true)} aria-label="گفت‌وگوی صوتی با دستیار هوشمند" title="گفت‌وگوی صوتی">
+          <Button data-uc-voice="true" tone="ghost" type="button" disabled={pending || !canSend} onClick={() => setVoiceModalOpen(true)} aria-label="گفت‌وگوی صوتی با دستیار هوشمند" title="گفت‌وگوی صوتی">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg>
           </Button>
           <Button tone="ghost" type="button" disabled={pending} onClick={() => setFiltersOpen(true)} aria-label="بودجه و شرایط" title="بودجه و شرایط">
