@@ -119,6 +119,11 @@ bdi {
   border-bottom:1px solid var(--ub-line)
 }
 .ub-brand {
+  border:0;
+  padding:0;
+  background:transparent;
+  text-align:start;
+  cursor:pointer;
   display:flex;
   gap:12px;
   align-items:center;
@@ -751,34 +756,4 @@ bdi {
     transition:none!important;
     animation:none!important
   }
-}
-.ub-base-pages {
-  position:relative
-}
-.ub-base-pages summary {
-  cursor:pointer;
-  min-height:44px;
-  padding-block:10px
-}
-.ub-base-pages nav {
-  position:absolute;
-  bottom:44px;
-  inset-inline-start:0;
-  display:grid;
-  gap:4px;
-  min-width:160px;
-  padding:8px;
-  background:var(--ub-surface);
-  border:1px solid var(--ub-line);
-  border-radius:12px;
-  z-index:10
-}
-.ub-base-pages nav button {
-  background:transparent;
-  color:var(--ub-ink);
-  border:0;
-  text-align:start;
-  min-height:44px;
-  padding:8px;
-  border-radius:8px
 }

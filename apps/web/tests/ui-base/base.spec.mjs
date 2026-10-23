@@ -91,14 +91,18 @@ test('real API client handles snapshot search, offers and unsent followups with 
   expect(summary.products).toBeGreaterThan(0); expect(summary.offers).toBeGreaterThan(0);
   expect(summary).toMatchObject({ unsent: 'draft_not_sent', hasSource: true, noContact: true, alternativeScope: true });
 });
-test('all A/B mount points navigate without losing the chosen conditions', async ({ page }) => {
+test('public discovery and visit routes remain reachable without a developer menu', async ({ page }) => {
   await page.goto('/design.html');
-  await page.locator('summary').filter({ hasText: 'صفحه‌های پایه' }).click();
-  const routes = page.getByRole('navigation', { name: 'صفحه‌های پایه', exact: true });
-  for (const name of ['بررسی نیاز','محصول‌ها','فروشندگان','مقایسهٔ آفر','پیگیری','مراجعه','شروع']) {
-    await routes.getByRole('button', { name, exact: true }).click();
-    await expect(page.locator('.ub-panel-top strong')).toHaveText(name);
+  await expect(page.getByRole('navigation', { name: 'صفحه‌های پایه', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'کمک برای انتخاب', exact: true }).click();
+  await expect(page.locator('.ub-panel-top strong')).toHaveText('بررسی نیاز');
+  const routes = page.getByRole('navigation', { name: 'مسیر خرید', exact: true });
+  for (const [action, title] of [['انتخاب محصول', 'محصول‌ها'], ['فروشندگان', 'فروشندگان'], ['مقایسه', 'مقایسهٔ آفر'], ['پیگیری و مراجعه', 'پیگیری']]) {
+    await routes.getByRole('button', { name: action, exact: false }).click();
+    await expect(page.locator('.ub-panel-top strong')).toHaveText(title);
   }
+  await page.getByRole('button', { name: 'رفتن به شروع', exact: true }).click();
+  await expect(page.locator('.ub-panel-top strong')).toHaveText('شروع');
 });
 test('offer retry resumes the failed page without dropping already loaded rows', async ({ page }) => {
   const offsets = []; let failNext = true;

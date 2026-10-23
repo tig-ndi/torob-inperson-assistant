@@ -37,6 +37,7 @@ export function initialWorkspace(): WorkspaceState {
 }
 export type WorkspaceAction =
   | { type: 'navigate'; screen: Screen }
+  | { type: 'restoreNavigation'; screen: Screen; navigation: Screen[] }
   | { type: 'back' }
   | { type: 'query'; value: string }
   | { type: 'filters'; value: Partial<Filters> }
@@ -62,6 +63,8 @@ export type WorkspaceAction =
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
   switch (action.type) {
+    case 'restoreNavigation':
+      return { ...state, screen: action.screen, navigation: [...action.navigation] };
     case 'navigate':
       return action.screen === state.screen ? state : { ...state, screen: action.screen, navigation: [...state.navigation.slice(-19), state.screen] };
     case 'back':

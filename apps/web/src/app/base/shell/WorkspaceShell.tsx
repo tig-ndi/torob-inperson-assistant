@@ -54,7 +54,7 @@ export function WorkspaceShell() {
     data-layout={visit && state.product ? 'visit' : 'discovery'} data-resolved-theme={theme}>
     <a href="#workspace-panel" className="ub-skip">رفتن به محتوای اصلی</a>
     <header className="ub-header">
-      <a className="ub-brand" href="/design.html"><span aria-hidden="true">ت</span><div>خرید حضوری<small>دستیار انتخاب در تهران</small></div></a>
+      <button type="button" className="ub-brand" aria-label="رفتن به شروع" onClick={() => dispatch({ type: 'navigate', screen: 'home' })}><span aria-hidden="true">ت</span><div>خرید حضوری<small>دستیار انتخاب در تهران</small></div></button>
       <div className="ub-header-actions"><label className="ub-theme">نمایش<select aria-label="تم نمایش" value={state.theme}
         onChange={e => dispatch({ type: 'theme', value: e.target.value === 'dark' ? 'dark' : e.target.value === 'light' ? 'light' : 'system' })}>
         <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تیره</option></select></label>
@@ -92,8 +92,7 @@ export function WorkspaceShell() {
           {catalogue.result.status === 'error' && <ErrorCard message={catalogue.result.error} />}
           <ScreenOutlet screen={state.screen} catalogue={catalogue.result.data} />
         </div>
-        <footer className="ub-panel-footer"><details className="ub-base-pages"><summary>صفحه‌های پایه</summary><nav aria-label="صفحه‌های پایه">{Object.entries(screenLabels).map(([screen, label]) =>
-          <button key={screen} onClick={() => dispatch({ type: 'navigate', screen: screen as Screen })}>{label}</button>)}</nav></details>
+        <footer className="ub-panel-footer">
           <span>قیمت تاریخی ≠ موجودی قطعی</span>
           {state.selectedOffer && <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'contact' })}>پیگیری انتخاب</Button>}</footer>
       </section>

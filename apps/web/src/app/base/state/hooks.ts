@@ -37,7 +37,7 @@ export function useCatalogue() {
   const resultsRequest = useRef(state.productResultsRequest);
   revision.current = state.revision;
   resultsRequest.current = state.productResultsRequest;
-  useEffect(() => { command.cancel(); }, [state.revision, command.cancel]);
+  useEffect(() => { command.cancel(); }, [state.revision, state.screen, command.cancel]);
   const search = useCallback(async (input: SearchInput) => {
     const expectedRevision = revision.current;
     const expectedResultsRequest = crypto.randomUUID();
