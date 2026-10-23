@@ -422,8 +422,19 @@ class AssistantService:
                     if not request.category_cleared or (
                             prior_category is not None and candidate != prior_category):
                         effective_category = candidate
-            fallback = (request.messages[-3].content if len(request.messages) >= 3
-                        and matches_question(request.messages[-2].content, 'unsupported_filter') else None)
+            fallback = None
+            if len(request.messages) >= 3:
+                previous_question = request.messages[-2].content
+                if matches_question(previous_question, 'unsupported_filter'):
+                    fallback = request.messages[-3].content
+                elif (matches_question(previous_question, 'product_kind') and plan.query is not None
+                      and request.context_query is None and request.context_category is None
+                      and not (request.context_need_state and request.context_need_state.pending_requirements)
+                      and detect_category_intent(request.messages[-3].content) is None):
+                    # The integrated client sends the short human history with the
+                    # state. Recover a field-only condition that could not be stored
+                    # before a topic existed; never carry one from an older product.
+                    fallback = request.messages[-3].content
             if coordinated:
                 # A true multi-product request has no single topic. Never project
                 # the model's lexical fragment into a search or the need state.

@@ -4,6 +4,7 @@ import json
 import unittest
 from uuid import uuid4
 
+from apps.api.intent import QUESTIONS
 import test_assistant
 
 
@@ -248,3 +249,121 @@ class NeedStateTests(unittest.TestCase):
         self.assertNotIn('user_lat', context)
         self.assertNotIn('35.71', self.calls[0].content.decode())
         self.assertIsNone(result['products'])
+
+
+class PreTopicConditionTests(unittest.TestCase):
+    """A field-only condition stated before any product must survive the product answer."""
+
+    setUp = test_assistant.AssistantApiTests.setUp
+
+    def answer(self, *contents, query='گوشی سامسونگ', needs=None):
+        self.response = test_assistant.completion(test_assistant.proposal(query=query))
+        payload = {'request_id': str(uuid4()), 'messages': [
+            {'role': 'user' if index % 2 == 0 else 'assistant', 'content': content}
+            for index, content in enumerate(contents)]}
+        if needs is not None:
+            payload['context_need_state'] = needs
+        response = self.agent_client.post('/api/assistant/turn', json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def test_condition_sent_before_the_topic_is_preserved_after_it_is_named(self):
+        result = self.answer('با گارانتی اصلی می‌خوام', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        self.assertEqual(result['status'], 'needs_input')
+        self.assertEqual(result['question_code'], 'unsupported_filter')
+        self.assertEqual(result['query'], 'گوشی سامسونگ')
+        self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
+        self.assertEqual(result['need_state']['pending_requirements'], [
+            {'key': 'گارانتی', 'source_text': 'با گارانتی اصلی می‌خوام', 'status': 'unsupported'}])
+        self.assertIsNone(result['products'])
+        # Pending is a request, never an applied filter or a confirmed warranty.
+        self.assertEqual(result['question'], QUESTIONS['unsupported_filter'])
+
+    def test_multiple_conditions_before_the_topic_are_all_preserved(self):
+        result = self.answer('رنگ آبی و گارانتی اصلی می‌خوام', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        self.assertEqual([item['key'] for item in result['need_state']['pending_requirements']],
+                         ['رنگ', 'گارانتی'])
+        self.assertTrue(all(item['source_text'] == 'رنگ آبی و گارانتی اصلی می‌خوام'
+                            for item in result['need_state']['pending_requirements']))
+
+    def test_absence_before_the_topic_is_not_revived_as_a_requirement(self):
+        for condition in ['بدون گارانتی', 'گارانتی نمی‌خوام', 'گارانتی لازم نیست']:
+            with self.subTest(condition=condition):
+                result = self.answer(condition, QUESTIONS['product_kind'], 'گوشی سامسونگ')
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['need_state']['pending_requirements'], [])
+                self.assertIsNotNone(result['products'])
+
+    def test_negated_value_before_the_topic_is_still_a_requirement_for_that_field(self):
+        result = self.answer('رنگ آبی نباشه', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        self.assertEqual(result['question_code'], 'unsupported_filter')
+        self.assertEqual(result['need_state']['pending_requirements'][0]['key'], 'رنگ')
+
+    def test_condition_of_a_previous_product_is_not_transferred_to_a_new_kind(self):
+        result = self.answer('گوشی سامسونگ با گارانتی', QUESTIONS['product_kind'], 'کفش کتانی',
+                             query='کفش کتانی')
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['topic_query'], 'کفش کتانی')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_existing_topic_condition_is_not_revived_for_a_new_kind(self):
+        result = self.answer('حافظه همون باشه', QUESTIONS['product_kind'], 'حالا کفش کتانی میخواهم',
+                             query='کفش کتانی', needs=state('رنگ'))
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_recovered_condition_can_be_removed_in_the_next_turn(self):
+        first = self.answer('با گارانتی اصلی می‌خوام', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        second = self.answer('شرط گارانتی را حذف کن', needs=first['need_state'])
+        self.assertEqual(second['status'], 'results')
+        self.assertEqual(second['need_state']['pending_requirements'], [])
+
+    def test_product_turn_can_explicitly_cancel_the_recovered_condition(self):
+        result = self.answer('با گارانتی اصلی می‌خوام', QUESTIONS['product_kind'],
+                             'گوشی سامسونگ بدون گارانتی')
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_removed_condition_is_not_revived_after_an_intermediate_answer(self):
+        result = self.answer('با گارانتی اصلی می‌خوام', QUESTIONS['product_kind'],
+                             'شرط گارانتی را حذف کن', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_unrelated_message_is_not_mistaken_for_a_condition(self):
+        result = self.answer('با گارانتی اصلی می‌خوام', QUESTIONS['product_kind'],
+                             'سلام', QUESTIONS['product_kind'], 'گوشی سامسونگ')
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_waived_field_before_the_topic_is_not_revived_as_a_requirement(self):
+        for waiver in ['رنگ مهم نیست', 'رنگ گوشی برام مهم نیست']:
+            with self.subTest(waiver=waiver):
+                result = self.answer(waiver, QUESTIONS['product_kind'], 'گوشی سامسونگ')
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_absence_phrases_do_not_create_pending_requirements_in_the_product_turn(self):
+        for text in ['گوشی سامسونگ بدون گارانتی', 'گوشی سامسونگ گارانتی نمی‌خوام']:
+            with self.subTest(text=text):
+                result = self.answer(text)
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_colloquial_absence_phrases_do_not_create_pending_requirements(self):
+        for text in ['گوشی سامسونگ گارانتی نداره', 'گوشی سامسونگ گارانتی لازم نیست']:
+            with self.subTest(text=text):
+                result = self.answer(text)
+                self.assertEqual(result['status'], 'results')
+                self.assertEqual(result['need_state']['pending_requirements'], [])
+
+    def test_direct_positive_warranty_request_stays_pending_not_applied(self):
+        result = self.answer('گوشی سامسونگ با گارانتی اصلی')
+        self.assertEqual(result['question_code'], 'unsupported_filter')
+        self.assertEqual(result['need_state']['pending_requirements'][0]['key'], 'گارانتی')
+        self.assertIsNone(result['products'])
+
+    def test_product_only_request_does_not_invent_a_condition(self):
+        result = self.answer('گوشی سامسونگ')
+        self.assertEqual(result['status'], 'results')
+        self.assertEqual(result['need_state']['pending_requirements'], [])
