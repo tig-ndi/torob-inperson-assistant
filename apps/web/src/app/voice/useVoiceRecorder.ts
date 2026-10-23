@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribeAudio, VoiceError } from './voiceClient.ts';
+import { createStreamAnalyser, type VoiceAnalyserSession } from './audioAnalyser.ts';
 
 export type VoiceRecorderState = 'idle' | 'recording' | 'transcribing' | 'error';
 
@@ -7,9 +8,11 @@ export function useVoiceRecorder(onTranscript?: (text: string) => void) {
   const [state, setState] = useState<VoiceRecorderState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
+  const [analyserSession, setAnalyserSession] = useState<VoiceAnalyserSession | null>(null);
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const analyserRef = useRef<VoiceAnalyserSession | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<number | null>(null);
   const abortCtrl = useRef<AbortController | null>(null);
@@ -22,6 +25,11 @@ export function useVoiceRecorder(onTranscript?: (text: string) => void) {
     if (timer.current !== null) {
       window.clearInterval(timer.current);
       timer.current = null;
+    }
+    if (analyserRef.current) {
+      analyserRef.current.close();
+      analyserRef.current = null;
+      setAnalyserSession(null);
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -58,6 +66,13 @@ export function useVoiceRecorder(onTranscript?: (text: string) => void) {
         },
       });
       streamRef.current = stream;
+
+      // Connect Web Audio API Analyser for real-time voice frequency visualization
+      const analyser = createStreamAnalyser(stream);
+      if (analyser) {
+        analyserRef.current = analyser;
+        setAnalyserSession(analyser);
+      }
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -156,6 +171,7 @@ export function useVoiceRecorder(onTranscript?: (text: string) => void) {
     error,
     duration,
     isSupported,
+    analyserSession,
     startRecording,
     stopRecording,
     cancelRecording,

@@ -1,148 +1,553 @@
-/* Scoped voice assistant styles */
+/* ==========================================================================
+   Voice Assistant & Real-Time Frequency Visualizer - UI/UX Styling
+   ========================================================================== */
 
-.uv-voice-input-wrapper {
+/* 1. Modal Backdrop & Container */
+.uv-voice-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(10, 14, 26, 0.82);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  animation: uv-fade-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  direction: rtl;
+}
+
+@keyframes uv-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.uv-voice-modal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 23, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  box-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 45px rgba(224, 40, 71, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  overflow: hidden;
+  animation: uv-modal-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes uv-modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 2. Header */
+.uv-voice-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.15rem 1.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+.uv-voice-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.uv-voice-badge-ai {
+  align-self: flex-start;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(224, 40, 71, 0.25), rgba(99, 102, 241, 0.35));
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fda4af;
+  text-transform: uppercase;
+}
+
+.uv-voice-modal-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.uv-voice-header-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
-.uv-voice-btn {
-  display: inline-flex;
+.uv-voice-icon-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-size: 1rem;
+}
+
+.uv-voice-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+/* 3. Visualizer Hero Section */
+.uv-voice-visualizer-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem 1rem;
+  background: radial-gradient(circle at 50% 30%, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0) 70%);
+}
+
+.uv-voice-canvas-wrapper {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Status Pill */
+.uv-voice-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.4rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  transition: all 0.25s ease;
+}
+
+.uv-voice-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.uv-voice-status-pill--listening {
+  background: rgba(224, 40, 71, 0.18);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+}
+
+.uv-voice-status-pill--listening .uv-voice-status-indicator {
+  background: #f43f5e;
+  box-shadow: 0 0 10px #f43f5e;
+  animation: uv-pulse-dot 1s infinite;
+}
+
+.uv-voice-status-pill--speaking {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(129, 140, 248, 0.45);
+  color: #c7d2fe;
+}
+
+.uv-voice-status-pill--speaking .uv-voice-status-indicator {
+  background: #06b6d4;
+  box-shadow: 0 0 10px #06b6d4;
+  animation: uv-pulse-dot 1s infinite;
+}
+
+.uv-voice-status-pill--transcribing {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: rgba(192, 132, 252, 0.45);
+  color: #e9d5ff;
+}
+
+.uv-voice-status-pill--transcribing .uv-voice-status-indicator {
+  background: #a855f7;
+  animation: uv-pulse-dot 0.6s infinite;
+}
+
+.uv-voice-timer-badge {
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.1rem 0.45rem;
+  border-radius: 12px;
+  color: #fecdd3;
+}
+
+@keyframes uv-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+/* 4. Body Content & Cards */
+.uv-voice-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1.4rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.uv-voice-card {
+  padding: 1rem 1.15rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  animation: uv-card-in 0.25s ease;
+}
+
+@keyframes uv-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.uv-voice-card--user {
+  background: rgba(224, 40, 71, 0.08);
+  border-color: rgba(244, 63, 94, 0.2);
+}
+
+.uv-voice-card--assistant {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(99, 102, 241, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.uv-voice-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.uv-voice-card-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+.uv-voice-pill-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.uv-voice-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.uv-voice-response-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #67e8f9;
+}
+
+.uv-voice-card-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #f1f5f9;
+}
+
+.uv-voice-response-summary {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+}
+
+.uv-voice-actions-row {
+  margin-top: 0.5rem;
+}
+
+.uv-voice-btn-primary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #e02847 0%, #c72740 100%);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(224, 40, 71, 0.35);
+  transition: all 0.2s ease;
+}
+
+.uv-voice-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(224, 40, 71, 0.5);
+  filter: brightness(1.08);
+}
+
+/* Suggestions Tags */
+.uv-voice-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.5rem 0;
+}
+
+.uv-voice-suggestions-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.uv-voice-tags {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: var(--radius-md, 12px);
-  border: 1px solid var(--color-line, #e2e8f0);
-  background: var(--color-surface, #ffffff);
-  color: var(--color-ink, #1e293b);
+}
+
+.uv-voice-tag-btn {
+  font-size: 0.8125rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.uv-voice-tag-btn:hover {
+  background: rgba(224, 40, 71, 0.15);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  transform: translateY(-1px);
+}
+
+/* 5. Footer Controls */
+.uv-voice-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.1rem 1.4rem 1.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 32, 0.8);
+}
+
+.uv-voice-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.4rem;
+  border-radius: 16px;
+  border: none;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.uv-voice-action-btn--ready {
+  background: linear-gradient(135deg, #e02847 0%, #ff4d6d 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(224, 40, 71, 0.4);
+}
+
+.uv-voice-action-btn--ready:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 6px 26px rgba(224, 40, 71, 0.6);
+  filter: brightness(1.08);
+}
+
+.uv-voice-action-btn--recording {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+  animation: uv-rec-pulse 1.2s infinite;
+}
+
+@keyframes uv-rec-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.85); transform: scale(1.01); }
+}
+
+.uv-voice-stop-square {
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-radius: 3px;
+}
+
+.uv-voice-mic-icon {
+  font-size: 1.15rem;
+}
+
+.uv-voice-btn-subtle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.uv-voice-btn:hover:not(:disabled) {
-  border-color: var(--color-brand, #e5384a);
-  color: var(--color-brand, #e5384a);
-  background: var(--color-surface2, #f8fafc);
-}
-
-.uv-voice-btn:focus-visible {
-  outline: 2px solid var(--color-brand, #e5384a);
-  outline-offset: 2px;
-}
-
-.uv-voice-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Recording State */
-.uv-voice-btn--recording {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #b91c1c;
-  animation: uv-voice-pulse 1.5s infinite;
-}
-
-:root[data-theme='dark'] .uv-voice-btn--recording {
-  background: #450a0a;
-  border-color: #f87171;
-  color: #fca5a5;
-}
-
-/* Transcribing State */
-.uv-voice-btn--transcribing {
-  background: var(--color-surface2, #f1f5f9);
-  color: var(--color-ink2, #64748b);
-  border-style: dashed;
-}
-
-/* Voice Bars Animation */
-.uv-voice-bars {
-  display: inline-flex;
-  align-items: center;
-  gap: 2.5px;
-  height: 14px;
-}
-
-.uv-voice-bars span {
-  display: inline-block;
-  width: 3px;
-  height: 100%;
-  background-color: currentColor;
-  border-radius: 2px;
-  animation: uv-voice-wave 0.8s ease-in-out infinite alternate;
-}
-
-.uv-voice-bars span:nth-child(1) { animation-delay: 0.1s; height: 35%; }
-.uv-voice-bars span:nth-child(2) { animation-delay: 0.3s; height: 85%; }
-.uv-voice-bars span:nth-child(3) { animation-delay: 0.2s; height: 60%; }
-.uv-voice-bars span:nth-child(4) { animation-delay: 0.4s; height: 100%; }
-
-/* Speaker Button */
-.uv-voice-speaker-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--color-line, #e2e8f0);
-  background: var(--color-surface, #ffffff);
-  color: var(--color-ink2, #64748b);
-  cursor: pointer;
   transition: all 0.18s ease;
 }
 
-.uv-voice-speaker-btn:hover:not(:disabled) {
-  color: var(--color-brand, #e5384a);
-  border-color: var(--color-brand, #e5384a);
-  background: var(--color-surface2, #f8fafc);
+.uv-voice-btn-subtle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
-.uv-voice-speaker-btn--playing {
-  color: var(--color-brand, #e5384a);
-  border-color: var(--color-brand, #e5384a);
-  background: rgba(229, 56, 74, 0.08);
+/* 6. Minimized Floating Dock */
+.uv-voice-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 9999;
+  animation: uv-dock-slide 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  direction: rtl;
 }
 
-.uv-voice-speaker-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@keyframes uv-dock-slide {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Error badge */
-.uv-voice-error {
+.uv-voice-dock-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 9999px;
+  background: rgba(18, 23, 38, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(16px);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s ease;
+}
+
+.uv-voice-dock-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(224, 40, 71, 0.5);
+  box-shadow: 0 12px 35px rgba(224, 40, 71, 0.3);
+}
+
+.uv-voice-dock-btn--listening {
+  border-color: #f43f5e;
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.4);
+}
+
+.uv-voice-dock-btn--speaking {
+  border-color: #06b6d4;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+}
+
+/* 7. Quick Launcher Button (Mounted in Header or Decide screen) */
+.uv-voice-launcher-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--radius-sm, 8px);
+  gap: 0.5rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(224, 40, 71, 0.4);
+  background: linear-gradient(135deg, rgba(224, 40, 71, 0.15), rgba(99, 102, 241, 0.18));
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(224, 40, 71, 0.2);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-:root[data-theme='dark'] .uv-voice-error {
-  background: #450a0a;
-  border-color: #991b1b;
-  color: #fca5a5;
+.uv-voice-launcher-btn:hover {
+  transform: translateY(-1px);
+  border-color: #f43f5e;
+  box-shadow: 0 4px 18px rgba(224, 40, 71, 0.4);
+  background: linear-gradient(135deg, rgba(224, 40, 71, 0.25), rgba(99, 102, 241, 0.28));
 }
 
-@keyframes uv-voice-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+.uv-voice-launcher-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
-@keyframes uv-voice-wave {
-  0% { transform: scaleY(0.3); }
-  100% { transform: scaleY(1); }
+.uv-voice-launcher-btn:hover::after {
+  opacity: 1;
+}
+
+.uv-voice-launcher-mic {
+  font-size: 1.1rem;
+  filter: drop-shadow(0 0 4px rgba(244, 63, 94, 0.6));
+}
+
+.uv-voice-launcher-badge {
+  font-size: 0.6875rem;
+  background: #e02847;
+  color: #ffffff;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-weight: 800;
 }
