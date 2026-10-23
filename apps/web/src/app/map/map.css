@@ -312,3 +312,171 @@
     transition: none;
   }
 }
+
+/* Floating Store Preview Card on Map */
+.um-preview-card {
+  position: absolute;
+  z-index: 950;
+  bottom: 24px;
+  right: 16px;
+  max-width: min(420px, calc(100% - 32px));
+  background: color-mix(in srgb, var(--ub-surface) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--ub-line);
+  border-radius: 18px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
+  padding: 16px 18px;
+  direction: rtl;
+  color: var(--ub-ink);
+  animation: umSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes umSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.um-preview-close {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.um-preview-close:hover {
+  background: var(--ub-line);
+  color: var(--ub-ink);
+}
+
+.um-preview-header {
+  padding-inline-end: 28px;
+  margin-bottom: 10px;
+}
+
+.um-preview-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ub-ink);
+}
+
+.um-preview-address {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ub-muted);
+  line-height: 1.4;
+}
+
+.um-preview-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.um-preview-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ub-brand);
+  background: color-mix(in srgb, var(--ub-brand) 12%, transparent);
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.um-status-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+}
+
+.um-status-pill--declared_open {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.um-status-pill--declared_closed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.um-distance-pill,
+.um-count-pill {
+  font-size: 11px;
+  color: var(--ub-muted);
+  background: var(--ub-soft);
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.um-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.um-routing-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+  color: var(--ub-ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.um-routing-link:hover {
+  background: var(--ub-line);
+  transform: translateY(-1px);
+}
+
+.um-routing-link--neshan {
+  color: #0077ff;
+  border-color: rgba(0, 119, 255, 0.3);
+  background: rgba(0, 119, 255, 0.08);
+}
+
+.um-routing-link--balad {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+@media (max-width: 959px) {
+  .um-preview-card {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
+    padding: 12px 14px;
+  }
+}

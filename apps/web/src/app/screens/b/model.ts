@@ -74,6 +74,24 @@ export function mapLink(offer: Offer): string | null {
   return `https://www.openstreetmap.org/?mlat=${point.lat}&mlon=${point.lon}#map=17/${point.lat}/${point.lon}`;
 }
 
+export function neshanLink(offer: Offer): string | null {
+  const point = offerCoordinates(offer);
+  if (!point) return null;
+  return `https://nshn.ir/?lat=${point.lat}&lng=${point.lon}`;
+}
+
+export function baladLink(offer: Offer): string | null {
+  const point = offerCoordinates(offer);
+  if (!point) return null;
+  return `https://balad.ir/location?latitude=${point.lat}&longitude=${point.lon}`;
+}
+
+export function googleMapsLink(offer: Offer): string | null {
+  const point = offerCoordinates(offer);
+  if (!point) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lon}`;
+}
+
 const faNumbers = new Intl.NumberFormat('fa-IR');
 export function formatCount(value: number): string { return faNumbers.format(value); }
 

@@ -74,7 +74,12 @@ export function WorkspaceShell() {
     <main className="ub-workspace">
       {/* Keep the initialized map alive across navigation while this purchase exists. */}
       {state.product && <div className="ub-map" hidden={!visit} ref={mapElement} tabIndex={-1} aria-label="فضای نقشهٔ فروشندگان"><MapLayer userPosition={state.position} radiusKm={state.filters.radiusKm} pins={pinsForWorkspace(state)}
-        selectedPinId={state.selectedOffer?.shop_id ?? null} onPinSelect={shopId => dispatch({ type: 'focusShop', shopId })} cameraIntent={state.cameraIntent}
+        selectedPinId={state.selectedOffer?.shop_id ?? null} onPinSelect={shopId => dispatch({ type: 'focusShop', shopId })}
+        onPositionPick={(lat, lon) => {
+          dispatch({ type: 'position', value: { lat, lon, source: 'manual', label: 'موقعیت انتخابی روی نقشه', accuracyMeters: null } });
+          dispatch({ type: 'notice', value: 'موقعیت مبدأ به این نقطه از نقشه تنظیم شد؛ فاصله‌ها به‌روز شدند.' });
+        }}
+        cameraIntent={state.cameraIntent}
         padding={{ top: 20, left: 20, right: 20, bottom: 20 }} /></div>}
       <section id="workspace-panel" ref={panelElement} className="ub-panel" aria-label="فضای انتخاب کالا" tabIndex={-1}>
         <div className="ub-panel-top" hidden={state.screen === 'home' && !state.navigation.length}><Button tone="ghost" disabled={!state.navigation.length} onClick={() => dispatch({ type: 'back' })} aria-label="بازگشت به مرحلهٔ قبل"><ChevronRightIcon /></Button>
@@ -90,7 +95,16 @@ export function WorkspaceShell() {
         </div>
         <footer className="ub-panel-footer">
           <span>قیمت تاریخی ≠ موجودی قطعی</span>
-          {state.selectedOffer && <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'contact' })}>پیگیری انتخاب</Button>}</footer>
+          {state.selectedOffer && (state.screen === 'stores' || state.screen === 'compare') && (
+            <Button tone="secondary" onClick={() => dispatch({ type: 'navigate', screen: 'contact' })}>پیگیری انتخاب</Button>
+          )}
+          {state.selectedOffer && state.screen === 'contact' && (
+            <Button tone="secondary" onClick={() => {
+              if (!state.visitPlan) dispatch({ type: 'plan', primary: state.selectedOffer! });
+              dispatch({ type: 'navigate', screen: 'trip' });
+            }}>برنامهٔ مراجعه</Button>
+          )}
+        </footer>
       </section>
     </main>
     <Toast message={state.notice} onClose={() => dispatch({ type: 'notice', value: null })} />

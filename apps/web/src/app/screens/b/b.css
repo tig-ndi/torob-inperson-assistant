@@ -1094,3 +1094,387 @@ html:has(.ub-app[data-layout=visit][data-resolved-theme=light]) {
 .uv-compare-detail-title { margin: 8px 0 0; font-size: 14px; }
 .uv-source-details summary { cursor: pointer; min-height: 44px; align-content: center; font-size: 13px; color: var(--ub-muted); }
 @media (min-width: 960px) { .uv-compare-summary { gap: 8px; } }
+
+/* Followup Mode Tabs */
+.uv-followup-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.uv-tab-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+  color: var(--ub-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.uv-tab-btn.is-active {
+  background: color-mix(in srgb, var(--ub-brand) 14%, var(--ub-surface));
+  border-color: var(--ub-brand);
+  color: var(--ub-brand);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+/* Smart Call Card */
+.uv-smart-call-card {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--ub-line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ub-surface) 95%, transparent), var(--ub-soft));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 14px;
+  direction: rtl;
+}
+
+.uv-smart-call-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uv-smart-call-avatar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.uv-call-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #10b981;
+  animation: uvPulse 1.8s infinite;
+}
+
+@keyframes uvPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.uv-smart-call-info h4 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ub-ink);
+}
+
+.uv-call-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ub-ink);
+  line-height: 1.5;
+}
+
+.uv-scenario-selector {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.uv-scenario-selector label {
+  font-size: 12px;
+  color: var(--ub-muted);
+}
+
+.uv-scenario-selector select {
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-surface);
+  color: var(--ub-ink);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.uv-call-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Call Ringing */
+.uv-call-ringing {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  gap: 12px;
+}
+
+.uv-ringing-indicator {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  display: grid;
+  place-items: center;
+}
+
+.uv-ring-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid #10b981;
+  animation: uvPulse 1.4s infinite;
+}
+
+.uv-ring-pulse--delay {
+  animation-delay: 0.7s;
+}
+
+/* Call Connected Dialogue */
+.uv-call-connected {
+  display: grid;
+  gap: 14px;
+}
+
+.uv-call-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 4px 10px;
+  border-radius: 20px;
+  width: fit-content;
+}
+
+.uv-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: uvBlink 1s infinite alternate;
+}
+
+@keyframes uvBlink {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+
+.uv-call-dialogue {
+  display: grid;
+  gap: 10px;
+  background: var(--ub-surface);
+  border: 1px solid var(--ub-line);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.uv-dialogue-msg {
+  display: grid;
+  gap: 4px;
+}
+
+.uv-dialogue-sender {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ub-muted);
+}
+
+.uv-dialogue-msg p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.uv-dialogue-msg--agent p {
+  background: color-mix(in srgb, var(--ub-brand) 12%, var(--ub-soft));
+  color: var(--ub-ink);
+  border-inline-start: 3px solid var(--ub-brand);
+}
+
+.uv-dialogue-msg--seller p {
+  background: var(--ub-soft);
+  color: var(--ub-ink);
+  border-inline-start: 3px solid #10b981;
+}
+
+/* Call Completed */
+.uv-call-completed {
+  display: grid;
+  gap: 14px;
+}
+
+.uv-result-box {
+  padding: 14px;
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.uv-result-box--warning {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.uv-result-box--warning h5 {
+  margin: 0;
+  font-size: 14px;
+  color: #ef4444;
+}
+
+.uv-result-box--success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.uv-result-box--success h5 {
+  margin: 0;
+  font-size: 14px;
+  color: #10b981;
+}
+
+/* Manual Inquiry Checklist */
+.uv-checklist-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-surface);
+  display: grid;
+  gap: 12px;
+}
+
+.uv-checklist-card h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.uv-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.uv-checklist li label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ub-ink);
+  cursor: pointer;
+}
+
+.uv-inquiry-box {
+  background: var(--ub-soft);
+  border: 1px solid var(--ub-line);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.uv-inquiry-label {
+  font-size: 11px;
+  color: var(--ub-muted);
+}
+
+.uv-inquiry-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ub-ink);
+}
+
+.uv-inquiry-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.uv-quick-outcome-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.uv-outcome-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.uv-outcome-chip {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--ub-line);
+  background: var(--ub-soft);
+  color: var(--ub-ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.uv-outcome-chip:hover {
+  background: var(--ub-line);
+  transform: translateY(-1px);
+}
+
+.uv-outcome-chip--success {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.uv-outcome-chip--danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* Routing Group in Trip */
+.uv-routing-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.uv-routing-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ub-muted);
+}
+
+.uv-routing-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.uv-link-button--brand {
+  border-color: #0077ff;
+  color: #0077ff;
+  background: rgba(0, 119, 255, 0.1);
+}
