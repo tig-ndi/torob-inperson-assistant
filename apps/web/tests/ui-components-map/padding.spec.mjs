@@ -5,6 +5,15 @@ import { page as products, offer, offers, tileOk } from '../ui-b/fixtures.mjs';
 const qa = fileURLToPath(new URL('../../../../.local/ui-ux-handoff/cm-b3/', import.meta.url));
 mkdirSync(qa, { recursive: true });
 
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return;
+  const geometry = await page.evaluate(() => Object.fromEntries(['.ub-app', '.ub-map', '.um-pin.is-selected', '.ub-panel', '.ub-search-area']
+    .map(selector => { const el = document.querySelector(selector); return [selector, el ? {
+      rect: el.getBoundingClientRect().toJSON(), sheet: el.getAttribute('data-sheet'),
+      style: el.getAttribute('style'), visibility: getComputedStyle(el).visibility } : null]; })));
+  console.log('map geometry', JSON.stringify(geometry));
+});
+
 async function open(page) {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/assistant/turn', r => r.abort());
