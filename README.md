@@ -1,210 +1,111 @@
-# دستیار خرید حضوری ترب
+<p align="center">
+  <img src="apps/web/public/icons/inperson-mark.svg" width="64" alt="In-Person Shopping Companion logo">
+</p>
+<h1 align="center">In-Person Shopping Companion</h1>
+<p align="center">Find the right shop before you leave — a Persian shopping assistant with an interactive map.</p>
+<p align="center"><a href="README.fa.md">فارسی</a> · English</p>
 
-## انتشار یک‌سرویسی
+![Desktop chat and map workspace](docs/images/desktop.png)
 
-برای انتشار از **ریشهٔ مخزن** از [راهنمای انتشار](docs/DEPLOYMENT.md) استفاده کنید: `requirements.txt` به lock فعلی ارجاع می‌دهد؛ Dockerfile فرانت را build می‌کند و `python -m tools.serve` همان فرانت و API را از یک سرویس روی `PORT` ارائه می‌دهد. انتقال خصوصی snapshot و دفتر مصرف موجود به دیسک پایدار، جدا از کد الزامی است؛ `TOROB_DATABASE` و `TOROB_USAGE_DATABASE` مسیر آن‌ها را مشخص می‌کنند. `/api/health/ready` آمادگی داده/دفتر/فرانت را بررسی می‌کند. این دستور جایگزین دستور توسعهٔ Vite نیست؛ راهنمای قدم‌به‌قدم تنظیمات و محدودیت میزبان در سند آمده است.
+A continuous journey from describing what you need to comparing nearby shops and planning a visit. Chat and map share the same selections, location and shopping context.
 
-پایهٔ پروژهٔ چالش ترب در Starcoach. کاربر از انتخاب محصول به مقایسهٔ فروشندگان، انتخاب محل مراجعه و پیگیری وضعیت می‌رسد.
+## What it does
 
-مخزن: https://github.com/tig-ndi/torob-inperson-assistant — خصوصی طبق تنظیم کاربر. Push و تنظیمات مخزن با کاربر است.
+- **Context-aware conversation:** keeps product requirements and budget across follow-up messages and location selection, with compact suggested replies.
+- **Connected chat and map:** a floating desktop assistant; full-screen mobile views that preserve your place when switching between conversation and map.
+- **Practical visit planning:** recorded opening hours, distance, walking/driving/cycling routes, arrival estimates, and links to Neshan, Balad and Google Maps.
+- **Useful comparisons:** product specifications, prices and shop details in a dedicated comparison dialog, with differences and reset controls.
+- **A complete local journey:** follow-up drafts, clearly labeled seller simulations, visit checklists, saved plans and purchase completion.
+- **Voice and accessible controls:** editable speech transcription, text-to-speech, Persian RTL layout, light/dark themes and touch-friendly actions.
 
-## وضعیت فعلی
+<p align="center">
+  <img src="docs/images/mobile-chat.png" width="240" alt="Mobile shopping conversation">
+  <img src="docs/images/mobile-map.png" width="240" alt="Mobile map and shop selection">
+</p>
 
-۲۰۲۶-۱۰-۲۳ — D43: رابط یکپارچهٔ انتخاب کالا، دستیار، فروشندگان/نقشه، مقایسه، پیگیری و برنامهٔ مراجعه اکنون در **`/`** باز می‌شود. پس از اجرای API و `npm run dev` در `apps/web`، نشانی `http://127.0.0.1:5173/` را باز کنید. نشانی قبلی `/design.html` به `/` هدایت می‌شود. کلید مدل در فرانت قرار نمی‌گیرد. این انتقال با تأیید انسان انجام شد؛ دیپلوی/ویدئو و نقص backend ثبت‌شدهٔ شرط پیش از تعیین کالا همچنان جدا و بازند.
+Screenshots show local example journeys. Catalogue records are historical evidence, not confirmed live prices or stock. The supplied catalogue covers Tehran; the base map can be explored elsewhere.
 
-ورودی `legacy.html` فقط برای رگرسیون محلی رابط قدیمی در Vite dev باقی مانده و عمداً جزو ورودی‌های build نیست؛ رابط عمومی لینک بازگشت به آن ندارد. تست‌های A/B/یکپارچه روی `/` اجرا می‌شوند. برای وضعیت شواهد و محدودیت‌ها ابتدای HANDOFF/TASKS/EVALUATION را بخوانید؛ [اسناد Base و مالکیت](docs/ui-base/README.md) سابقهٔ تقسیم کار A/B را حفظ می‌کنند.
+## Run locally
 
-یادداشت‌های تاریخ‌دار زیر سابقهٔ توسعه‌اند؛ وضعیت جاری بالا و ابتدای اسناد تحویل بر آن‌ها مقدم است.
+**Requirements:** Git, Python 3.12 or 3.14 with SQLite FTS5, Node.js 24, and a compatible CSV catalogue. API keys are kept on the backend. Internet access is needed for external AI, speech, map tiles and road routes.
 
-به‌روزرسانی ۲۰۲۶-۱۰-۲۲ پس از a392df8: برش P3-A و smoke زنجیرهٔ P2→P3 روی snapshot واقعی بررسی شدند. مسیر نیاز → تغییر بودجه با حفظ state → آفر معتبر → پیش‌نویس ارسال‌نشده → نتیجهٔ simulated → جایگزین همان محصول با بودجهٔ حفظ‌شده (۵ بررسی، ۲ فراخوان مصنوعی، hash ثابت) پاس شد. این شاهد مدل واقعی، مرورگر یا deployed journey نیست؛ P2/P3 برای اتصال UI، پذیرش انسانی و مسیر قابل‌مشاهده بازند. جزئیات ابتدای HANDOFF و EVALUATION.
+### 1. Clone and install — Windows CMD
 
-به‌روزرسانی پس از ce7d8cd: سه نقص BE-001/002/003 در دامنهٔ نفی/عملگر باتری، بودجهٔ منفی صریح و گردشدن کسر تومان اصلاح شدند. ۱۶۳ تست backend بدون skip و نمونه‌های API قبل/بعد با provider مصنوعی موفق‌اند؛ این گام مدل واقعی یا تست UI اجرا نکرد. قرارداد API/DB و وابستگی‌ها تغییر نکرده‌اند. جزئیات و حدود شواهد در ابتدای HANDOFF و D28؛ وضعیت زیر سابقهٔ گام قبلی است.
-
-آخرین گام بک‌اند: حداقل ظرفیت ثبت‌شدهٔ باتری گوشی با واحد دقیق mAh/Ah، تفکیک unknown/conflicting و فیلتر >= پیش از صفحه‌بندی، به‌همراه اصلاح ساختاری «جست‌وجوی کالای روشن بدون بودجه» و سؤال غیرضروری priority/product_kind. عبارت کامل آخرین پیام فقط با پشتوانهٔ یک category_name واحد و سرِ سازگار پذیرفته می‌شود؛ درخواست چندکالایی و query جمع‌شدهٔ مدل برای آن سؤال می‌ماند، ابهام دستگاه و بودجهٔ نامعتبر حفظ می‌شوند، و بودجه/باتری قبلی به‌درستی حفظ یا پاک می‌شود. ۱۴۸ backend بدون skip (۵۷ assistant) موفق‌اند. شکست اولیهٔ live سؤال priority بود (نه product_kind)؛ پس از اصلاح، تغییر کفش با بودجه، شارژر مبهم و no_evidence پاس شدند. نمایش explanation/battery و اتصال UI همچنان کار پژمان است و هیچ فایل وب تغییر نکرد. شواهد و محدودیت‌ها در HANDOFF/TASKS بر سابقه مقدم‌اند؛ P2 کامل نیست و هر live بعدی فقط با تأیید تازه انجام می‌شود.
-
-P1 برای ادامهٔ داخلی پروژه پذیرفته شده: جست‌وجو، مقایسهٔ ۲–۳ محصول، آفرهای واقعی، بودجه و محدوده/فاصله با UI فارسی/RTL و دو اصلاح UX بررسی‌شدهٔ کاربر موجودند. گام ساعات P2 نیز با گزارش بررسی دستی کاربر پذیرفته شده است. نمایش/فیلتر شرایط ثبت‌شدهٔ خرید اعتباری حضوری ساخته و محلی بررسی شده؛ بازبینی دستی این گام هنوز انجام نشده. تطابق قیود به معنی تأیید اعتبار/پرداخت/فروشنده نیست. مسیر محدود فهم نیاز ابتدا با BoxAPI و gpt-5-mini در مرورگر سنجیده شد؛ اکنون بک‌اند به Luna منتقل شده و شواهد تازه در ابتدای HANDOFF است؛ بررسی دستی و ارزیابی معنایی گسترده/توصیهٔ مستند، پیگیری و دیپلوی باقی‌اند؛ P2 کامل نیست. Git محلی/کامیت با عامل مجاز و push/remote فقط با کاربر است.
-
-## شروع برای کدنویسی
-
-`MASTER_PROMPT.md` و `NEXT_AGENT_PROMPT.md` فقط روی همین دستگاه نگهداری می‌شوند؛ اگر موجودند برای انتقال استفاده کن. در clone جدید، قواعد AGENTS و HANDOFF/TASKS مرجع‌اند. وضعیت جاری در `HANDOFF.md` و کار بعدی در `TASKS.md` است. یک عامل در هر زمان مالک کدنویسی باشد؛ Codex اولویت اول است.
-
-## اجرای base
-
-نیازمندی: Python 3.11+ با SQLite FTS5؛ بدون نصب پکیج. اجرای واقعی روی Python 3.14.2 / SQLite 3.50.4 انجام شده است. دستورات را در ریشهٔ پروژه اجرا کن.
-
-این توضیح بی‌نیازی از نصب فقط برای importer و ۹ تست base است. suite کامل اکنون API را هم تست می‌کند و نصب requirements.lock.txt مطابق بخش بعد لازم دارد.
-
-```powershell
-Set-Location 'D:\starcoach\torob'
-python -X utf8 -m unittest discover -s tests -p test_prepare_data.py -v
-python -X utf8 -m tools.prepare_data --source 'D:\starcoach\starcoach-dataset-v16-cap300-csv'
-```
-
-دستور دوم در این محیط قبلاً اجرا شده و `.local/catalogue.sqlite3` و `.local/data-profile.json` ساخته شده‌اند. برای حفظ snapshot قبلی، خروجی موجود بازنویسی نمی‌شود. اگر نیاز به بازسازی داری، نام تازه انتخاب کن:
-
-```powershell
-python -X utf8 -m tools.prepare_data --source 'D:\starcoach\starcoach-dataset-v16-cap300-csv' --database '.local/catalogue-v2.sqlite3' --report '.local/data-profile-v2.json'
-```
-
-این مسیر دیتاست مختص سیستم فعلی است؛ هم‌تیمی‌ها مسیر نسخهٔ محلی خود را به `--source` بدهند. CSV و DB را به ریپو اضافه نکنید. ابزار هدر، JSON، نوع داده، شناسهٔ تکراری، روابط، سقف محصولات و integrity را بررسی می‌کند، SHA-256 منابع را ثبت می‌کند و ایندکس جست‌وجوی فارسی می‌سازد. این کار کیفیت معنایی همهٔ داده‌ها یا دقت یک ایجنت را اثبات نمی‌کند.
-
-## اجرای API محلی
-
-محیط بررسی‌شده: Python 3.14.2 / Windows؛ وابستگی‌های دقیق API و تست در requirements.lock.txt هستند. از ریشهٔ پروژه:
-
-```powershell
+```cmd
+git clone https://github.com/tig-ndi/torob-inperson-assistant.git
+cd torob-inperson-assistant
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
-.\.venv\Scripts\python.exe -X utf8 -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_api
-.\.venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --no-access-log
+.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+npm --prefix apps/web ci
+copy .env.example .env
 ```
 
-venv موجود را دوباره نسازید. suite فعلی ۶۱ تست مصنوعی domain/API/import دارد؛ smoke_api جداگانه ۷ بررسی روی snapshot واقعی و حفظ hash را انجام می‌دهد. smoke از ASGI درون‌پردازشی استفاده می‌کند؛ جای تست مرورگر نیست. هشدار deprecation مربوط به TestClient/httpx در نسخهٔ نصب‌شده وجود دارد و مانع اجرای تست نیست. CI وابستگی‌ها را نصب می‌کند، ولی نتیجهٔ GitHub هنوز بررسی نشده است.
+### 2. Prepare the catalogue once
 
-پس از اجرای سرور، مستندات تعاملی محلی در [API docs](http://127.0.0.1:8000/docs) است؛ `/api/products?q=...`، `/api/products/{product_id}` و `/api/products/{product_id}/offers` ساخته شده‌اند. قرارداد کامل در docs/API.md است. برای مسیر متفاوت DB، متغیر محیطی TOROB_DATABASE را در همان ترمینال تنظیم کنید؛ .env.example فقط نمونه است و خودکار بارگذاری نمی‌شود. داده/شمارهٔ تماس به سرویس خارجی ارسال نمی‌شود.
+The source dataset and generated databases are **not distributed in Git**. Place your compatible `shops.csv`, `products.csv` and `offers.csv` in one folder, then run:
 
-## اجرای رابط جست‌وجوی محلی
-
-Node 24.12.0 / npm 11.19.1 این نوبت بررسی شدند؛ نسخه‌ها و resolvedها در apps/web/package.json و package-lock.json قفل‌اند. API بخش بالا را روی 8000 اجرا کنید؛ در ترمینال دیگر:
-
-```powershell
-Set-Location 'D:\starcoach\torob\apps\web'
-npm ci --no-fund --no-audit
-npm run dev
+```cmd
+.venv\Scripts\python.exe -X utf8 -m tools.prepare_data --source "C:\path\to\catalogue-csv"
 ```
 
-پیش‌نمایش: [رابط محلی](http://127.0.0.1:5173). Vite مسیر /api را به 127.0.0.1:8000 proxy می‌کند. `npm run build` شامل TypeScript strict است. build استاتیک API را میزبانی نمی‌کند؛ دیپلوی تنظیم نشده است.
+Replace the example path with your own. This creates `.local/catalogue.sqlite3` and its validation report. The importer preserves existing output files; see the [data format and import guide](docs/DATA.md).
 
-برای تست مرورگر از apps/web با backend نصب‌شده و DB موجود، پورت‌های 18000 و 15173 آزاد باشند؛ تست سرورهای تازهٔ همین کد را اجرا/جمع می‌کند و به سرورهای کاربر روی 8000/5173 دست نمی‌زند. در صورت اشغال پورت تست، خطا می‌دهد و سرور ناشناس را reuse نمی‌کند:
+### 3. Add your keys
 
-```powershell
-$env:PLAYWRIGHT_BROWSERS_PATH='D:\starcoach\torob\.local\pw-browsers'
-npx playwright install chromium
-npm run test:e2e
-```
-
-Chromium در .local می‌ماند؛ دستگاه دیگر مسیر همان دستگاه را بدهد. مجموعهٔ عادی headless تک‌worker اکنون ۳۳ تست با مسیرهای دیتاست واقعی، پاسخ‌های مصنوعی و ورودی UI دارد و provider را فراخوانی نمی‌کند. ترکیب بودجه/شعاع/ساعت/شرایط اعتباری و صفحه‌بندی در تست API با زمان ثابت جدا بررسی می‌شود. تصاویر در .local/qa خارج Git هستند. UI تصاویر/فونت خارجی نمی‌گیرد؛ placeholder خنثی است. مقایسه/آفر/بودجه/محدوده و ساعات/شرایط ثبت‌شدهٔ خرید اعتباری اکنون در UI موجودند؛ مسیر محدود مدل نیز اضافه شده؛ توصیهٔ کاربردمحور کامل و هر پرداخت واقعی ساخته نشده است.
-
-## بررسی ساعات و دادهٔ واقعی
-
-نصب requirements.lock.txt شامل tzdata برای IANA/Asia/Tehran روی Windows است. بعد از تغییر API، سرور توسعهٔ قبلی را خودتان با Ctrl+C متوقف و با فرمان بالاتر دوباره اجرا کنید؛ فرآیند قدیمی Python کد تازه را خودکار بارگذاری نمی‌کند. درخواست‌های تست از سرور مستقل استفاده می‌کنند.
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_hours
-```
-
-این smoke زمان چهارشنبه ۲۰۲۶-۱۰-۲۱ ساعت ۱۲ تهران را ثابت می‌گیرد؛ وضعیت‌های دادهٔ واقعی و IDs آفرهای باز را با oracle مستقل SQL می‌سنجد و hash DB را کنترل می‌کند. زمان ثابت، تأیید بازبودن واقعی امروز نیست. جزئیات قرارداد و عدم قطعیت در docs/API.md است. در UI، آفر را باز کنید و فیلتر «فقط فروشگاه‌هایی که طبق ساعات ثبت‌شده اکنون بازند» را امتحان کنید؛ timestamp و دکمهٔ به‌روزرسانی نشان می‌دهند وضعیت چه زمانی محاسبه شده است. برای backend سفارشیِ توسعه، TOROB_API_PORT فقط پورت proxy محلی Vite را تعیین می‌کند؛ پیش‌فرض 8000 است.
-
-## بررسی شرایط اعتباری ثبت‌شده
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_credit
-```
-
-این smoke مستقل SQL روی snapshot فعلی، IDs/ترتیب صفحات API و hash DB را می‌سنجد. منبع ۱۷۴ روش حضوری همگی با قیود مبلغ null/دستهٔ [] دارد؛ شرایط غیرخالی/مرزی با fixture آزموده می‌شوند. فیلتر in_person_credit_only فقط تطابق با قیود ثبت‌شده را می‌سنجد؛ تأیید اعتبار، پرداخت یا پذیرش فروشنده نیست. در UI آفر را باز و جزئیات روش‌ها و فیلتر را روشن/خاموش کنید؛ unknown channel حضوری نیست، مبلغ/دستهٔ ثبت‌نشده «نامحدود قطعی» معرفی نمی‌شود. با محصول بدون روش منطبق، حالت خالی طبیعی است. بعد از تغییر API سرور قبلی را دوباره اجرا و صفحه را refresh کنید؛ هیچ provider لازم نیست.
-
-## بررسی فقط‌خواندنی پیگیری و جایگزین
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_followups
-```
-
-این بررسی بدون مدل، مرورگر یا تماس، دو عملیات `prepare` و `alternatives` را روی snapshot واقعی می‌سنجد: پیوند منبع، حفظ قیمت/زمان، حذف همهٔ آفرهای فروشگاه گزارش‌شده، جایگزین فقط از همان محصول و فروشگاه‌های دیگر، حفظ چند آفر مستقل، بودجه/صفحه‌بندی، نبود جایگزین و hash ثابت. خروجی فقط شماره‌های تجمیعی است؛ شناسه/شمارهٔ تماس چاپ نمی‌شود. این شاهد ASGI/دادهٔ واقعی است، نه تأیید موجودی زنده یا پذیرش مرورگر.
-
-## بررسی زنجیرهٔ P2→P3 بدون مدل پولی
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_chain
-```
-
-این smoke از endpointهای واقعی روی snapshot محلی با provider مصنوعی و ledger موقت استفاده می‌کند: نیاز و بودجهٔ اولیه، ویرایش بودجه با حفظ need_state، انتخاب پویا از یک محصول واقعی با حداقل دو فروشگاه زیر بودجه، پیش‌نویس ارسال‌نشده، outcome شبیه‌سازی‌شده و جایگزین همان محصول از فروشگاه دیگر با همان بودجه. برابری مجموعهٔ offer_id با offers فیلترشده، نبود فیلد/لینک تماس، دو فراخوان مصنوعی و hash ثابت کنترل می‌شوند؛ شناسه یا شماره چاپ نمی‌شود. این شاهد ASGI/دادهٔ واقعی است، نه مدل واقعی، مرورگر، deployed journey یا موجودی زنده.
-
-## اجرای محدود دستیار BoxAPI
-
-قرارداد اختیاری need_state/context_need_state اکنون نیازهای فعال و اجرا‌نشده را بین نوبت‌ها حمل می‌کند؛ فیلتر واقعی رنگ/حافظه نیست. برای حفظ این وضعیت، اتصال کلاینت لازم است؛ جزئیات و تقدم فیلدهای فرم در docs/API.md (D30). UI فعلی در این برش تغییر نکرده است.
-
-تنظیم سقف تجمعی تلاش از ۱ تا ۲۰۰ معتبر است؛ تغییر فایل نیازمند راه‌اندازی مجدد بک‌اند است و ledger صفر نمی‌شود. قرارداد nearest و اتصال موقعیت/مرتب‌سازی در docs/API.md و بررسی پوشش فیلدهای واقعی در docs/DATA_CAPABILITIES.md آمده؛ اتصال UI این فیلدها هنوز با پژمان است.
-
-فقط در فایل محلی ریشهٔ پروژه `.env.local` یا environment بک‌اند تنظیم کنید؛ فایل نمونه و `.env` خودکار بارگذاری نمی‌شوند. environment مقدم است. مقادیر نمونه زیر واقعی نیستند؛ کلید را در چت، Git یا متغیرهای VITE نگذارید:
+Open `.env`, fill in the two keys, and enable voice if you want to use it:
 
 ```dotenv
-TOROB_ASSISTANT_ENABLED=1
-BOXAPI_API_KEY=YOUR_LOCAL_KEY
-TOROB_ASSISTANT_MODEL=gpt-5.6-luna
-TOROB_ASSISTANT_ATTEMPT_LIMIT=3
+BOXAPI_API_KEY="your-boxapi-key"
+AVALAI_API_KEY="your-avalai-key"
+TOROB_VOICE_ENABLED=1
 ```
 
-بعد از تنظیم، سرور Python را دوباره اجرا کنید. `/api/assistant/status` فقط وضعیت آماده‌بودن و سهمیهٔ تعداد درخواست را نشان می‌دهد، نه کلید. endpoint ثابت مسابقه https://ai.boxapi.ir/ai/v1/chat/completions است؛ بدون retry/تغییر مدل خودکار. Luna با low و JSON schema واقعی سنجیده شده؛ gpt-5-mini مدل پیشین و gpt-5.4-mini گزینهٔ تنظیمیِ واقعی‌سنجیده‌نشده است. نتیجه و پول از کد/DB می‌آیند؛ intent محدود جای توصیهٔ کاربردمحور کامل نیست. پشتیبانی مدل در [BoxAPI](https://boxapi.ir/codebox/) و قابلیت‌ها/تعرفهٔ رسمی در [OpenAI Docs](https://developers.openai.com/api/docs/models/gpt-5.6-luna) بررسی شده؛ هزینهٔ گزارش‌شده و موجودی حساب باید جدا بررسی شوند.
+Other settings are already in `.env.example`. The default assistant model is `gpt-5.6-luna`; your account must support the configured model. The example limits the assistant to **3 total attempts**, including failures. Adjust `TOROB_ASSISTANT_ATTEMPT_LIMIT` deliberately when needed; its local usage ledger survives restarts. Speech credit and rate limits are managed separately by AvalAI.
 
-سقف تنظیم‌شده، تعداد کل تلاش‌های مجاز است؛ با restart یا گفت‌وگوی تازه صفر نمی‌شود. failed/cancelled هم از سقف کم می‌شوند. تعداد فعلی و هزینه‌های گزارش‌شده را با دستور محلی بخش بعد ببینید؛ صورتحساب provider مرجع موجودی قطعی است. ledger را برای reset پاک نکنید و سقف را بدون اختیار تازه بالا نبرید.
+### 4. Start the app
 
-موضوع آخرین جست‌وجوی موفق و بودجهٔ نمایان در همین صفحه حفظ می‌شوند؛ مثلاً بعد از نتایج گوشی، «بودجه را هشت میلیون کن» همان کالا را با مبلغ تازه جست‌وجو می‌کند. «حالا کفش کتانی می‌خواهم» موضوع را عوض می‌کند؛ «ارزان‌ترش را می‌خواهم» بدون مبلغ روشن نیازمند سؤال است. موضوع و چند پیام اخیر حافظهٔ دائمی یا اثبات تناسب با کاربرد نیستند. گفت‌وگوی تازه موضوع/پیام‌ها را پاک می‌کند ولی بودجهٔ بالا و cap سرور را حفظ می‌کند.
-
-تست عادی `npm run test:e2e` با env ایجنت غیرفعال و mock، بدون مصرف است. آزمون‌های live مرورگر پایین، oracle مدل gpt-5-mini مربوط به سابقه‌اند؛ پیش از اجرای آن‌ها روی Luna باید توسط مالک UI هماهنگ شوند. در گام مهاجرت بک‌اند ویرایش/اجرا نشدند. فرمان پایین **فقط با مجوز و سقف باقی‌مانده** از apps/web یک درخواست هزینه‌دار می‌فرستد؛ در CI/اسکریپت عادی قرار ندهید:
-
-```powershell
-$env:TOROB_ALLOW_LIVE='1'
-npm run test:e2e -- --config playwright.live.config.mjs assistant.spec.mjs
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-local.ps1
 ```
 
-فایل `context.spec.mjs` به‌جای فایل بالا حداکثر **سه درخواست واقعی**، `category.spec.mjs` حداکثر **دو درخواست واقعی** و `evidence.spec.mjs` حداکثر **دو درخواست واقعی** دارد. evidence دو نیاز عکاسی/باتری را با بودجه و تطبیق فیلدها با specs منبع بررسی می‌کند. انتخاب همهٔ فایل‌های live اکنون حداکثر هشت درخواست است؛ این شمارش مجوز مصرف تازه نیست. فایل‌ها را صریح انتخاب کنید و کل مجموعهٔ live را بدون سقف تأییدشده اجرا نکنید. شواهد اجرای واقعی و شکست‌ها در HANDOFF؛ موفقیت نمونهٔ کوچک دقت عمومی را ثابت نمی‌کند.
+Open **http://127.0.0.1:18120**. The launcher builds the frontend, initializes a missing local usage ledger and starts the API and UI together. Stop with `Ctrl+C`. On later runs, use the same command; restart after editing `.env`. `-SkipBuild` reuses a previous frontend build, and `-Offline` disables the AI and speech providers.
 
-آزمون خالص استخراج مشخصات، بدون شبکه یا provider، از پوشهٔ apps/web با `npm run test:evidence` اجرا می‌شود (Node.js 24 محیط فعلی، پشتیبانی از type stripping بومی؛ dependency جدید ندارد). آزمون عادی مرورگر همان `npm run test:e2e` است؛ سه سناریوی تازهٔ specs هم در این مجموعه‌اند.
+<details>
+<summary>Linux / macOS</summary>
 
-از ریشه، `python -X utf8 -m tools.smoke_assistant --live --case 1` نیز یک درخواست واقعی است؛ case 2 جست‌وجو، case 3 follow-up، case 4 نیاز مبهم تازه و case 5 نبود شواهد دارد. دو مورد آخر نیز در گام حفظ زمینه موفق بودند. این فرمان‌ها رگرسیون بدون مصرف نیستند و هر بار سقف را کم می‌کنند. تست‌های عادی قراردادها را با mock می‌سنجند؛ موفقیت چند مثال، دقت عمومی یا توصیهٔ کاربردمحور را ثابت نمی‌کند.
+After cloning, use the platform-specific environment and the same catalogue/configuration steps:
 
-## توضیح نتایج در API
-
-پاسخ turn می‌تواند `explanation` شامل دلیل بازیابی/دسته، سند آفر زیر سقف، provenance و شواهد موضوعی محصولات داشته باشد. این داده فیلتر/رتبه‌بندی تناسب یا تأیید کیفیت/موجودی نیست. ورودی اختیاری `context_topics` با camera/battery ادامهٔ مرور مشخصات را حفظ می‌کند. قرارداد برای اتصال مالک UI در [docs/API.md](docs/API.md) است؛ کلاینت فعلی فیلد افزوده را نادیده می‌گیرد. ساخت توضیح مدل دوم یا مصرف توکن اضافه ندارد.
-
-## ارزیابی مصرف‌دار گفت‌وگوی Luna از API
-
-`tools/eval_dialogue.py` از ریشه با opt-in، شناسهٔ سناریوهای ثابت و نام گزارش تازه اجرا می‌شود. مرورگر/دیپلوی نیست؛ انتظارهای بودجه/دسته/سؤال و محصولات با SQL منبع بررسی می‌شوند. پیش‌نیاز: پنجرهٔ مجاز محلی با `baseline_attempts` برابر شمار واقعی ledger هنگام تأیید، `approved_max_new_calls` برابر سقف تأییدشدهٔ همان گام و `model` برابر gpt-5.6-luna. این manifest مجوز انسانی نیست و cap سرور را تغییر نمی‌دهد؛ baseline را برای ادامهٔ همین پنجره از نو تنظیم نکنید. پنجرهٔ جدید `.local/qa/rationale-run-start.json` و پنجرهٔ پیشین luna-run-start هر دو مصرف شده‌اند؛ بدون اختیار تازه اجرا نکنید.
-
-نمونهٔ فرمان فقط پس از اجازهٔ تازه و با allowance همان اجازه:
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.eval_dialogue --live --cases fresh_mobile --label fresh-retest --allowance .local/qa/approved-window.json
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock.txt
+npm --prefix apps/web ci
+cp .env.example .env
+.venv/bin/python -X utf8 -m tools.prepare_data --source /path/to/catalogue-csv
+# Edit .env with your own keys before starting.
+npm --prefix apps/web run build
+.venv/bin/python -c "from pathlib import Path; from apps.api.agent_usage import UsageLedger; UsageLedger(Path('.local/agent-usage.sqlite3')).connect().close()"
+.venv/bin/python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 18120 --no-access-log
 ```
 
-شناسه‌ها در CASES ابزارند؛ `phone_initial,budget_followup,topic_shoes` یک زنجیرهٔ سه‌درخواستی است. برای توضیح، `explain_camera,explain_budget,explain_shoes` همان حفظ موضوع و تغییر کالا را با سند آفر/نقل specs می‌سنجد؛ explain_battery و fresh_budget هرکدام یک turn هستند. retry خودکار و overwrite گزارش وجود ندارد؛ خروجی در .local/qa، بیرون Git است. با شکست provider مصرف متوقف می‌شود. آزمون‌های عادی backend از مدل مصنوعی استفاده می‌کنند و provider را صدا نمی‌زنند.
+</details>
 
-## ظرفیت ثبت‌شدهٔ باتری گوشی — بک‌اند
+## Built with
 
-برای حداقل صریح ظرفیت، `/api/products?q=گوشی&min_battery_capacity_mah=5000` را استفاده کنید؛ بودجهٔ تومان و صفحه‌بندی قبلی قابل ترکیب‌اند. ظرفیت دقیق mAh/Ah، ابهام/تعارض منبع و سؤال «باتری قوی» در بک‌اند پیاده شده‌اند؛ ظرفیت به معنی دوام واقعی نیست. قرارداد state و اتصال لازم پژمان در `docs/API.md` آمده است؛ کلاینت فعلی هنوز این معیار را در نمایش/صفحه‌بندی حمل نمی‌کند.
+**React · TypeScript · Vite · Tailwind CSS · MapLibre GL · FastAPI · SQLite FTS5**
 
-بررسی بدون مدل و بدون مصرف روی snapshot محلی:
+`apps/web` contains the interface, `apps/api` the validated shopping and provider logic, and `tools/prepare_data.py` the CSV importer. Prices, distances and opening-hour decisions are calculated in code; the language model interprets the conversation. Local API documentation is available at http://127.0.0.1:18120/docs.
 
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.smoke_battery
+## Checks
+
+```cmd
+.venv\Scripts\python.exe -X utf8 -m unittest discover -s tests -v
+npm --prefix apps/web run build
 ```
 
-oracle این ابزار مستقل و محدود به ظرفیت‌های صحیح mAh و نبود/تعارض ساده است؛ شمار پوشش و استثناها را گزارش می‌کند. اجرای زندهٔ سناریوهای `capacity_*` در eval_dialogue نیازمند opt-in، پنجرهٔ مصرف تازهٔ تأییدشده و سقف معتبر process است؛ ابزار اختیار مصرف یا افزایش تنظیمات نمی‌دهد. پنجره‌های گام دهم مصرف شده‌اند. شواهد و شکست محفوظ آزمون واقعی در HANDOFF/EVALUATION است.
+The backend suite uses mocked providers; snapshot-specific cases skip if the local catalogue is absent. For the current mobile/desktop browser suite, start the app with `-Offline`, install Chromium with `npx playwright install chromium` from `apps/web`, then run `npm run test:local` there. These checks do not establish live provider availability.
 
-## مشاهدهٔ آفلاین مصرف
+## Data and attribution
 
-از ریشهٔ پروژه اجرا کنید؛ هیچ شبکه/API، کلید یا تغییر تنظیماتی لازم نیست:
+Recorded shop hours can be missing or out of date. Route times exclude live traffic. Seller contact, stock checks and reservations are explicitly simulated; the app does not place real calls or send seller messages. Never commit `.env`, source CSVs, local databases or usage ledgers.
 
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -m tools.report_usage
-```
-
-این دستور SQLite مصرف را فقط‌خواندنی باز می‌کند؛ تعداد تلاش‌ها/وضعیت، توکن‌های گزارش‌شده و هزینهٔ معلوم و نامعلوم را نمایش می‌دهد. «پایان فنی» به معنای درست‌بودن معنایی پاسخ نیست. هزینهٔ timeout یا پاسخ بدون cost صفر فرض نمی‌شود. این گزارش محلی مصرف خارج این فایل یا صورتحساب provider را نمی‌بیند؛ سهمیهٔ تعداد درخواست، موجودی پولی نیست.
-
-برای یک ماندهٔ محاسباتی مشروط، `--initial-credit` را با مبلغ اولیه در همان واحد گزارش هزینه بدهید؛ این پارامتر موجودی حساب را نمی‌خواند و سقف مصرف را تغییر نمی‌دهد. در صورت وجود هر هزینهٔ نامشخص، مانده محاسبه نمی‌شود. `--json` خروجی ماشین‌خوان و `--save` ذخیرهٔ ثابت در `.local/usage/report.json` را فعال می‌کند؛ گزارش واقعی، ledger و تنظیمات وارد Git نشوند. کد ابزار و تست‌های مصنوعی آن قابل نسخه‌بندی‌اند.
-
-## فایل‌های اصلی پروژه
-
-- `project-overview.md`: نیازمندی‌ها، چهار گام خرید و ابهام‌ها.
-- `ARCHITECTURE.md` و `DESIGN.md`: معماری و رفتار UI پیشنهادی.
-- `TASKS.md` و `EVALUATION.md`: ترتیب کار و شواهد لازم برای پذیرش.
-- `DECISIONS.md` و `HANDOFF.md`: تصمیم‌ها و انتقال وضعیت.
-- `docs/DATA.md`: قرارداد CSV و خطرهای دادهٔ واقعی.
-- `docs/SOURCES.md` و `docs/SKILLS.md`: منشأ اطلاعات و نتیجهٔ بررسی Skill.
-- `docs/GIT.md`: قواعد کامیت محلی عامل و دستور push برای کاربر.
-- `docs/API.md`: قرارداد جاری کاتالوگ، بودجه، فاصله، ساعات و شرایط اعتباری؛ `apps/api/hours.py` و `tests/test_hours.py` منطق و تست ساعات را دارند.
-- `tools/prepare_data.py` و `tests/test_prepare_data.py`: ابزار واقعی و تست‌های مرزی آن.
-
-فایل `.env.example` نمونهٔ بدون secret برای تنظیم مسیر snapshot و ایجنت است؛ `.env.local` فقط تنظیمات allowlist ایجنت را می‌خواند. هیچ کلیدی در نمونه یا فرانت‌اند قرار ندهید.
+Maps use OpenFreeMap / OpenStreetMap; road routing uses FOSSGIS / OSRM. Existing third-party attribution is preserved in [LICENSES/torobche-MIT.txt](LICENSES/torobche-MIT.txt).
