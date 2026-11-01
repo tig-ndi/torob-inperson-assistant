@@ -14,6 +14,7 @@ from tools.prepare_data import normalize_text
 from apps.api.hours import evaluate_hours, tehran_time
 from apps.api.credit import evaluate_credit
 from apps.api.battery import assess_capacity
+from apps.api.shopping_intent import retrieval_query,matches_product_kind,preference_rank
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -162,7 +163,7 @@ class Catalogue:
                sort_by: str = 'relevance') -> dict:
         if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
-        expression = search_expression(query)
+        expression = search_expression(retrieval_query(query))
         with self.connect() as connection:
             provenance = self.provenance(connection)
             @lru_cache(maxsize=1024)
@@ -177,15 +178,19 @@ class Catalogue:
                                   'JOIN shops s ON s.shop_id=o.shop_id WHERE o.product_id=p.product_id '
                                   'AND (? IS NULL OR o.price_toman<=?)) AS nearest_distance')
                 params.extend([user_lat, user_lon, max_price, max_price])
-            params.extend([expression, category_name, category_name, max_price, max_price])
+            connection.create_function('matches_product_kind',4,matches_product_kind,deterministic=True)
+            connection.create_function('preference_rank',2,preference_rank,deterministic=True)
+            params.extend([expression,query,category_name,category_name,max_price,max_price])
             if min_battery_capacity_mah is not None:
                 params.extend(['گوشی موبایل', min_battery_capacity_mah])
+            if sort_by != 'nearest':params.append(query)
             params.extend([limit + 1, offset])
             nearest_clause = 'AND nearest_distance IS NOT NULL ' if sort_by == 'nearest' else ''
-            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'product_search.rank,p.product_id'
+            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'preference_rank(?,p.category_name),product_search.rank,p.product_id'
             rows = connection.execute(
                 "SELECT p.* " + nearest_select + " FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
+                "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs)=1 "
                 "AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
                 "AND o.price_toman<=?)) " + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",
@@ -249,7 +254,8 @@ class Catalogue:
             "in_person_credit": credit.as_dict(),
             "direct_distance_meters": direct_distance_meters,
             "shop": {"name": row["shop_name"], "address": row["address"],
-                     "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"]}}
+                     "location_label": row["location_label"], "lat": row["lat"], "lon": row["lon"],
+                     "supports_fast_delivery": bool(row['supports_fast_delivery']) if row['supports_fast_delivery'] is not None else None}}
 
     def followup_selection(self, product_id: str, offer_id: str, shop_id: str,
                            user_lat: float | None = None, user_lon: float | None = None,
@@ -267,7 +273,7 @@ class Catalogue:
             if product is None:
                 raise FollowupSelectionError('product_not_found')
             query = ("SELECT o.*,s.shop_id AS resolved_shop_id,s.name AS shop_name,s.address,"
-                     "s.location_label,s.lat,s.lon,s.weekly_hours,s.payment_options,"
+                     "s.location_label,s.lat,s.lon,s.weekly_hours,s.payment_options,s.supports_fast_delivery,"
                      "p.category_name AS product_category_name")
             params: list = []
             if user_lat is not None:
@@ -302,7 +308,9 @@ class Catalogue:
                user_lat: float | None = None, user_lon: float | None = None,
                max_distance_km: float | None = None, open_now_only: bool = False,
                evaluated_at: datetime | None = None, in_person_credit_only: bool = False,
-               *, sort_by: str = 'price', exclude_shop_id: str | None = None) -> dict | None:
+               *, sort_by: str = 'price', exclude_shop_id: str | None = None,
+               min_price: int | None = None, payment_provider: str | None = None,
+               fast_delivery_only: bool = False) -> dict | None:
         if sort_by not in {'price', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
         checked_at = tehran_time(evaluated_at if evaluated_at is not None else datetime.now(timezone.utc))
@@ -315,12 +323,19 @@ class Catalogue:
         def credit(raw: str | None, price: int | None, category: str | None):
             return evaluate_credit(raw, price, category)
 
+        def matches_provider(raw, price, category):
+            names = {'torobpay': {'ترب پی', 'تربپی'}, 'kalabarg': {'کالابرگ', 'کالا برگ'}}
+            return int(any(option.status == 'matches_declared_terms' and
+                           normalize_text(option.provider_name or '') in names.get(payment_provider, set())
+                           for option in credit(raw, price, category).options))
+
         with self.connect() as connection:
             connection.create_function("declared_open_now", 1,
                                        lambda raw: int(hours(raw).status == "declared_open"), deterministic=True)
             connection.create_function("matches_in_person_credit", 3,
                                        lambda raw, price, category: int(credit(raw, price, category).status == "matches_declared_terms"),
                                        deterministic=True)
+            connection.create_function('matches_payment_provider', 3, matches_provider, deterministic=True)
             provenance = self.provenance(connection)
             if connection.execute("SELECT 1 FROM products WHERE product_id=?", (product_id,)).fetchone() is None:
                 return None
@@ -329,7 +344,7 @@ class Catalogue:
             max_dist_m = max_distance_km * 1000.0 if max_distance_km is not None else None
 
             query = ("SELECT o.*,s.name AS shop_name,s.address,s.location_label,s.lat,s.lon,s.weekly_hours,"
-                     "s.payment_options,p.category_name AS product_category_name")
+                     "s.payment_options,s.supports_fast_delivery,p.category_name AS product_category_name")
             params: list = []
             if has_location:
                 query += ",haversine_m(?, ?, s.lat, s.lon) AS dist_m"
@@ -344,6 +359,13 @@ class Catalogue:
                 "AND (? IS NULL OR o.shop_id<>?) "
             )
             params.extend([product_id, max_price, max_price, exclude_shop_id, exclude_shop_id])
+            if min_price is not None:
+                query += 'AND o.price_toman>=? '
+                params.append(min_price)
+            if payment_provider is not None:
+                query += 'AND matches_payment_provider(s.payment_options,o.price_toman,p.category_name)=1 '
+            if fast_delivery_only:
+                query += 'AND s.supports_fast_delivery=1 '
 
             if open_now_only:
                 query += "AND declared_open_now(s.weekly_hours)=1 "

@@ -77,6 +77,7 @@ export type Shop = {
   location_label: string | null;
   lat: number | null;
   lon: number | null;
+  supports_fast_delivery?: boolean | null;
 };
 
 export const HOURS_REASON_TEXT = {
@@ -436,6 +437,7 @@ export function parseOfferPage(value: unknown): OfferPage {
         location_label: nullableText(s.location_label),
         lat,
         lon,
+        supports_fast_delivery: typeof s.supports_fast_delivery === 'boolean' ? s.supports_fast_delivery : null,
       },
     };
   });

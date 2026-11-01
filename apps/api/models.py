@@ -215,6 +215,7 @@ class Shop(Model):
     location_label: str | None
     lat: float | None = Field(ge=-90, le=90, allow_inf_nan=False)
     lon: float | None = Field(ge=-180, le=180, allow_inf_nan=False)
+    supports_fast_delivery: bool | None = None
 
 
 class Shift(Model):
@@ -292,16 +293,20 @@ class FollowupSelection(Model):
 
 
 class FollowupPrepareRequest(FollowupSelection):
-    pass
+    visit_time: str | None = Field(default=None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$')
 
 
 class FollowupAlternativesRequest(FollowupSelection):
+    visit_time: str | None = Field(default=None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$')
     outcome: Literal['no_answer', 'closed', 'out_of_stock']
     outcome_source: Literal['simulated', 'user_report']
     max_price_toman: str | None = Field(default=None, pattern=r'^[0-9]{1,19}$')
     max_distance_km: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
     open_now_only: bool = False
     in_person_credit_only: bool = False
+    min_price_toman: str | None = Field(default=None, pattern=r'^[0-9]{1,19}$')
+    payment_provider: Literal['torobpay', 'kalabarg'] | None = None
+    fast_delivery_only: bool = False
     sort_by: Literal['price', 'nearest'] = 'price'
     limit: int = Field(default=20, ge=1, le=50)
     offset: int = Field(default=0, ge=0, le=1000000)
@@ -310,6 +315,10 @@ class FollowupAlternativesRequest(FollowupSelection):
     def valid_filters(self):
         if self.max_price_toman is not None and int(self.max_price_toman) > 2**63 - 1:
             raise ValueError('budget exceeds supported integer range')
+        if self.min_price_toman is not None and int(self.min_price_toman) > 2**63 - 1:
+            raise ValueError('minimum exceeds supported integer range')
+        if self.min_price_toman is not None and self.max_price_toman is not None and int(self.min_price_toman) > int(self.max_price_toman):
+            raise ValueError('minimum exceeds maximum')
         if self.max_distance_km is not None and (self.user_lat is None or self.user_lon is None):
             raise ValueError('radius requires coordinates')
         if self.sort_by == 'nearest' and self.user_lat is None:
