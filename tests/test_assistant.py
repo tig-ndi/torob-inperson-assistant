@@ -27,6 +27,36 @@ CONTACT_DATA = re.compile(
     r'(?<!\d)(?:\+98|0098|0)?9\d{9}(?!\d)|(?:tel:|wa\.me|whatsapp\.com|t\.me/)', re.IGNORECASE)
 
 
+def contact_response_text(result):
+    # The caller's UUID can contain phone-like digit runs. Scan every other
+    # field, including nested content, without changing the contact detector.
+    return json.dumps({key: value for key, value in result.items() if key != 'request_id'},
+                      ensure_ascii=False)
+
+
+class ContactResponseTests(unittest.TestCase):
+    def test_phone_like_request_uuid_does_not_count_as_contact_content(self):
+        result = {'request_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aa9335345788',
+                  'question': 'چه کالایی می‌خواهید؟'}
+        self.assertIsNotNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+        self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
+
+    def test_contact_scan_still_checks_top_level_and_nested_response_content(self):
+        cases = [
+            ('question', '09335345788'),
+            ('query', 'tel:09335345788'),
+            ('category_name', 'https://wa.me/989335345788'),
+            ('explanation', {'limitations': ['https://whatsapp.com/example']}),
+            ('products', {'items': [{'contact': 'https://t.me/example'}]}),
+            ('need_state', {'topic_query': '09335345788'}),
+            ('need_state', {'request_id': '09335345788'}),
+        ]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                result = {'request_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aa9335345788', field: value}
+                self.assertIsNotNone(CONTACT_DATA.search(contact_response_text(result)))
+
+
 def body(text='گوشی با بودجه ده میلیون تومان می‌خواهم', **changes):
     return {'request_id': str(uuid4()), 'messages': [{'role': 'user', 'content': text}], 'max_price_toman': None, **changes}
 
@@ -832,13 +862,16 @@ class AssistantApiTests(unittest.TestCase):
 
     def test_contact_only_requests_never_become_a_product_or_need_state_topic(self):
         names = ('گوشی موبایل', 'شارژر گوشی', 'شماره زن', 'شماره گیر تلفن')
-        for text, query in [('شماره تماس‌ها را بده', 'شماره تماس ها'),
-                            ('شماره تماس ها را بده.', 'شماره تماس ها'),
-                            ('شماره را بده', 'شماره')]:
+        for index, (text, query) in enumerate([
+                ('شماره تماس‌ها را بده', 'شماره تماس ها'),
+                ('شماره تماس ها را بده.', 'شماره تماس ها'),
+                ('شماره را بده', 'شماره')]):
             with self.subTest(text=text), patch.object(
                     self.service.catalogue, 'category_names', return_value=names):
                 self.response = completion(proposal(action='search', query=query))
-                result = self.post(body(text)).json()
+                request = body(text, request_id=f'aaaaaaaa-aaaa-4aaa-8aaa-aa933534578{index}')
+                result = self.post(request).json()
+                self.assertEqual(result['request_id'], request['request_id'])
                 self.assertEqual(result['status'], 'needs_input')
                 self.assertEqual(result['question_code'], 'product_kind')
                 self.assertIsNone(result['query'])
@@ -849,7 +882,7 @@ class AssistantApiTests(unittest.TestCase):
                 self.assertEqual(result['need_state']['pending_requirements'], [])
                 self.assertIn(CONTACT_LIMITATION, result['question'])
                 self.assertIn(QUESTIONS['product_kind'], result['question'])
-                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+                self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
         self.assertEqual(len(self.calls), 3)
 
     def test_contact_only_continuation_preserves_recorded_phone_state(self):
@@ -874,7 +907,7 @@ class AssistantApiTests(unittest.TestCase):
                 self.assertEqual(result['need_state']['max_price_toman'], '15000000')
                 self.assertIn(CONTACT_RESULT_LIMITATION, result['explanation']['limitations'])
                 self.assertGreaterEqual(len(result['explanation']['limitations']), 2)
-                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+                self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
         self.assertEqual(len(self.calls), 2)
 
     def test_contact_request_with_pending_and_battery_condition_keeps_them(self):
@@ -931,7 +964,7 @@ class AssistantApiTests(unittest.TestCase):
                     self.assertEqual(result['max_price_toman'], '15000000')
                     self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')
                     self.assertIn(CONTACT_RESULT_LIMITATION, result['explanation']['limitations'])
-                self.assertIsNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
+                self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
         self.assertEqual(len(self.calls), 2)
 
     def test_true_multi_product_request_never_searches_the_model_query(self):
