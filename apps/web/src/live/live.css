@@ -1,0 +1,17 @@
+.live-input{display:block;width:100%;min-height:44px;margin-top:6px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);font-size:14px;outline-offset:2px}
+.live-label{display:block;font-size:13px;color:var(--text-2)}
+.live-table{border-collapse:collapse;min-width:360px;font-size:12px}
+.live-table th,.live-table td{padding:10px;min-width:120px;max-width:180px;border-bottom:1px solid var(--border);vertical-align:top;text-align:right;overflow-wrap:anywhere}
+.live-link{display:flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:14px;background:var(--primary);color:var(--on-primary);font-size:14px;font-weight:700}
+.live-link.secondary{background:var(--surface-2);color:var(--text)}
+.map-control{display:grid;width:44px;height:44px;place-items:center;border-radius:100%;border:1px solid var(--border);background:var(--bg);box-shadow:var(--shadow-2)}
+.real-pin{border:1px solid var(--primary);background:var(--pin-bg);color:var(--pin-ink);padding:7px 12px;border-radius:22px;font-family:Vazirmatn,sans-serif;font-weight:700;font-size:13px;box-shadow:var(--shadow-2);white-space:nowrap;max-width:220px}
+.real-pin.chosen{background:var(--primary);color:var(--on-primary);z-index:2;border:3px solid var(--bg)}
+.user-dot{width:18px;height:18px;border:3px solid white;background:#2f6fed;border-radius:50%;box-shadow:0 0 0 8px #2f6fed20}
+.map-credit{position:absolute;left:4px;z-index:15;max-width:260px;background:var(--bg);color:var(--text-2);font:10px/1.8 sans-serif;padding:1px 5px;border-radius:5px;direction:ltr;opacity:.85}
+.map-credit a{text-decoration:underline}
+.map-failure{position:absolute;left:70px;top:145px;max-width:240px;z-index:15;padding:10px;border-radius:12px;background:var(--bg);color:var(--text-2);font-size:12px;box-shadow:var(--shadow-2)}
+.map-failure button{display:block;min-height:40px;color:var(--primary);font-weight:bold}
+.maplibregl-ctrl-attrib{display:none}
+.maplibregl-canvas:focus-visible{outline-offset:-3px}
+@media(max-width:370px){.map-failure{max-width:185px;font-size:11px}.design-toolbar form{padding-inline-start:8px;gap:0}.design-toolbar form input{font-size:13px}}
