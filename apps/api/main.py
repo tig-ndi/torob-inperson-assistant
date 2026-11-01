@@ -25,9 +25,11 @@ from apps.api.assistant import AssistantService
 from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
 from apps.api.battery import MAX_CAPACITY_MAH
+from apps.api.hours import tehran_time
 from apps.api.voice import voice_router
 from apps.api.deployment import readiness
 from apps.api.guidance import Guidance, guidance
+from apps.api.local_features import local_router
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +55,13 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     agent = assistant if assistant is not None else AssistantService.from_root(catalogue, ROOT)
     web = (web_dist if web_dist is not None else Path(
         os.environ.get('TOROB_WEB_DIST', str(ROOT / 'apps/web/dist')))).resolve()
+    def visit_instant(visit_time: str | None = None) -> datetime:
+        instant = clock() if clock is not None else datetime.now(timezone.utc)
+        if visit_time is not None:
+            hour, minute = map(int, visit_time.split(':'))
+            instant = tehran_time(instant).replace(hour=hour, minute=minute, second=0, microsecond=0)
+        return instant
+
     application.state.readiness_check = lambda: readiness(catalogue, agent.ledger, web)
 
     @application.get('/api/assistant/guidance', response_model=Guidance)
@@ -172,12 +181,19 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         max_distance_km: float | None = Query(None, gt=0, le=1000, allow_inf_nan=False),
         open_now_only: bool = False,
         in_person_credit_only: bool = False,
+        min_price_toman: Budget = None,
+        payment_provider: Literal['torobpay', 'kalabarg'] | None = None,
+        fast_delivery_only: bool = False,
         sort_by: Literal['price', 'nearest'] = 'price',
+        visit_time: str | None = Query(None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'),
     ):
         # Hours depend on request time. A refresh must not reuse a cached page.
         response.headers["Cache-Control"] = "no-store"
         validate_id(product_id)
         validate_coordinates(user_lat, user_lon, max_distance_km)
+        minimum, maximum = parse_budget(min_price_toman), parse_budget(max_price_toman)
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise HTTPException(422, 'کف بودجه از سقف بودجه بیشتر است.')
         if sort_by == 'nearest' and user_lat is None:
             raise HTTPException(422, 'مرتب‌سازی فاصله به مختصات معتبر نیاز دارد.')
         result = catalogue.offers(
@@ -189,9 +205,10 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             user_lon,
             max_distance_km,
             open_now_only=open_now_only,
-            evaluated_at=clock() if clock is not None else datetime.now(timezone.utc),
+            evaluated_at=visit_instant(visit_time),
             in_person_credit_only=in_person_credit_only,
             sort_by=sort_by,
+            min_price=minimum, payment_provider=payment_provider, fast_delivery_only=fast_delivery_only,
         )
         if result is None:
             raise HTTPException(404, "محصول در این snapshot ثبت نشده است.")
@@ -200,7 +217,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     @application.post('/api/followups/prepare', response_model=FollowupPrepareResponse)
     def followup_prepare(body: FollowupPrepareRequest, response: Response):
         response.headers['Cache-Control'] = 'no-store'
-        instant = clock() if clock is not None else datetime.now(timezone.utc)
+        instant = visit_instant(body.visit_time)
         selection = catalogue.followup_selection(
             body.product_id, body.offer_id, body.shop_id,
             body.user_lat, body.user_lon, instant)
@@ -222,7 +239,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     @application.post('/api/followups/alternatives', response_model=FollowupAlternativesResponse)
     def followup_alternatives(body: FollowupAlternativesRequest, response: Response):
         response.headers['Cache-Control'] = 'no-store'
-        instant = clock() if clock is not None else datetime.now(timezone.utc)
+        instant = visit_instant(body.visit_time)
         selection = catalogue.followup_selection(
             body.product_id, body.offer_id, body.shop_id,
             body.user_lat, body.user_lon, instant)
@@ -237,6 +254,8 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                 in_person_credit_only=body.in_person_credit_only,
                 sort_by=body.sort_by,
                 exclude_shop_id=body.shop_id,
+                min_price=int(body.min_price_toman) if body.min_price_toman is not None else None,
+                payment_provider=body.payment_provider, fast_delivery_only=body.fast_delivery_only,
             )
 
         page = offer_page(body.limit, body.offset)
@@ -265,6 +284,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         }
 
     application.include_router(voice_router)
+    application.include_router(local_router(catalogue, ROOT))
     # API routes always win. Missing API endpoints must never return frontend HTML.
     @application.api_route('/api/{path:path}', methods=['GET', 'HEAD'], include_in_schema=False)
     def unknown_api(path: str):
