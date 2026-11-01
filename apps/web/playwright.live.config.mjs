@@ -1,14 +1,2 @@
-import { defineConfig } from '@playwright/test';
-import base from './playwright.config.mjs';
-
-if (process.env.TOROB_ALLOW_LIVE !== '1') throw new Error('Live tests require TOROB_ALLOW_LIVE=1; assistant.spec uses one call, context.spec up to three, category.spec/evidence.spec up to two each. Select files explicitly.');
-
-export default defineConfig({
-  ...base,
-  testDir: './live',
-  retries: 0,
-  timeout: 45000,
-  webServer: base.webServer.map((server, index) => index === 0
-    ? { ...server, env: { ...server.env, TOROB_ASSISTANT_ENABLED: '1' } }
-    : server),
-});
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'./tests/live',outputDir:'../../.local/live-qa/results',timeout:45000,workers:1,retries:0,use:{baseURL:'http://127.0.0.1:18120',headless:true,reducedMotion:'reduce',launchOptions:{...(process.env.DESIGN_CHROMIUM_PATH?{executablePath:process.env.DESIGN_CHROMIUM_PATH}:{}),args:['--enable-unsafe-swiftshader','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']}}});

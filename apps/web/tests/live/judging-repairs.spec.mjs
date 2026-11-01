@@ -1,0 +1,49 @@
+import {test,expect} from '@playwright/test';
+import {mockAssistant,send,layout} from './helpers.mjs';
+import {visitFixture,chooseLocation} from './visit-fixtures.mjs';
+
+for(const width of [320,390])test(`first map opening frames shops without a recenter click at ${width}`,async({page,request})=>{
+ await page.setViewportSize({width,height:844});await mockAssistant(page,request);await page.goto('/');
+ await page.getByRole('button',{name:'خودم روی نقشه می‌زنم',exact:true}).click();await page.locator('.maplibregl-canvas').click({position:{x:width/2,y:320}});
+ await send(page,'گوشی می‌خواهم');await page.getByRole('button',{name:'دیدن فروشگاه‌ها'}).first().click();await expect(page.locator('[data-offer]').first()).toBeVisible();
+ await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
+ await expect.poll(()=>page.locator('[data-map-shop]').evaluateAll(es=>{const bottom=document.querySelector('[data-mobile-store-sheet]').getBoundingClientRect().top;return es.length>0&&es.every(e=>{const r=e.getBoundingClientRect();return r.bottom>90&&r.bottom<=bottom+2;});})).toBe(true);
+ await page.screenshot({path:`../../.local/live-qa/repaired-map-first-${width}.png`});
+});
+
+for(const width of [320,390])test(`urgent visit suggests a destination before model selection and survives refresh at ${width}`,async({page,request})=>{
+ await page.setViewportSize({width,height:844});const f=await visitFixture(page,request);await page.goto('/');await chooseLocation(page);await send(page,'ساعت ۲۳:۳۰ شارژر موبایل نزدیک من کجا باز است؟');
+ const decision=page.getByRole('region',{name:'پیشنهاد برای مراجعه'});await expect(decision).toContainText(f.far.shop.name);await expect(decision).toContainText('گزینهٔ احتمالی');await layout(page);
+ const bounds=await decision.boundingBox(),footer=await page.locator('.composer-area').boundingBox();expect(bounds.y).toBeLessThan(footer.y);
+ await decision.getByRole('button',{name:'بررسی همین مقصد',exact:true}).first().click();await expect(page.getByRole('button',{name:'کپی پیش‌نویس'})).toBeVisible();await page.getByRole('button',{name:'ساخت برنامهٔ رفتن',exact:true}).click();
+ await page.getByRole('checkbox',{name:'آدرس دقیق و ساعت کاری را بررسی کنم'}).click();await page.getByRole('textbox',{name:'پیام به دستیار خرید'}).fill('این پیام هنوز ارسال نشده');
+ const messages=await page.locator('[data-message-role]').count();await page.reload();
+ await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','trip');await expect(page.getByRole('checkbox',{name:'آدرس دقیق و ساعت کاری را بررسی کنم'})).toHaveAttribute('aria-checked','true');await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue('این پیام هنوز ارسال نشده');await expect(page.locator('[data-message-role]')).toHaveCount(messages);expect(f.calls).toHaveLength(0);
+ await page.getByRole('button',{name:'برنامه‌ها و نتایج قبلی',exact:true}).click();await expect(page.locator('[data-result]')).toHaveCount(1);await page.getByRole('button',{name:'بستن',exact:true}).click();await layout(page);await page.screenshot({path:`../../.local/live-qa/repaired-trip-refresh-${width}.png`});
+});
+
+test('closed destination blocks unreviewed navigation and saving',async({page,request})=>{
+ await page.setViewportSize({width:390,height:844});const f=await visitFixture(page,request);await page.goto('/');await chooseLocation(page);await send(page,'شارژر موبایل نزدیک من برای ساعت ۲۳:۳۰');await page.getByRole('button',{name:'دیدن فروشگاه‌ها'}).first().click();await page.locator(`[data-offer="${f.near.offer_id}"]`).getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();
+ await expect(page.locator('[data-visit-safety]')).toContainText('برای این زمان راه نیفت');await page.getByRole('button',{name:'ساخت برنامهٔ رفتن',exact:true}).click();await expect(page.getByRole('button',{name:'ذخیرهٔ برنامهٔ خرید',exact:true})).toBeDisabled();await page.getByRole('button',{name:'مسیریابی',exact:true}).click();
+ await expect(page.getByRole('link',{name:'بازکردن در نشان',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'با آگاهی از هشدار ادامه می‌دهم',exact:true}).click();await expect(page.getByRole('link',{name:'بازکردن در نشان',exact:true})).toHaveAttribute('href',/^https:/);
+});
+
+for(const source of ['simulated','user_report'])test(`${source} unavailable reply automatically finds and maps a source-backed alternative`,async({page,request})=>{
+ await page.setViewportSize({width:390,height:844});const f=await visitFixture(page,request);const alternative={...structuredClone(f.far),offer_id:'synthetic_replacement',shop_id:'synthetic_replacement_shop',shop:{...f.far.shop,name:'جایگزین باز آزمایشی',lat:35.724},direct_distance_meters:2700};f.rows.push(alternative);
+ let queries=0;await page.route('**/api/followups/alternatives',r=>{queries++;const i=r.request().postDataJSON();expect(i.open_now_only).toBe(true);expect(i.outcome_source).toBe(source);expect(i.offer_id).toBe(f.far.offer_id);return r.fulfill({json:{status:'alternatives_available',product_id:f.product.product_id,reported_offer_id:f.far.offer_id,reported_shop_id:f.far.shop_id,excluded_offer_count:1,outcome:{kind:i.outcome,source:i.outcome_source,received_at:'2026-10-30T23:30:00+03:30',verified_externally:false,seller_confirmation:false},alternatives:{...f.insight.open_offers,items:[alternative]},limitations:[]}});});
+ await page.goto('/');await chooseLocation(page);await send(page,'ساعت ۲۳:۳۰ شارژر نزدیک من');await page.getByRole('button',{name:'بررسی همین مقصد',exact:true}).first().click();if(source==='simulated'){await page.getByText('پیگیری تکی و جایگزین خودکار',{exact:true}).click();await page.locator('[data-followup-assistant] summary').click();await page.getByLabel('سناریوی پیگیری آزمایشی').selectOption('out_of_stock');await page.getByRole('button',{name:'اجرای پیگیری آزمایشی',exact:true}).click();}else await send(page,'این فروشگاه موجود نبود، جایگزین پیدا کن');
+ await expect(page.locator('.followup-alternatives')).toContainText(alternative.shop.name);expect(queries).toBe(1);await expect(page.getByRole('log')).toContainText(source==='simulated'?'شبیه‌سازی':'گزارش تو');await page.getByRole('button',{name:'جایگزین روی نقشه',exact:true}).click();await expect(page.locator('.real-pin.chosen')).toHaveAttribute('aria-label',new RegExp(alternative.shop.name));await page.getByRole('button',{name:'ادامه با این فروشگاه در گفت‌وگو',exact:true}).click();await expect(page.locator('[data-active-tool]')).toContainText(alternative.shop.name);
+});
+
+test('a corrupt saved session recovers locally without sending a model request',async({page,request})=>{
+ const calls=[];await mockAssistant(page,request,calls);await page.addInitScript(()=>{sessionStorage.setItem('inperson-journey:v2:thread','{broken');sessionStorage.setItem('inperson-journey:v2:position',JSON.stringify({lat:999,lon:51,label:'bad',source:'gps',accuracyMeters:null}));});await page.goto('/');await expect(page.getByRole('button',{name:'موقعیت فعلی من',exact:true})).toBeVisible();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toBeVisible();expect(calls).toHaveLength(0);
+});
+
+test('manual navigator duration is scoped to the selected destination and survives refresh',async({page,request})=>{
+ const f=await visitFixture(page,request);await page.setViewportSize({width:390,height:844});await page.goto('/');await chooseLocation(page);await send(page,'ساعت ۲۳:۳۰ شارژر نزدیک من');await page.getByRole('button',{name:'بررسی همین مقصد',exact:true}).first().click();
+ await page.getByRole('button',{name:'زمان و روش رسیدن را تغییر بده',exact:true}).click();await page.getByRole('button',{name:'زمان راه را خودم وارد می‌کنم',exact:true}).click();await page.getByLabel('زمان راه به دقیقه').fill('7');await page.getByRole('button',{name:'بستن',exact:true}).click();await expect(page.locator('.arrival-facts').first()).toContainText('زمان راه واردشده: ۷ دقیقه');await page.reload();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','contact');await page.getByRole('button',{name:'زمان و روش رسیدن را تغییر بده',exact:true}).click();await expect(page.getByRole('button',{name:'زمان راه را خودم وارد می‌کنم',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.getByLabel('زمان راه به دقیقه')).toHaveValue('7');expect(f.calls).toHaveLength(0);
+});
+
+test('asking to compare selects two visit choices without another model request',async({page,request})=>{
+ const calls=[],products=await mockAssistant(page,request,calls);const index=products.items.slice(0,3).findIndex(p=>p.offer_summary.offer_count>1);expect(index).toBeGreaterThanOrEqual(0);await page.setViewportSize({width:390,height:844});await page.goto('/');await send(page);await page.getByRole('button',{name:'دیدن فروشگاه‌ها'}).nth(index).click();await expect(page.locator('[data-offer]').nth(1)).toBeVisible();await send(page,'کدوم بهتره؟ مقایسه کن');await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','stores');await expect(page.getByRole('dialog',{name:'مقایسهٔ کامل انتخاب‌ها'})).toBeVisible();await page.getByText('اولویت قیمت و فاصله و دلیل پیشنهاد',{exact:true}).click();await expect(page.locator('[data-compare-advice]')).toBeVisible();await expect(page.getByRole('button',{name:/حذف پیشنهاد/})).toHaveCount(2);expect(calls).toHaveLength(1);await page.getByRole('button',{name:'همین مقایسه روی نقشه',exact:true}).click();await expect(page.locator('[data-compared="true"]').first()).toBeVisible();
+});
