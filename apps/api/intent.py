@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from apps.api.shopping_intent import keypad_request
 from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.battery import strip_capacity_clause
@@ -37,13 +38,18 @@ CONTACT_RESULT_LIMITATION = (
 )
 
 
-def question_prompt(code: str, contact: bool = False) -> str:
-    return f'{CONTACT_LIMITATION} {QUESTIONS[code]}' if contact else QUESTIONS[code]
+CHARGER_DEVICE_QUESTION = 'شارژر را برای چه دستگاهی می‌خواهی؛ گوشی، تبلت یا لپ‌تاپ؟ مدل دستگاه یا نوع درگاه را بگو تا گزینهٔ ناسازگار پیشنهاد ندهم.'
+
+
+def question_prompt(code: str, contact: bool = False, topic: str | None = None) -> str:
+    normalized = normalize_text(topic or '')
+    message = CHARGER_DEVICE_QUESTION if code == 'product_kind' and normalized.startswith('شارژر ') and not re.search(r'گوشی|موبایل|تبلت|لپ', normalized) else QUESTIONS[code]
+    return f'{CONTACT_LIMITATION} {message}' if contact else message
 
 
 def matches_question(content: str, code: str) -> bool:
     """Recognize a stored question even when a contact limitation preceded it."""
-    return content == QUESTIONS[code] or content == question_prompt(code, True)
+    return content == QUESTIONS[code] or content == question_prompt(code, True) or code == 'product_kind' and content in {CHARGER_DEVICE_QUESTION, f'{CONTACT_LIMITATION} {CHARGER_DEVICE_QUESTION}'}
 
 
 class StrictModel(BaseModel):
@@ -126,7 +132,7 @@ NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES,
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
 BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر))*\s*:?\s+'
-QUERY_STOPWORDS = frozenset('من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+QUERY_STOPWORDS = frozenset('هر روز زیر حضوری من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
 GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
 MAX_TOPIC_WORDS = 4
 TOPIC_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛]')
@@ -134,9 +140,24 @@ TOPIC_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛]')
 
 def _strip_budget_phrases(text: str) -> str:
     cleaned = normalize_text(text)
-    cleaned = re.sub(rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
+    cleaned = re.sub(rf'(?:زیر\s+|حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
     cleaned = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
     return re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر|$|[.،؛؟!]))', ' ', cleaned)
+
+
+def product_clauses(text: str, prioritize: bool = True) -> list[str]:
+    """Prioritize explicit buying clauses over a user's background story.
+
+    A quantified duration followed by an activity is usage context. A request
+    for a watch (e.g. 'یک ساعت هوشمند می‌خواهم') must remain a product.
+    """
+    cleaned = normalize_text(text)
+    cleaned = re.sub(rf'ساعت\s+(?:[0-9]{{1,2}}[:٫.][0-9]{{2}}|{AMOUNT}(?:\s+و\s+(?:نیم|ربع))?)\s*(?:صبح|ظهر|عصر|شب|امشب)(?:\s+(?:است|هست))?', ' ', cleaned)
+    cleaned = re.sub(rf'(?:{AMOUNT}|نیم)\s+(?:ساعت|دقیقه)\s+(?:وقت|فرصت)\s*دارم', ' ', cleaned)
+    cleaned = re.sub(rf'(?:هر\s+روز\s+|روزانه\s+)?{AMOUNT}\s+(?:ساعت|دقیقه)\s+(?:پیاده\s*روی|راه\s*رفتن|دویدن|می\s*دوم|کار\s*می\s*کنم|مطالعه\s*می\s*کنم)', ' ', cleaned)
+    clauses = [s.strip() for s in re.split(r'[.!?؟؛;\n،,]+', cleaned) if s.strip()]
+    buying = re.compile(r'می\s*خوا|لازم\s*دار|نیاز\s*دار|بخر|دنبال')
+    return sorted(clauses, key=lambda s: not bool(buying.search(s))) if prioritize else clauses
 
 
 def _catalogue_words(category_names):
@@ -277,6 +298,11 @@ def multiple_topic_heads(text: str, category_names, identity_words=None) -> bool
             continue
         signature = _mention_signature(tokens, start, sequences, identity_words)
         if signature is not None:
+            # Controls and desired properties of a named phone are not a second
+            # purchase. Keep explicit lists such as "گوشی و دوربین" intact.
+            if detect_category_intent(text)==CAT_MOBILE_PHONE and signature in {'دکمه','صدا'}:
+                if re.search(r'ویژگی|کنار بگذار|درشت|بلند|دکمه\s*ای',normalize_text(text)):
+                    continue
             signatures.append(signature)
     return len(set(signatures)) > 1
 
@@ -338,11 +364,11 @@ def explicit_budget(message: str) -> str | None:
     # An unsupported signed amount is an explicit invalid budget, not absence
     # of a budget. Physical units without a currency are not money phrases.
     sign = r'(?:[-−–+]\s*|(?:منفی|مثبت)\s+)'
-    signed_money = rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){sign}{AMOUNT}\s*(?:تومان|تومن)(?!\w)'
+    signed_money = rf'(?:زیر\s+|حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){sign}{AMOUNT}\s*(?:تومان|تومن)(?!\w)'
     signed_edit = rf'(?:سقف\s+)?{BUDGET_PREFIX}{sign}{AMOUNT}(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر\s+بده|$|[.،؛؟!]))'
     if re.search(signed_money, text) or re.search(signed_edit, text):
         raise ValueError('invalid signed budget')
-    pattern = rf'(?:حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX})(?P<amount>{AMOUNT}\s*(?:تومان|تومن))'
+    pattern = rf'(?:زیر\s+|حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX})(?P<amount>{AMOUNT}\s*(?:تومان|تومن))'
     # The explicit budget field establishes toman, even in a short edit command.
     unitless = rf'(?:سقف\s+)?{BUDGET_PREFIX}(?P<amount>{AMOUNT})(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر\s+بده|$|[.،؛؟!]))'
     amounts = []
@@ -411,7 +437,8 @@ def query_choices(request: AssistantRequest) -> list[str]:
     for message in reversed(request.messages):
         if message.role != 'user':
             continue
-        text = normalize_text(message.content)
+        text = ' ، '.join(product_clauses(message.content, prioritize=False))
+        text = re.sub(r'برای\s+(?:پیاده\s*روی|دویدن|راه\s*رفتن)(?:\s+روزانه)?',' ',text)
         if detect_category_intent(message.content) == CAT_MOBILE_PHONE or (
                 request.context_query is not None and detect_category_intent(request.context_query) == CAT_MOBILE_PHONE
                 and re.match(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب|حداقل|[0-9])|^حداقل\s+', text)):
@@ -496,13 +523,15 @@ def product_span(text: str, category_names, identity_words) -> str | None:
         return None
     cleaned = normalize_text(text)
     if detect_category_intent(text) == CAT_MOBILE_PHONE:
+        if keypad_request(text):
+            return 'گوشی دکمه ای'
         cleaned = strip_capacity_clause(cleaned, AMOUNT)
     cleaned = _strip_budget_phrases(cleaned)
     _, heads = _catalogue_words(category_names)
     sequences = _category_sequences(category_names)
     if not heads:
         return None
-    for segment in re.split(r'[.!?؟؛;\n،,]+', cleaned):
+    for segment in product_clauses(cleaned):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
         for start in (index for index, token in enumerate(tokens) if token in heads):
             if tokens[start] == 'شماره' and _category_prefix_length(tokens, start, sequences) < 2:
