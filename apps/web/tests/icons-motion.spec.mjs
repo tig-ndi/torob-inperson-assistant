@@ -57,19 +57,19 @@ test('favicon and touch icons are unique, resolvable, and internally consistent'
   await page.goto('/');
   const links = await readLinks();
   expect(links.map(link => link.href)).toEqual([
-    '/icons/favicon.svg',
+    '/icons/torob-companion.svg',
     '/favicon.ico',
     '/icons/apple-touch-icon.png',
   ]);
   expect(links.filter(link => link.rel === 'icon')).toHaveLength(2);
   expect(new Set(links.map(link => link.href)).size).toBe(links.length);
 
-  const svgResponse = await request.get('/icons/favicon.svg');
+  const svgResponse = await request.get('/icons/torob-companion.svg');
   expect(svgResponse.status()).toBe(200);
   expect(svgResponse.headers()['content-type']).toContain('image/svg+xml');
   const svg = await svgResponse.text();
-  expect(svg).toContain('viewBox="0 0 64 64"');
-  expect(svg).toContain('#b52331');
+  expect(svg).toContain('viewBox="0 0 112 112"');
+  expect(svg).toContain('#ef334e');
   expect(svg).not.toMatch(/<text\b|font-family|href="https?:/i);
 
   const icoResponse = await request.get('/favicon.ico');
@@ -79,7 +79,7 @@ test('favicon and touch icons are unique, resolvable, and internally consistent'
   expect(ico.readUInt16LE(0)).toBe(0);
   expect(ico.readUInt16LE(2)).toBe(1);
   const count = ico.readUInt16LE(4);
-  expect(count).toBe(3);
+  expect(count).toBe(4);
   const icoSizes = [];
   for (let index = 0; index < count; index += 1) {
     const entry = 6 + index * 16;
@@ -95,7 +95,7 @@ test('favicon and touch icons are unique, resolvable, and internally consistent'
     expect(png.readUInt32BE(20)).toBe(height);
     icoSizes.push(width);
   }
-  expect(icoSizes).toEqual([16, 32, 48]);
+  expect(icoSizes).toEqual([16, 32, 48, 64]);
 
   const appleResponse = await request.get('/icons/apple-touch-icon.png');
   expect(appleResponse.status()).toBe(200);

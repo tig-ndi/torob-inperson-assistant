@@ -258,16 +258,16 @@ test('built version links the favicon assets and survives a real-tab reload', as
     expect(existsSync(path.join(webRoot, 'dist', 'legacy.html'))).toBe(false);
     const readLinks = () => page.evaluate(() =>
       [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')].map(link => link.getAttribute('href')));
-    expect(await readLinks()).toEqual(['/icons/favicon.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
+    expect(await readLinks()).toEqual(['/icons/torob-companion.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
     expect(await page.locator('link[rel="manifest"]').count()).toBe(0);
     const ico = await request.get(`${previewUrl}favicon.ico`);
     expect(ico.status()).toBe(200);
     expect(ico.headers()['content-type']).toMatch(/image\/(x-icon|vnd\.microsoft\.icon)/);
-    const svg = await request.get(`${previewUrl}icons/favicon.svg`);
+    const svg = await request.get(`${previewUrl}icons/torob-companion.svg`);
     expect(svg.status()).toBe(200);
     await page.reload();
     await expect(page.locator('.ub-app')).toBeVisible();
-    expect(await readLinks()).toEqual(['/icons/favicon.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
+    expect(await readLinks()).toEqual(['/icons/torob-companion.svg', '/favicon.ico', '/icons/apple-touch-icon.png']);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.resolve('../../.local/qa/icons-integration-built.png') });
     await page.goto(`${previewUrl}design.html`);

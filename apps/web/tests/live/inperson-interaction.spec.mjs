@@ -33,6 +33,6 @@ test('saved plans require an explicit deletion confirmation and cancel preserves
 });
 
 test('mobile map preview returns to the same draft and uses the shared custom logo',async({page,request})=>{
-  await page.setViewportSize({width:390,height:844});await mockAssistant(page,request);await page.goto('/');await expect(page.locator('.brand-mark')).toHaveAttribute('src','/icons/inperson-mark.svg');await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','/icons/inperson-mark.svg');
+  await page.setViewportSize({width:390,height:844});await mockAssistant(page,request);await page.goto('/');await expect(page.locator('.brand-mark')).toHaveAttribute('src','/icons/torob-companion.svg');await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','/icons/torob-companion.svg');
   const draft='الان شارژر لازم دارم';await page.getByRole('textbox',{name:'پیام به دستیار خرید'}).fill(draft);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await page.locator('.maplibregl-canvas').click({position:{x:190,y:340}});await expect(page.getByRole('button',{name:'این موقعیت من است',exact:true})).toBeVisible();await page.getByRole('button',{name:'این موقعیت من است',exact:true}).click();await expect(page.locator('[data-map-panel]')).toBeHidden();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);await layout(page);await page.screenshot({path:'../../.local/live-qa/inperson-welcome-mobile.png'});
 });

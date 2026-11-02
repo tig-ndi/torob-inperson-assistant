@@ -1099,7 +1099,7 @@ function App() {
     <>
       <header className="header">
         <div className="shell header-inner">
-          <span className="logo" aria-hidden="true">ت</span>
+          <img className="logo" src="/icons/torob-companion.svg" style={{background:"transparent",objectFit:"contain"}} alt="" aria-hidden="true"/>
           <div>
             <p className="site-name">دستیار خرید حضوری</p>
             <p className="header-note">کاتالوگ تهران · پروژهٔ مستقل چالش ترب</p>

@@ -1,1 +1,1 @@
-export default function BrandMark({className=''}:{className?:string}){return <img className={'inperson-mark '+className} src="/icons/inperson-mark.svg" width="44" height="44" alt="" aria-hidden="true"/>;}
+export default function BrandMark({className=''}:{className?:string}){return <img className={'inperson-mark '+className} src="/icons/torob-companion.svg" width="44" height="44" alt="" aria-hidden="true"/>;}
