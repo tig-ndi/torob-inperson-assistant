@@ -8,11 +8,11 @@ for(const width of [320,390,1000,1440])test(`direct theme controls fit and prese
   await draft.fill('پیش از رفتن موجودی را بررسی کنیم');
   await expect(page.getByRole('button',{name:'تنظیمات',exact:true})).toHaveCount(0);
   await expect(app).toHaveClass(/theme-dark/);
-  await page.getByRole('button',{name:'ظاهر روشن',exact:true}).click();await expect(app).toHaveClass(/theme-light/);
-  await page.getByRole('button',{name:'ظاهر تیره',exact:true}).click();await expect(app).toHaveClass(/theme-dark/);
-  await page.getByRole('button',{name:'ظاهر سیستم',exact:true}).click();await page.emulateMedia({colorScheme:'light'});await expect(app).toHaveClass(/theme-light/);
-  await expect(page.getByRole('button',{name:'ظاهر سیستم',exact:true})).toHaveAttribute('aria-pressed','true');
-  await page.getByRole('button',{name:'ظاهر تیره',exact:true}).click();await page.reload();await expect(app).toHaveClass(/theme-dark/);
+  if(width<1000)await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر روشن',exact:true}).click();await expect(app).toHaveClass(/theme-light/);
+  if(width<1000)await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر تیره',exact:true}).click();await expect(app).toHaveClass(/theme-dark/);
+  if(width<1000)await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر سیستم',exact:true}).click();await page.emulateMedia({colorScheme:'light'});await expect(app).toHaveClass(/theme-light/);
+  if(width<1000)await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await expect(page.getByRole('button',{name:'ظاهر سیستم',exact:true})).toHaveAttribute('aria-pressed','true');if(width<1000)await page.keyboard.press('Escape');
+  if(width<1000)await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر تیره',exact:true}).click();await page.reload();await expect(app).toHaveClass(/theme-dark/);
   await expect(draft).toHaveValue('پیش از رفتن موجودی را بررسی کنیم');
   const header=await page.locator('.chat-header').boundingBox();
   for(const button of await page.locator('.chat-header button').all()){
