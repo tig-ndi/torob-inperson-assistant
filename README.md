@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/web/public/icons/inperson-mark.svg" width="64" alt="In-Person Shopping Companion logo">
+  <img src="apps/web/public/icons/torob-companion.svg" width="64" alt="In-Person Shopping Companion logo">
 </p>
 <h1 align="center">In-Person Shopping Companion</h1>
 <p align="center">Find the right shop before you leave — a Persian shopping assistant with an interactive map.</p>
@@ -11,7 +11,8 @@ A continuous journey from describing what you need to comparing nearby shops and
 
 ## What it does
 
-- **Context-aware conversation:** keeps product requirements and budget across follow-up messages and location selection, with compact suggested replies.
+- **Context-aware conversation:** keeps product requirements and budget across follow-up messages and location selection.
+- **Less typing, less clutter:** compact replies adapt to the current shopping step; focused dialogs ask only for the relevant answer while chat and map stay in place.
 - **Connected chat and map:** a floating desktop assistant; full-screen mobile views that preserve your place when switching between conversation and map.
 - **Practical visit planning:** recorded opening hours, distance, walking/driving/cycling routes, arrival estimates, and links to Neshan, Balad and Google Maps.
 - **Useful comparisons:** product specifications, prices and shop details in a dedicated comparison dialog, with differences and reset controls.
@@ -19,7 +20,7 @@ A continuous journey from describing what you need to comparing nearby shops and
 - **Voice and accessible controls:** editable speech transcription, text-to-speech, Persian RTL layout, light/dark themes and touch-friendly actions.
 
 <p align="center">
-  <img src="docs/images/mobile-chat.png" width="240" alt="Mobile shopping conversation">
+  <img src="docs/images/mobile-chat.png" width="240" alt="Mobile welcome and location options">
   <img src="docs/images/mobile-map.png" width="240" alt="Mobile map and shop selection">
 </p>
 
