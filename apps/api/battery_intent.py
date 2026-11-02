@@ -32,8 +32,8 @@ def _clause_update(text: str, current: BatteryRequirement, allow_bare: bool) -> 
     text = _strip_budget_phrases(text).strip()
     mentioned = bool(re.search(r'باتری|باطری|' + UNIT + r'\b', text))
     waiting = current.status == 'awaiting_minimum'
-    keep = re.search(REMOVAL_LABEL + r'حذف\s+(?:نکن(?:ید)?|نشود|نشه)\b', text)
-    remove = re.search(REMOVAL_LABEL + r'حذف\s+(?:بکن(?:ید)?|کن(?:ید)?|شود|بشه)\b', text)
+    keep = re.search(REMOVAL_LABEL + r'(?:حذف\s+(?:نکن(?:ید)?|نشود|نشه)|بر\s*ندار(?:ید)?)\b', text)
+    remove = re.search(REMOVAL_LABEL + r'(?:حذف\s+(?:بکن(?:ید)?|کن(?:ید)?|شود|بشه)|بردار(?:ید)?|(?:فعلا\s+)?فیلتر\s*نکن)\b', text)
     unimportant = re.search(rf'(?:ظرفیت\s+)?{BATTERY_LABEL}\s+(?:(?:دیگه|دیگر|اصلا|برای من)\s+)*(?:مهم نیست|اهمیتی ندارد)\b', text)
     if (keep or remove or unimportant) and re.search(rf'\bحداقل\s+{AMOUNT}', text):
         return BatteryRequirement(status='awaiting_minimum')
@@ -118,4 +118,4 @@ def capacity_followup(request: AssistantRequest) -> bool:
     if len(request.messages) > 1 and matches_question(request.messages[-2].content, 'battery_capacity'):
         if re.fullmatch(rf'{AMOUNT}(?:\s*{UNIT})?[ .،؛؟!]*|بدون حداقل', latest):
             return True
-    return bool(re.search(capacity_clause(AMOUNT), latest) or re.search(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب)|^(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?(?:باتری|باطری).*حذف', latest))
+    return bool(re.search(capacity_clause(AMOUNT), latest) or re.search(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب)|^(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?(?:باتری|باطری).*(?:حذف|بردار|فیلتر\s*نکن)', latest))

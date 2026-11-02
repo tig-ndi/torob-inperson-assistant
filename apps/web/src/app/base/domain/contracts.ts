@@ -58,6 +58,7 @@ export type ProductResults = {
   explanation: Explanation | null;
 };
 export type Explanation = {
+  recommended_product_id?: string | null;
   query: string;
   category_name: string | null;
   max_price_toman: string | null;

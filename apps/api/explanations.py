@@ -10,6 +10,7 @@ from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.intent import AssistantRequest
 from apps.api.models import OfferPage, Product, ProductPage, SearchExplanation
 from tools.prepare_data import normalize_text
+from apps.api.selection import recommend_selection
 
 
 TOPICS = {'camera': 'دوربین', 'battery': 'باتری'}
@@ -117,31 +118,7 @@ def topic_explanation(product: Product, topic: str) -> dict:
 
 
 def selection_summary(page: ProductPage, request: AssistantRequest) -> str:
-    """Name a source-backed starting option, without claiming verified fitness."""
-    if not page.items:
-        return 'با این شرایط، محصولی در داده‌های ثبت‌شده پیدا نشد؛ بودجه یا نوع کالا را تغییر بدهیم.'
-    context = normalize_text(' '.join(m.content for m in request.messages if m.role == 'user'))
-    parent = bool(re.search(r'پدر|مادر|سالمند|دکمه', context))
-    walking = bool(re.search(r'پیاده|دویدن|ورزش', context))
-    footwear=any(re.search(r'کفش|کتانی',p.category_name or '') for p in page.items)
-    if walking and footwear and not re.search(r'مردانه|زنانه|بچگانه|کودک|دخترانه|پسرانه',context):
-        return 'کفش‌های ثبت‌شده در این بودجه پیدا شدند. برای انتخاب مدل پیاده‌روی، کفش مردانه، زنانه یا کودک می‌خواهی؟ بعد سایز و کاربرد ثبت‌شده را بررسی می‌کنیم؛ قیمت کمتر به‌تنهایی راحتی یا تناسب را ثابت نمی‌کند.'
-    def evidence(p):
-        rows=[]
-        for spec in p.specs:
-            key,value=normalize_text(spec.key or ''),normalize_text(spec.value or '')
-            if parent and p.category_name==CAT_MOBILE_PHONE and re.search(r'پشتیبانی از زبان فارسی|کیبورد فارسی',key) and value in {'دارد','بله'}:
-                rows.append(f'{spec.key}: {spec.value}')
-            elif walking and re.search(r'کفش|کتانی|کتونی',p.category_name or '') and re.search(r'کاربرد|مناسب برای',key) and re.search(r'پیاده|دویدن|ورزش',value) and not re.search(r'نیست|ندارد|نامناسب',value):
-                rows.append(f'{spec.key}: {spec.value}')
-        return rows
-    ranked=sorted(page.items,key=lambda p:(-len(evidence(p)),p.offer_summary.min_price_toman is None,int(p.offer_summary.min_price_toman or 0),p.product_id))
-    first=ranked[0]
-    facts=evidence(first)
-    reason='؛ '.join(facts[:2]) if facts else 'در میان نتایج فعلی کمترین قیمت ثبت‌شده را دارد' if first.offer_summary.min_price_toman is not None else 'برای شروع بررسی مشخصات و فروشگاه‌ها'
-    price=f' با قیمت ثبت‌شدهٔ {first.offer_summary.min_price_toman} تومان' if first.offer_summary.min_price_toman is not None else ''
-    caution='اندازهٔ دکمه و بلندی صدا هنوز تأیید نشده؛ این دو مورد را پیش از مراجعه بپرس.' if parent and first.category_name==CAT_MOBILE_PHONE else 'راحتی و سایز را باید پیش از خرید امتحان کنی.' if walking and re.search(r'کفش|کتانی|کتونی',first.category_name or '') else 'تناسب نهایی و موجودی هنوز باید بررسی شوند.'
-    return f'برای شروع بررسی، «{first.persian_title}»{price}: {reason}. {caution} فروشگاه‌ها و گزینه‌های مقایسه پایین در دسترس‌اند.'
+    return recommend_selection(page, request).summary
 
 
 def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str | None, request: AssistantRequest) -> dict:
@@ -150,6 +127,7 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
     except ValidationError as exc:
         raise CatalogueUnavailable('invalid source page') from exc
     topics = review_topics(request, page, query)
+    selection = recommend_selection(page, request)
     products = []
     for product in page.items:
         reasons = [f'این کالا در بازیابی لفظی کاتالوگ برای «{query}» آمده است.']
@@ -157,6 +135,7 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
             if product.category_name != page.category_name:
                 raise CatalogueUnavailable('source category mismatch')
             reasons.append(f'دستهٔ منبع با فیلتر «{page.category_name}» مطابقت دارد.')
+        reasons.extend(selection.evidence.get(product.product_id, []))
         budget_offer = None
         if page.min_battery_capacity_mah is not None:
             capacity = product.battery_capacity
@@ -186,7 +165,7 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
                          'battery_capacity': product.battery_capacity.model_dump() if product.battery_capacity else None})
     result = {'query': query, 'category_name': page.category_name, 'max_price_toman': budget,
               'ranking_basis': 'lexical_match_then_product_id', 'topics': topics,
-              'summary': selection_summary(page, request),
+              'summary': selection.summary, 'recommended_product_id': selection.product_id,
               'limitations': ['تناسب با نیازت فقط با مشخصات ثبت‌شده قابل بررسی است؛ ویژگی ثبت‌نشده را تأیید نمی‌کنیم.',
                               'قیمت و آفر تاریخی‌اند؛ موجودی و پذیرش فروشنده برای مراجعه هنوز باید تأیید شوند.'],
               'products': products, 'provenance': page.provenance.model_dump()}

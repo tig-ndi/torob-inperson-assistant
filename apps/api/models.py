@@ -181,6 +181,7 @@ class ProductExplanation(Model):
 
 
 class SearchExplanation(Model):
+    recommended_product_id: str | None = None
     query: str
     category_name: str | None
     max_price_toman: str | None

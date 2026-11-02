@@ -38,6 +38,25 @@ class JudgingRegressions(unittest.TestCase):
         self.assertEqual(len(self.calls),2)
         self.assertTrue(multiple_topic_heads('گوشی و شارژر می‌خواهم',self.catalogue.category_names(),self.catalogue.identity_words()))
 
+    def test_constraint_control_words_never_override_the_active_product(self):
+        for text,state in [
+            ('سایز را فعلا فیلتر نکن، بودجه همان سه میلیون تومان بماند.',{'version':1,'topic_query':'کفش زنانه','max_price_toman':'3000000','pending_requirements':[{'key':'سایز','source_text':'سایز ۳۸','status':'unsupported'}]}),
+            ('حداقل ظرفیت باتری را بردار، بودجه را حفظ کن.',test_assistant.phone_battery_state(max_price_toman='10000000')),
+        ]:
+            with self.subTest(text=text):
+                result=self.turn(text,state)
+                self.assertEqual(result['query'],state['topic_query'])
+                self.assertEqual(result['status'],'results',result)
+                self.assertEqual(result['need_state']['pending_requirements'],[])
+                self.assertEqual(result['max_price_toman'],state['max_price_toman'])
+                if 'باتری' in text:self.assertEqual(result['battery_requirement']['status'],'no_minimum')
+
+    def test_refused_phone_does_not_displace_the_requested_shoe(self):
+        result=self.turn('گوشی نمی‌خواهم؛ کفش زنانه می‌خواهم تا سه میلیون تومان.')
+        self.assertEqual(result['status'],'results',result)
+        self.assertIn('کفش',result['query'])
+        self.assertNotIn('گوشی',result['query'])
+
     def test_walk_shoe_results_exclude_accessories_and_phone_explanations(self):
         # The provider may correctly propose a search here; the repository still
         # owns product-family exclusions and must not return shoelaces.

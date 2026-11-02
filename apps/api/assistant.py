@@ -25,6 +25,7 @@ from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requ
 from apps.api.visit_intent import is_constraint_followup, has_unsupported_modifier
 from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, is_need_control
 from tools.prepare_data import normalize_text
+from apps.api.purchase_language import affirmative_purchase_text
 
 
 ENDPOINT = "https://ai.boxapi.ir/ai/v1/chat/completions"
@@ -222,11 +223,15 @@ class AssistantService:
             latest_msg = request.messages[-1].content
             latest_has_capacity_unit = bool(re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)))
             capacity_reply = capacity_followup(request)
-            latest_category = detect_category_intent(latest_msg)
+            latest_category = detect_category_intent(affirmative_purchase_text(latest_msg))
             category_names = await asyncio.to_thread(self.catalogue.category_names)
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
             latest_span = product_span(latest_msg, category_names, identity_words)
-            coordinated = multiple_topic_heads(latest_msg, category_names, identity_words)
+            context_control = bool(request.context_query and is_need_control(latest_msg, include_ack=True)
+                                   and not re.search(r'(?<![\wن])می\s*(?:خواهم|خوام)(?!\w)|دنبال|بخر', normalize_text(latest_msg)))
+            if context_control:
+                latest_span, latest_category = None, None
+            coordinated = multiple_topic_heads(affirmative_purchase_text(latest_msg), category_names, identity_words)
             contact_requested = is_contact_request(latest_msg, category_names)
             # The active product is the latest grounded span. If the stored topic
             # itself is polluted and the new message only refines it, recover the
@@ -363,7 +368,7 @@ class AssistantService:
             # Host intercept: guarantee clarification for ambiguous requests lacking a target device,
             # including a premature model budget question. An uncertain explicit amount
             # keeps its budget clarification; never call the model a second time.
-            routing_message = plan.query if plan.query and capacity_reply and latest_category is None and has_phone_context else ' ؛ '.join(product_clauses(latest_msg))
+            routing_message = plan.query if plan.query and (context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
             if not budget_uncertain and (
                 is_ambiguous_product_intent(
                     routing_message,

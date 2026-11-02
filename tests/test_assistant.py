@@ -486,7 +486,7 @@ class AssistantApiTests(unittest.TestCase):
             ambiguous = self.post(body('شارژر می‌خواهم')).json()
             multi = self.post(body('کفش و گوشی')).json()
         self.assertEqual(ambiguous['status'], 'needs_input')
-        self.assertEqual(ambiguous['question'], QUESTIONS['product_kind'])
+        self.assertEqual(ambiguous['question'], CHARGER_DEVICE_QUESTION)
         self.assertIsNone(ambiguous['query'])
         self.assertIsNone(ambiguous['products'])
         self.assertEqual(multi['status'], 'needs_input')

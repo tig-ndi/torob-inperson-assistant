@@ -67,3 +67,10 @@ test('followup retains IDs and rejects sending/contact claims and unrelated alte
   assert.throws(() => parseAlternatives({ ...alternatives(), alternatives: offers([offer()]) }));
   assert.throws(() => parseAlternatives({ ...alternatives(), outcome: { ...alternatives().outcome, seller_confirmation: true } }));
 });
+
+test('recommendation must identify an actual product in the same response',()=>{
+  const data=turn();data.explanation.recommended_product_id='missing-product';
+  assert.throws(()=>parseTurn(data,requestId));
+  data.explanation.recommended_product_id=data.products.items[0].product_id;
+  assert.equal(parseTurn(data,requestId).explanation.recommended_product_id,data.products.items[0].product_id);
+});

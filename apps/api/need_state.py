@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from apps.api.models import PendingRequirement, AssistantNeedState, BatteryRequirement
 from apps.api.category import detect_category_intent
+from apps.api.purchase_language import affirmative_purchase_text
 from tools.prepare_data import normalize_text
 
 if TYPE_CHECKING:
@@ -50,8 +51,8 @@ class PendingUpdate:
 def is_need_control(text: str, *, include_ack: bool = False) -> bool:
     text = normalize_text(text)
     return (text in GENERIC_RELEASE | ALL_RELEASE or include_ack and text in CONTINUE or
-            bool(re.search(r'(?:حذف|بردار|مهم نیست|بی خیال|صرف نظر)', text)
-                 and (FIELD_PATTERN.search(text) or 'فاصله' in text
+            bool(re.search(r'(?:حذف|بردار|مهم نیست|بی خیال|صرف نظر|فیلتر نکن|اعمال نکن|در نظر نگیر|کنار بگذار)', text)
+                 and (FIELD_PATTERN.search(text) or re.search(r'حداقل\s+(?:ظرفیت\s+)?(?:باتری|باطری)',text) or 'فاصله' in text
                       or 'شرط' in text and ('اجرا نشده' in text or 'حل نشده' in text))))
 
 
@@ -81,7 +82,8 @@ def update_pending(items: list[PendingRequirement], text: str) -> PendingUpdate:
             tail = clause[match.start():matches[index + 1].start() if index + 1 < len(matches) else len(clause)]
             denied = bool(re.search(r'حذف\s*نکن|بر\s*ندار', tail)
                           or re.search(field + r'(?:همون|همان|قبلی|حفظ\s*کن|نگه\s*دار|تغییر\s*نده)', clause))
-            removed = bool(re.search(field + r'(?:حذف\s*کن(?:ید)?|بردار(?:ید)?|مهم\s*نیست)', clause)
+            ignored = bool(re.search(field + r'(?:(?:فعلا|موقتا|الان)\s+)*(?:فیلتر\s*نکن|اعمال\s*نکن|در\s*نظر\s*نگیر|کنار\s*بگذار)(?!\w)',clause))
+            removed = ignored or bool(re.search(field + r'(?:حذف\s*کن(?:ید)?|بردار(?:ید)?|مهم\s*نیست)', clause)
                            or re.search(r'(?:بی\s*خیال|صرف\s*نظر\s*از)\s+' + literal + r'(?!\w)', clause)
                            or re.search(literal + r'(?:\s+\S+){0,2}\s+(?:برام\s+|برای\s+من\s+)?'
                                         r'مهم\s*نیست', clause))
@@ -132,7 +134,7 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     changed = False
     if query and old_topic and normalize_text(query) != normalize_text(old_topic):
         old_category = request.context_category or detect_category_intent(old_topic)
-        new_category = detect_category_intent(query) or detect_category_intent(request.messages[-1].content)
+        new_category = detect_category_intent(query) or detect_category_intent(affirmative_purchase_text(request.messages[-1].content))
         if old_category is not None and new_category == old_category:
             changed = False
         elif old_category and await asyncio.to_thread(catalogue.matches_identity, query, old_category):

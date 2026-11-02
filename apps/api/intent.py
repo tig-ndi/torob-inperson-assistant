@@ -13,6 +13,7 @@ from apps.api.battery import strip_capacity_clause
 from apps.api.models import BatteryRequirement, AssistantNeedState
 from apps.api.need_state import is_need_control
 from apps.api.visit_intent import is_constraint_followup, wants_nearest
+from apps.api.purchase_language import affirmative_purchase_text
 from tools.prepare_data import normalize_text
 
 
@@ -43,7 +44,7 @@ CHARGER_DEVICE_QUESTION = 'شارژر را برای چه دستگاهی می‌�
 
 def question_prompt(code: str, contact: bool = False, topic: str | None = None) -> str:
     normalized = normalize_text(topic or '')
-    message = CHARGER_DEVICE_QUESTION if code == 'product_kind' and normalized.startswith('شارژر ') and not re.search(r'گوشی|موبایل|تبلت|لپ', normalized) else QUESTIONS[code]
+    message = CHARGER_DEVICE_QUESTION if code == 'product_kind' and normalized.startswith('شارژر') and not re.search(r'گوشی|موبایل|تبلت|لپ', normalized) else QUESTIONS[code]
     return f'{CONTACT_LIMITATION} {message}' if contact else message
 
 
@@ -131,7 +132,7 @@ SCALES = {"هزار": 1000, "میلیون": 10**6, "میلیارد": 10**9}
 NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES, 'و'])
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
-BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر))*\s*:?\s+'
+BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
 QUERY_STOPWORDS = frozenset('هر روز زیر حضوری من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
 GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
 MAX_TOPIC_WORDS = 4
@@ -151,7 +152,7 @@ def product_clauses(text: str, prioritize: bool = True) -> list[str]:
     A quantified duration followed by an activity is usage context. A request
     for a watch (e.g. 'یک ساعت هوشمند می‌خواهم') must remain a product.
     """
-    cleaned = normalize_text(text)
+    cleaned = affirmative_purchase_text(text)
     cleaned = re.sub(rf'ساعت\s+(?:[0-9]{{1,2}}[:٫.][0-9]{{2}}|{AMOUNT}(?:\s+و\s+(?:نیم|ربع))?)\s*(?:صبح|ظهر|عصر|شب|امشب)(?:\s+(?:است|هست))?', ' ', cleaned)
     cleaned = re.sub(rf'(?:{AMOUNT}|نیم)\s+(?:ساعت|دقیقه)\s+(?:وقت|فرصت)\s*دارم', ' ', cleaned)
     cleaned = re.sub(rf'(?:هر\s+روز\s+|روزانه\s+)?{AMOUNT}\s+(?:ساعت|دقیقه)\s+(?:پیاده\s*روی|راه\s*رفتن|دویدن|می\s*دوم|کار\s*می\s*کنم|مطالعه\s*می\s*کنم)', ' ', cleaned)
@@ -391,6 +392,8 @@ def proposed_budget(plan: IntentPlan, request: AssistantRequest) -> str | None:
     if explicit is not None:
         return explicit
     text = normalize_text(latest)
+    if re.search(r'بودجه.*(?:حفظ\s*کن|نگه\s*دار|همان.*بماند|همون.*بمونه)', text) and not re.search(r'تغییر|کمتر|بیشتر|کاهش|افزایش', text):
+        return request.max_price_toman
     if re.search(r'ارزان\s*تر|ارزون\s*تر|گران\s*تر|گرون\s*تر', text) or re.search(r'\bبودجه\b.*(?:کن|تغییر|کمتر|بیشتر|ریال)', text):
         raise ValueError('budget change requires an explicit toman amount')
     if re.search(r'(?:بودجه|حداکثر|تا).*ریال', text):
@@ -438,6 +441,7 @@ def query_choices(request: AssistantRequest) -> list[str]:
         if message.role != 'user':
             continue
         text = ' ، '.join(product_clauses(message.content, prioritize=False))
+        text = re.sub(r'(?:بقیه|سایر)\s+(?:ی\s+)?شرایط(?:\s+(?:همان|همون|قبلی|باشد|باشه|بماند|بمونه|حفظ|کن|را|رو|نگه|دار))*', ' ', text)
         text = re.sub(r'برای\s+(?:پیاده\s*روی|دویدن|راه\s*رفتن)(?:\s+روزانه)?',' ',text)
         if detect_category_intent(message.content) == CAT_MOBILE_PHONE or (
                 request.context_query is not None and detect_category_intent(request.context_query) == CAT_MOBILE_PHONE
@@ -521,11 +525,13 @@ def product_span(text: str, category_names, identity_words) -> str | None:
     """
     if not text or not isinstance(text, str):
         return None
-    cleaned = normalize_text(text)
-    if detect_category_intent(text) == CAT_MOBILE_PHONE:
+    cleaned = affirmative_purchase_text(text)
+    if detect_category_intent(cleaned) == CAT_MOBILE_PHONE:
         if keypad_request(text):
             return 'گوشی دکمه ای'
         cleaned = strip_capacity_clause(cleaned, AMOUNT)
+    semantic_category = detect_category_intent(cleaned)
+    accessory_head = semantic_category.split()[0] if semantic_category and semantic_category.startswith(('شارژر','باتری','کیف','محافظ','پایه','تاچ')) else None
     cleaned = _strip_budget_phrases(cleaned)
     _, heads = _catalogue_words(category_names)
     sequences = _category_sequences(category_names)
@@ -534,6 +540,8 @@ def product_span(text: str, category_names, identity_words) -> str | None:
     for segment in product_clauses(cleaned):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
         for start in (index for index, token in enumerate(tokens) if token in heads):
+            if accessory_head and tokens[start]!=accessory_head:
+                continue
             if tokens[start] == 'شماره' and _category_prefix_length(tokens, start, sequences) < 2:
                 # A bare or contact-style 'شماره' is not a catalogue product;
                 # keep looking for a later real product in the same clause.

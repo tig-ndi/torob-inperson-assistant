@@ -80,7 +80,7 @@ export function parseOffers(value: unknown): OfferPage {
 function parseExplanation(value: unknown): Explanation | null {
   if (value === null) return null;
   const e = record(value); provenance(e.provenance);
-  return { query: text(e.query, 120), category_name: nullableText(e.category_name), max_price_toman: money(e.max_price_toman),
+  return { recommended_product_id:e.recommended_product_id==null?null:identifier(e.recommended_product_id), query: text(e.query, 120), category_name: nullableText(e.category_name), max_price_toman: money(e.max_price_toman),
     ranking_basis: oneOf(e.ranking_basis, ['lexical_match_then_product_id']),
     topics: list(e.topics, x => oneOf(x, topics), 2), summary: text(e.summary),
     limitations: list(e.limitations, x => text(x), 30),
@@ -123,6 +123,7 @@ export function parseTurn(value: unknown, requestId: string): AssistantTurn {
       (status !== 'needs_input' && (!query || question !== null || question_code !== null || products === null)) ||
       (status === 'results' && products?.items.length === 0) || (status === 'no_evidence' && products?.items.length !== 0) ||
       need_state.offer_sort !== offer_sort || JSON.stringify(need_state.battery_requirement) !== JSON.stringify(battery_requirement)) throw new ContractError();
+  if(explanation?.recommended_product_id&&!products?.items.some(p=>p.product_id===explanation.recommended_product_id))throw new ContractError();
   return { request_id: requestId, status, query, category_name, max_price_toman, question, question_code,
     products, need_state, offer_sort, battery_requirement, explanation };
 }
