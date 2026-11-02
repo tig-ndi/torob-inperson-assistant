@@ -13,7 +13,8 @@ test('arrival closing risk changes the decision; exact large prices keep their o
 });
 test('explicit local visit conditions preserve exact budget and do not swallow product features',()=>{
  assert.deepEqual(visitPreferences('شارژر نزدیک من زیر ۱.۵ میلیون تومان فقط فروشگاه باز و قسطی'),{open:true,credit:true,max:'1500000'});
- assert.equal(visitIntent('شارژر نزدیک من زیر ۱.۵ میلیون تومان فقط فروشگاه باز',null).topic,'شارژر');
+ assert.equal(visitIntent('شارژر نزدیک من زیر ۱.۵ میلیون تومان فقط فروشگاه باز',null),null);
+ assert.equal(visitIntent('شارژر موبایل نزدیک من زیر ۱.۵ میلیون تومان فقط فروشگاه باز',null).topic,'شارژر موبایل');
  assert.equal(visitIntent('شارژر رنگ آبی نزدیک من زیر ۲ میلیون تومان',null),null);
  assert.equal(visitIntent('هدفون نزدیک من تا دو کیلومتر',null).nearbyKm,2);
 });

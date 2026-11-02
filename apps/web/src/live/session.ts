@@ -13,6 +13,7 @@ const visit=(v:unknown)=>{const i=record(v),clock=i.localTime;if(clock!==null&&(
 const offers=(v:unknown)=>parseOfferPage({items:list(v,x=>{if(record(x).inventory_status!=='unconfirmed')throw new Error('stock');return x;},500),has_more:false,provenance:{currency:'toman',inventory_status:'unconfirmed'},hours_evaluated_at:new Date().toISOString()}).items;
 const recent=(v:unknown)=>{const r=record(v);return {id:text(r.id,100),query:text(r.query,1000),page:parseCataloguePage(r.page),need:nullable(parseNeedState)(r.need),filters:filters(r.filters),assistant:bool(r.assistant),visit:nullable(visit)(r.visit),createdAt:text(r.createdAt,100)};};
 const parsers={
+  purchaseQueue:(v:unknown)=>list(v,x=>text(x,120),10),
   mode:(v:unknown)=>oneOf(v,['walking','driving','cycling','manual']),duration:(v:unknown)=>text(v,3),
   screen:(v:unknown)=>oneOf(v,['home','decide','results','stores','compare','contact','trip']),
   filters,position:nullable(position),query:(v:unknown)=>text(v,1000),draft:(v:unknown)=>text(v,1000),

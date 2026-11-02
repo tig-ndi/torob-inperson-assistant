@@ -1,8 +1,11 @@
-import {digits,distance,fa,type VisitInsights,type Filters} from './data.ts';
+import {digits,distance,fa,type VisitInsights} from './data.ts';
+import {sellerPreferences as visitPreferences} from './sellerPreferences.ts';
+import {purchaseTopics} from './requestPlanning.ts';
+export {sellerPreferences as visitPreferences} from './sellerPreferences.ts';
 export type ChatEntry = {id:string;role:'user'|'assistant';text:string;kind?:'message'|'action'};
 export type VisitIntent = {topic:string;nearbyKm:number;localTime:string|null;reuseProduct?:boolean};
 export function visitClock(text:string):string|null {
-  const input=digits(text).replace(/ي/g,'ی').replace(/ك/g,'ک');
+  const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');
   let localTime:string|null=null;
   const clock=input.match(/(?:ساعت)?(\d{1,2})[:٫.](\d{2})/);
   const hourWords:Record<string,number>={'دوازده':12,'یازده':11,'ده':10,'نه':9,'هشت':8,'هفت':7,'شش':6,'پنج':5,'چهار':4,'سه':3,'دو':2,'یک':1};
@@ -11,13 +14,15 @@ export function visitClock(text:string):string|null {
   return localTime;
 }
 export function visitIntent(text:string,context:string|null):VisitIntent|null {
-  const input=digits(text).replace(/ي/g,'ی').replace(/ك/g,'ک');
+  const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');
   if(!/نزدیک|اطراف|حضوری|الان.*باز|فروشگاه.*باز|شب|کیلومتر|کجا.*بخر/.test(input))return null;
   // Leave additional product/payment requirements to the bounded intent interpreter.
   if(/رنگ|سایز|دوربین|حافظه|گارانتی|سامسونگ|شیائومی|آیفون|اپل|نوکیا|هانوفر|دکمه|سالمند|پدر|مادر|باتری|باطری|سبک|درشت|بلند|مناسب|ضد|پیاده.?روی|تایپ.?سی|نوع.?سی|فردا|دیروز|هفته|شنبه|جمعه|[a-z]/i.test(input))return null;
   if(/تومان|تومن|میلیون|میلیارد|بودجه/.test(input)&&!visitPreferences(text).max)return null;
+  if(purchaseTopics(text).length>1||/نمی.?خوا(?:هم|م)|نمی.?خوام/.test(text))return null;
   const topics=['قاب گوشی','کاور گوشی','کیف گوشی','شارژر موبایل','شارژر گوشی','شارژر','کابل شارژ','هدفون','گوشی','موبایل','کفش','لپ تاپ','لپ‌تاپ','باتری','پاوربانک'];
   const explicit=topics.find(t=>input.includes(digits(t)));
+  if(explicit==='شارژر')return null; // Ask for the device instead of mixing medical/laptop adapters.
   const topic=explicit==='شارژر گوشی'?'شارژر موبایل':explicit??context;
   if(!topic)return null;
   const localTime=visitClock(text);
@@ -27,20 +32,6 @@ export function visitIntent(text:string,context:string|null):VisitIntent|null {
   const word=Object.keys(words).find(w=>input.includes(w+'کیلومتر'));
   const nearbyKm=radius?Math.max(0.1,Math.min(50,Number(radius[1]))):word?words[word]!:2;
   return {topic,nearbyKm,localTime,reuseProduct:!explicit&&!!context};
-}
-
-// Only explicit, executable seller constraints are translated locally. Product
-// features remain with the bounded interpreter instead of being silently dropped.
-export function visitPreferences(text:string):Partial<Filters>{
-  const input=digits(text),result:Partial<Filters>={};
-  if(/فقط(?:فروشگاه|مغازه)?(?:های)?باز|فقطباز/.test(input))result.open=true;
-  if(/(?:خرید)?قسطی|اعتباری/.test(input))result.credit=true;
-  if(/ترب.?پی/.test(input))result.pay=true;
-  if(/کالابرگ/.test(input))result.kala=true;
-  if(/ارسالفوری/.test(input))result.fast=true;
-  const price=input.match(/(?:زیر|حداکثر|بودجه(?:ام)?|تا)(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
-  if(price){const [whole,fraction='']=price[1]!.split('.'),multiplier=price[2]==='میلیارد'?1000000000n:price[2]==='میلیون'?1000000n:1n,scale=10n**BigInt(fraction.length),value=(BigInt(whole!)*scale+BigInt(fraction||'0'))*multiplier;if(value%scale===0n&&value/scale<=9223372036854775807n)result.max=String(value/scale);}
-  return result;
 }
 
 export function visitGuidance(v:VisitInsights,_label:string){
