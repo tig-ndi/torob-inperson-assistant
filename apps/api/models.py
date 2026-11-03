@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from apps.api.hours import HoursReason, HoursStatus
 from apps.api.credit import CreditReason, CreditStatus, OptionReason
 from apps.api.battery import MAX_CAPACITY_MAH
+from apps.api.source_filters import SourceFilters
 
 
 class Model(BaseModel):
@@ -73,6 +74,8 @@ class PendingRequirement(Model):
 
 
 class AssistantNeedState(Model):
+    source_filters: SourceFilters = Field(default_factory=SourceFilters)
+    reference_product_id: str | None = Field(default=None,min_length=1,max_length=120)
     version: int = Field(default=1, ge=1, le=1)
     topic_query: str | None = Field(default=None, min_length=1, max_length=120)
     category_name: str | None = Field(default=None, min_length=1, max_length=120)

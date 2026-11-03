@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from apps.api.intent import AssistantRequest
 
 
-FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی', 'سیستم عامل')
+FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی', 'سیستم عامل', 'درگاه')
 GENERIC_RELEASE = {'بدون این شرط', 'بدون این فیلتر'}
 ALL_RELEASE = {'همه شرط های اجرا نشده را حذف کن', 'همه شرط های حل نشده را حذف کن',
                'همه فیلترهای اجرا نشده را حذف کن'}
@@ -80,7 +80,15 @@ def update_pending(items: list[PendingRequirement], text: str, *, supported_fiel
             return PendingUpdate([], controlled=True)
         return PendingUpdate(list(items), 'requirement_choice', True)
     updated = {normalize_text(item.key): item for item in items if item.key not in supported_fields}
-    if referenced_colour(cleaned) and not re.search(r'(?<!\w)رنگ(?:ش|اش)?(?!\w)', cleaned):
+    if 'رنگ' not in supported_fields and referenced_colour(cleaned) and not re.search(r'(?<!\w)رنگ(?:ش|اش)?(?!\w)', cleaned):
+        updated['رنگ'] = PendingRequirement(key='رنگ', source_text=text)
+    if re.search(r'(?<!\w)سبک(?:\s+باشد|\s+باشه|\s+می|\s+و|$)', cleaned):
+        updated['وزن'] = PendingRequirement(key='وزن', source_text=text)
+    from apps.api.source_filters import connector
+    if 'درگاه' not in supported_fields and connector(cleaned):
+        updated['درگاه'] = PendingRequirement(key='درگاه', source_text=text)
+    from apps.api.source_filters import COLOURS
+    if any(re.search(re.escape(colour) + r'(?:ش)?\s+(?:(?:را|رو)\s+)?(?:نباش|نمی\s*خوا|نمیخوام)', cleaned) for colour in COLOURS):
         updated['رنگ'] = PendingRequirement(key='رنگ', source_text=text)
     controlled = False
     operations: dict[str, set[str]] = {}
@@ -174,18 +182,35 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     topic = query or old_topic
     semantic_category = category or (None if changed else request.context_category)
     latest = request.messages[-1].content
+    from apps.api.source_filters import SourceFilters, edited_filters, FIELD_NAMES, requested_filters
+    previous = request.context_need_state.source_filters if request.context_need_state and not changed else SourceFilters()
+    supported = []
+    if topic:
+        wanted=set(requested_filters(latest)) | {key for key,value in previous.model_dump().items() if value is not None}
+        for field in wanted:
+            if await asyncio.to_thread(catalogue.supports_source_field, topic, semantic_category, field):
+                supported.append(field)
+    source_filters = edited_filters(previous, latest, lambda field: field in supported, has_pending=bool(pending))
+    accepted_fields = tuple(FIELD_NAMES[field] for field in supported if getattr(source_filters, field) is not None)
     supported_platform = semantic_category == 'گوشی موبایل' and operating_system(latest) and operating_system(topic or '') and not negated_operating_system(latest)
-    update = update_pending(pending, latest, supported_fields=('سیستم عامل',) if supported_platform else ()) if topic else PendingUpdate([])
+    update = update_pending(pending, latest, supported_fields=accepted_fields + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
     if topic and negated_operating_system(latest):
         by_key = {item.key:item for item in update.items}
         by_key['سیستم عامل'] = PendingRequirement(key='سیستم عامل',source_text=latest)
         update = PendingUpdate(list(by_key.values()), update.clarification, update.controlled) if len(by_key)<=8 else PendingUpdate(update.items,'requirement_limit',True)
+    reference = request.reference_product_id or (request.context_need_state.reference_product_id if request.context_need_state else None)
+    if changed or query and old_topic and query != old_topic and not is_constraint_followup(latest):
+        reference = request.reference_product_id
     resolved = AssistantNeedState(
-        topic_query=topic, category_name=semantic_category,
+        reference_product_id=reference,
+        source_filters=source_filters, topic_query=topic, category_name=semantic_category,
         category_cleared=request.category_cleared if category is None else False,
         max_price_toman=budget, offer_sort=offer_sort, battery_requirement=battery,
         budget_needs_input=budget_needs_input,
         review_topics=requested_review_topics(request) if semantic_category == 'گوشی موبایل' or detect_category_intent(topic) == 'گوشی موبایل' else [],
         pending_requirements=update.items,
     )
-    return NeedResolution(resolved, update.clarification, update.controlled)
+    clarification=update.clarification
+    if generic_release(latest) and not pending and sum(v is not None for v in previous.model_dump().values())>1:
+        clarification='requirement_choice'
+    return NeedResolution(resolved, clarification, update.controlled)

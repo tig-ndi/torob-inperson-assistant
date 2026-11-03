@@ -87,6 +87,12 @@ def decode_list(raw: str | None) -> list:
 
 
 class Catalogue:
+    def supports_source_field(self, query, category, field):
+        from apps.api.source_filters import recorded_values
+        with self.connect() as db:
+            db.create_function('field_present', 1, lambda raw: int(bool(recorded_values(raw, field))), deterministic=True)
+            return db.execute('SELECT 1 FROM product_search JOIN products p ON p.product_id=product_search.product_id WHERE product_search MATCH ? AND (? IS NULL OR p.category_name=?) AND field_present(p.specs)=1 LIMIT 1', (retrieval_expression(query), category, category)).fetchone() is not None
+
     def __init__(self, database: Path):
         self.database = database.resolve()
 
@@ -169,12 +175,14 @@ class Catalogue:
     def search(self, query: str, limit: int, offset: int, max_price: int | None,
                category_name: str | None = None, min_battery_capacity_mah: int | None = None,
                *, user_lat: float | None = None, user_lon: float | None = None,
-               sort_by: str = 'relevance') -> dict:
+               sort_by: str = 'relevance', source_filters=None, ranking_context='', reference_product_id=None) -> dict:
         if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
         expression = retrieval_expression(query)
         with self.connect() as connection:
             provenance = self.provenance(connection)
+            from apps.api.source_filters import matches_source_filters
+            connection.create_function('source_filter', 1, lambda raw: matches_source_filters(raw, source_filters or {}), deterministic=True)
             @lru_cache(maxsize=1024)
             def capacity(category, raw):
                 return assess_capacity(category, decode_list(raw))
@@ -189,18 +197,20 @@ class Catalogue:
                 params.extend([user_lat, user_lon, max_price, max_price])
             connection.create_function('matches_product_kind',4,matches_product_kind,deterministic=True)
             connection.create_function('preference_rank',2,preference_rank,deterministic=True)
-            params.extend([expression,query,category_name,category_name,max_price,max_price])
+            from apps.api.recorded_preferences import recorded_preference_score
+            connection.create_function('source_rank',2,lambda cat,raw: recorded_preference_score(cat,raw,ranking_context),deterministic=True)
+            params.extend([expression,query,reference_product_id,reference_product_id,category_name,category_name,max_price,max_price])
             if min_battery_capacity_mah is not None:
                 params.extend(['گوشی موبایل', min_battery_capacity_mah])
             if sort_by != 'nearest':params.append(query)
             params.extend([limit + 1, offset])
             nearest_clause = 'AND nearest_distance IS NOT NULL ' if sort_by == 'nearest' else ''
-            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'preference_rank(?,p.category_name),product_search.rank,p.product_id'
+            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'source_rank(p.category_name,p.specs) DESC,preference_rank(?,p.category_name),product_search.rank,p.product_id'
             rows = connection.execute(
                 "SELECT p.* " + nearest_select + " FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
-                "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs)=1 "
-                "AND (? IS NULL OR p.category_name = ?) "
+                "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs)=1 AND source_filter(p.specs)=1 "
+                "AND (? IS NULL OR p.product_id=?) AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
                 "AND o.price_toman<=?)) " + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",
                 params).fetchall()

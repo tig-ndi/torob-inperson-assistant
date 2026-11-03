@@ -27,6 +27,7 @@ from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, i
 from tools.prepare_data import normalize_text
 from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import platform_topic
+from apps.api.models import BatteryRequirement
 
 
 ENDPOINT = "https://ai.boxapi.ir/ai/v1/chat/completions"
@@ -47,7 +48,7 @@ specifications. Do not drop an operating system to search generic cheap phones.
 Keep this topic for a budget-only follow-up. A newly named product replaces the old topic.
 Also keep the product type/brand/model for follow-ups that add a colour, size,
 material or seller/location preference; these words are not a new product name.
-Only battery capacity and nearest-seller ordering are executable added criteria here.
+Recorded operating system, colour, shoe size and connector can also be validated by the host. Never claim availability of a variant or device/protocol compatibility from a connector alone.
 For requested colour/size/material/warranty or other unsupported filters, clarify
 unsupported_filter, keeping the previous product query when present; never silently
 claim the filter was applied. Even if nearest is also requested, do not drop the
@@ -145,6 +146,7 @@ class BoxProvider:
             {"role": "user", "content": json.dumps({"history": [m.model_dump() for m in request.messages],
                                                      "active_budget_toman": request.max_price_toman,
                                                      "context_query": request.context_query,
+                                                     "source_filters": request.context_need_state.source_filters.model_dump() if request.context_need_state else {},
                                                      "pending_requirements": [item.model_dump() for item in request.context_need_state.pending_requirements] if request.context_need_state else [],
                                                      "battery_requirement": request.context_battery_requirement.model_dump() if request.context_battery_requirement else None,
                                                      "query_choices": choices}, ensure_ascii=False)}],
@@ -229,10 +231,12 @@ class AssistantService:
             latest_msg = request.messages[-1].content
             latest_has_capacity_unit = bool(re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)))
             capacity_reply = capacity_followup(request)
-            latest_category = detect_category_intent(affirmative_purchase_text(latest_msg))
+            from apps.api.purchase_context import refines_purchase
+            refinement = refines_purchase(latest_msg, request.context_query, request.context_category)
+            latest_category = None if refinement else detect_category_intent(affirmative_purchase_text(latest_msg))
             category_names = await asyncio.to_thread(self.catalogue.category_names)
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
-            latest_span = product_span(latest_msg, category_names, identity_words)
+            latest_span = None if refinement else product_span(latest_msg, category_names, identity_words)
             if (request.context_query and is_constraint_followup(latest_msg)
                     and latest_category is None and field_only_topic(latest_span, category_names)):
                 # A large catalogue also contains categories beginning with
@@ -243,7 +247,9 @@ class AssistantService:
                                    and not re.search(r'(?<![\wن])می\s*(?:خواهم|خوام)(?!\w)|دنبال|بخر', normalize_text(latest_msg)))
             if context_control:
                 latest_span, latest_category = None, None
-            coordinated = multiple_topic_heads(affirmative_purchase_text(latest_msg), category_names, identity_words)
+            coordinated = not refinement and multiple_topic_heads(affirmative_purchase_text(latest_msg), category_names, identity_words)
+            if refinement:
+                plan = IntentPlan(action='search', query=normalize_text(request.context_query), budget_text=plan.budget_text, question=None)
             contact_requested = is_contact_request(latest_msg, category_names)
             # The active product is the latest grounded span. If the stored topic
             # itself is polluted and the new message only refines it, recover the
@@ -332,6 +338,9 @@ class AssistantService:
                         or await asyncio.to_thread(
                             self.catalogue.matches_identity, plan.query, 'گوشی موبایل'))
             requirement = resolve_requirement(request, battery_phone)
+            if (refinement and request.context_battery_requirement and request.context_battery_requirement.status=='awaiting_minimum'
+                    and re.search(r'دوام|شارژدهی|مهم|اولویت', normalize_text(latest_msg))):
+                requirement = BatteryRequirement(status='no_minimum')
             if battery_phone and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'} and plan.query is None:
                 query = authoritative or next(iter(query_choices(request)), None)
                 if query:
@@ -348,6 +357,8 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='budget')
                 budget = request.max_price_toman
                 budget_uncertain = True
+            if not budget_uncertain and plan.action=='clarify' and plan.question=='priority' and latest_span and not coordinated:
+                plan=IntentPlan(action='search',query=latest_span,budget_text=None,question=None)
             if not budget_uncertain and plan.action == 'clarify' and plan.question == 'budget':
                 if coordinated:
                     # No single topic exists for a coordinated/list request; keep
@@ -380,7 +391,7 @@ class AssistantService:
             # Host intercept: guarantee clarification for ambiguous requests lacking a target device,
             # including a premature model budget question. An uncertain explicit amount
             # keeps its budget clarification; never call the model a second time.
-            routing_message = plan.query if plan.query and (context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
+            routing_message = plan.query if plan.query and (refinement or context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
             if not budget_uncertain and (
                 is_ambiguous_product_intent(
                     routing_message,
@@ -511,6 +522,7 @@ class AssistantService:
                     topic = needs.state.topic_query
                     grounded = topic is not None and (
                         detect_category_intent(topic) is not None
+                        or product_span(topic, category_names, identity_words) == topic
                         or any(token in identity_words or any(character.isdigit() for character in token)
                                or token.isascii()
                                for token in re.findall(r'[^\W_]+', topic, flags=re.UNICODE)))
@@ -525,6 +537,12 @@ class AssistantService:
                         plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
                         effective_category = (None if needs.state.category_cleared
                                               else needs.state.category_name)
+            from apps.api.purchase_context import accessory_target
+            if (not budget_uncertain and (needs.state.category_name or '').startswith('شارژر')
+                    and needs.state.source_filters.connector is None
+                    and accessory_target(' '.join(m.content for m in request.messages if m.role=='user'))
+                    and not needs.state.pending_requirements):
+                plan = IntentPlan(action='clarify', query=needs.state.topic_query, budget_text=None, question='connector')
             if plan.action == 'clarify' and plan.question == 'budget':
                 # The clarification must describe the valid topic/category the final
                 # state keeps; an invalid amount still blocks every search.
@@ -571,12 +589,17 @@ class AssistantService:
                     0,
                     int(budget) if budget is not None else None,
                     category_name=effective_category,
+                    source_filters=needs.state.source_filters.model_dump(),
+                    reference_product_id=needs.state.reference_product_id,
+                    ranking_context=' '.join(m.content for m in request.messages if m.role=='user'),
                     min_battery_capacity_mah=requirement.minimum_mah,
                     **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
                        if offer_sort == 'nearest' else {}),
                 )
             explanation = await asyncio.to_thread(
                 explain_search, self.catalogue, page, plan.query, budget, request) if page is not None else None
+            if explanation is not None and page is not None and not page['items'] and any(needs.state.source_filters.model_dump().values()):
+                explanation['summary']='با رنگ، سایز یا درگاه انتخاب‌شده، تطابق ثبت‌شده‌ای برای این مدل پیدا نشد؛ می‌توانی همان شرط یا مدل را تغییر بدهی. موجودی لحظه‌ای از این نتیجه معلوم نمی‌شود.'
             if explanation is not None and contact_requested:
                 explanation['limitations'].append(CONTACT_RESULT_LIMITATION)
             result = {
@@ -585,7 +608,7 @@ class AssistantService:
                 'query': plan.query,
                 'category_name': effective_category,
                 'max_price_toman': budget,
-                'question': question_prompt(plan.question, contact_requested, latest_span or plan.query or latest_msg) if plan.question else None,
+                'question': ('کدام شرط را حذف کنیم؟ از پاسخ‌های آماده، رنگ، سایز یا درگاه موردنظر را انتخاب کن؛ بقیهٔ شرایط حفظ می‌شوند.' if plan.question=='requirement_choice' and not needs.state.pending_requirements else question_prompt(plan.question, contact_requested, latest_span or plan.query or latest_msg)) if plan.question else None,
                 'products': page,
                 'model': self.settings.model,
                 'battery_requirement': requirement.model_dump(),

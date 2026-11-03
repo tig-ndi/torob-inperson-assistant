@@ -16,7 +16,12 @@ from apps.api.shopping_intent import matches_product_kind
 from tools.prepare_data import normalize_text
 
 
+from apps.api.source_filters import SourceFilters, matches_source_filters
+
+
 class DestinationRequest(VisitRequest):
+    source_filters: SourceFilters = Field(default_factory=SourceFilters)
+    reference_product_id:str|None=Field(default=None,min_length=1,max_length=120)
     product_id:str=''
     query:str=Field(min_length=1,max_length=120)
     category_name:str|None=Field(default=None,max_length=200)
@@ -55,6 +60,7 @@ def destinations_router(catalogue:Catalogue):
                 return int(any(o.status=='matches_declared_terms' and normalize_text(o.provider_name or '') in names for o in value.options))
             return 1
         with catalogue.connect() as db:
+            db.create_function('source_filter',1,lambda raw: matches_source_filters(raw,body.source_filters.model_dump()),deterministic=True)
             db.create_function('product_kind',4,matches_product_kind,deterministic=True)
             db.create_function('visit_status',1,hours,deterministic=True)
             db.create_function('arrival_rank',3,arrival_rank,deterministic=True)
@@ -62,7 +68,7 @@ def destinations_router(catalogue:Catalogue):
             db.create_function('capacity_mah',2,lambda cat,raw:assess_capacity(cat,decode_list(raw)).capacity_mah,deterministic=True)
             base=(' FROM product_search JOIN products p ON p.product_id=product_search.product_id '
                   'JOIN offers o ON o.product_id=p.product_id JOIN shops s ON s.shop_id=o.shop_id '
-                  'WHERE product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs)=1 '
+                  'WHERE source_filter(p.specs)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs)=1 '
                   'AND (? IS NULL OR p.category_name=?) AND haversine_m(?,?,s.lat,s.lon)<=? '
                   'AND (? IS NULL OR o.price_toman>=?) AND (? IS NULL OR o.price_toman<=?) ')
             low=int(body.min_price_toman) if body.min_price_toman is not None else None
@@ -70,6 +76,9 @@ def destinations_router(catalogue:Catalogue):
             params=[expression,body.query,category,category,body.lat,body.lon,body.search_km*1000,low,low,high,high]
             if body.credit or body.payment_provider:base+='AND payment_matches(s.payment_options,o.price_toman,p.category_name)=1 '
             if body.fast_delivery_only:base+='AND s.supports_fast_delivery=1 '
+            if body.reference_product_id is not None:
+                base+='AND p.product_id=? '
+                params.append(body.reference_product_id)
             if body.minimum_battery_mah is not None:
                 base+='AND p.category_name=? AND capacity_mah(p.category_name,p.specs)>=? ';params.extend(['گوشی موبایل',body.minimum_battery_mah])
             counts=db.execute('SELECT count(DISTINCT p.product_id),count(DISTINCT s.shop_id)'+base,params).fetchone()

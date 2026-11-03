@@ -6,6 +6,7 @@ from apps.api.category import CAT_MOBILE_PHONE
 from apps.api.intent import AssistantRequest
 from apps.api.models import Product, ProductPage
 from tools.prepare_data import normalize_text
+from apps.api.recorded_preferences import recorded_preference_score
 
 
 @dataclass
@@ -65,7 +66,7 @@ def recommend_selection(page: ProductPage, request: AssistantRequest) -> Selecti
     evidence = {p.product_id: facts_for(p, context)[1] for p in page.items}
     if walking and footwear and not re.search(r'مردانه|زنانه|بچگانه|کودک|دخترانه|پسرانه', context):
         return Selection(None, 'کفش‌های ثبت‌شده در این بودجه پیدا شدند. برای انتخاب مدل پیاده‌روی، کفش مردانه، زنانه یا کودک می‌خواهی؟ بعد سایز و کاربرد ثبت‌شده را بررسی می‌کنیم؛ قیمت کمتر به‌تنهایی راحتی یا تناسب را ثابت نمی‌کند.', evidence)
-    first = min(page.items, key=lambda p: (-facts_for(p, context)[0],
+    first = min(page.items, key=lambda p: (-recorded_preference_score(p.category_name,[s.model_dump() for s in p.specs],context), -facts_for(p, context)[0],
         p.offer_summary.min_price_toman is None, int(p.offer_summary.min_price_toman or 0), p.product_id))
     facts = evidence[first.product_id]
     reason = '؛ '.join(facts[:2]) if facts else 'در میان نتایج فعلی کمترین قیمت ثبت‌شده را دارد' if first.offer_summary.min_price_toman is not None else 'برای شروع بررسی مشخصات و فروشگاه‌ها'
@@ -75,6 +76,8 @@ def recommend_selection(page: ProductPage, request: AssistantRequest) -> Selecti
         caution = 'اندازهٔ دکمه و بلندی صدا هنوز تأیید نشده؛ این دو مورد را پیش از مراجعه بپرس.'
     elif walking and footwear:
         caution = 'این مشخصات راحتی واقعی را ثابت نمی‌کنند؛ سایزهای کارت را با سایزت مقایسه کن و موجودی همان سایز را از فروشنده بپرس. پیش از خرید باید کفش را امتحان کنی.'
+    elif first.category_name == CAT_MOBILE_PHONE and re.search(r'دوربین|عکاسی|عکس گرفتن|باتری|شارژدهی', context):
+        caution = 'مقایسه بر پایهٔ مقادیر ثبت‌شده است؛ وضوح دوربین، کیفیت عکس از سوژهٔ متحرک را ثابت نمی‌کند و ظرفیت باتری هم تضمین دوام نیست. این نیاز را پیش از خرید بررسی کن.'
     else:
         caution = 'تناسب نهایی و موجودی هنوز باید بررسی شوند.'
     return Selection(first.product_id, f'برای شروع بررسی، «{first.persian_title}»{price}: {reason}. {caution} کارت همین مدل و فروشگاه‌هایش پایین در دسترس است.', evidence)

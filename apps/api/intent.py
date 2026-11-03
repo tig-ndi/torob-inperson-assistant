@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from apps.api.purchase_context import refines_purchase
 from apps.api.shopping_intent import keypad_request
 from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
@@ -18,6 +19,7 @@ from tools.prepare_data import normalize_text
 
 
 QUESTIONS = {
+    "connector": "شارژر را برای همین دستگاه نگه داشتم. درگاه اتصال گوشی کدام است؛ تایپ سی، میکرو USB یا لایتنینگ؟ سازگاری توان و پروتکل شارژ را هم پیش از خرید با فروشنده بررسی کن.",
     "requirement_choice": "کدام شرط را حذف کنیم؟ نام آن را بگویید؛ برای حذف همهٔ شرط‌های اجرا‌نشده بگویید «همه شرط های اجرا نشده را حذف کن».",
     "requirement_limit": "تعداد شرط‌های حل‌نشده زیاد است؛ ابتدا مشخص کنید کدام شرط را نگه داریم یا حذف کنیم. شرط تازه اضافه نشد.",
     "location": "برای یافتن نزدیک‌ترین فروشنده، موقعیت را در بخش محدوده مشخص کنید؛ بدون مختصات معتبر فاصله را حدس نمی‌زنیم.",
@@ -63,6 +65,7 @@ class Message(StrictModel):
 
 
 class AssistantRequest(StrictModel):
+    reference_product_id: str | None = Field(default=None,min_length=1,max_length=120)
     request_id: str = Field(pattern=r"^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$")
     messages: list[Message] = Field(min_length=1, max_length=5)
     max_price_toman: str | None = Field(default=None, pattern=r"^[0-9]{1,19}$")
@@ -112,7 +115,7 @@ class IntentPlan(StrictModel):
     action: Literal["clarify", "search"]
     query: str | None = Field(max_length=120)
     budget_text: str | None = Field(max_length=100)
-    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope", "location", "unsupported_filter", "requirement_choice", "requirement_limit"] | None
+    question: Literal["product_kind", "budget", "priority", "specific_model", "battery_capacity", "battery_scope", "location", "unsupported_filter", "requirement_choice", "requirement_limit", "connector"] | None
 
     @model_validator(mode="after")
     def valid_action(self):
@@ -372,8 +375,13 @@ def explicit_budget(message: str) -> str | None:
     pattern = rf'(?:زیر\s+|حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX})(?P<amount>{AMOUNT}\s*(?:تومان|تومن))'
     # The explicit budget field establishes toman, even in a short edit command.
     unitless = rf'(?:سقف\s+)?{BUDGET_PREFIX}(?P<amount>{AMOUNT})(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر\s+بده|$|[.،؛؟!]))'
+    # A scaled upper bound is unambiguous in this toman shopping interface;
+    # a bare number or a physical quantity still requires clarification.
+    scaled = rf'(?:زیر\s+|حداکثر\s+|تا\s+)(?P<amount>{AMOUNT})(?=\s*(?:می\s*خوا|باش|بخر|است|هست|که|برای|با|و|$|[.،؛؟!]))'
     amounts = []
     matches = list(re.finditer(pattern, text))
+    matches += [m for m in re.finditer(scaled, text) if re.search(r'هزار|میلیون|میلیارد', m['amount'])
+                and not any(m.start() < other.end() and other.start() < m.end() for other in matches)]
     matches += [m for m in re.finditer(unitless, text)
                 if not any(m.start() < other.end() and other.start() < m.end() for other in matches)]
     for match in matches:
@@ -435,6 +443,8 @@ def query_choices(request: AssistantRequest) -> list[str]:
         return [normalize_text(request.context_query)]
     if not request.context_query and wants_nearest(latest) and is_constraint_followup(latest) and detect_category_intent(latest) is None:
         return []
+    if refines_purchase(latest, request.context_query, request.context_category):
+        return [normalize_text(request.context_query)]
     stop = QUERY_STOPWORDS
     tokens = []
     for message in reversed(request.messages):
@@ -525,7 +535,8 @@ def product_span(text: str, category_names, identity_words) -> str | None:
     """
     if not text or not isinstance(text, str):
         return None
-    cleaned = affirmative_purchase_text(text)
+    from apps.api.source_filters import product_text
+    cleaned = product_text(affirmative_purchase_text(text))
     if detect_category_intent(cleaned) == CAT_MOBILE_PHONE:
         if keypad_request(text):
             return 'گوشی دکمه ای'
@@ -547,6 +558,8 @@ def product_span(text: str, category_names, identity_words) -> str | None:
                 # keep looking for a later real product in the same clause.
                 continue
             head = tokens[start]
+            if start + 1 < len(tokens) and tokens[start + 1] in {'درد', 'دارد', 'ندارد', 'هست', 'است'}:
+                continue
             # A brand/model written before its head noun still belongs to the phrase.
             while (start and tokens[start - 1] in identity_words
                    and tokens[start - 1] not in QUERY_STOPWORDS):

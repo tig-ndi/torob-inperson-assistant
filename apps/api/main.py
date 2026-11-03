@@ -143,6 +143,10 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                category_name: Annotated[str | None, Query(max_length=120)] = None,
                category_cleared: Annotated[bool, Query()] = False,
                min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None,
+               reference_product_id: str | None = Query(None,min_length=1,max_length=120),
+               colour: str | None = Query(None, min_length=1, max_length=32),
+               size: str | None = Query(None, pattern=r'^\d{1,2}(?:\.5)?$'),
+               connector: str | None = Query(None, pattern=r'^(usb-c|micro-usb|lightning)$'),
                sort_by: Literal['relevance', 'nearest'] = 'relevance',
                user_lat: float | None = Query(None, ge=-90, le=90, allow_inf_nan=False),
                user_lon: float | None = Query(None, ge=-180, le=180, allow_inf_nan=False)):
@@ -157,7 +161,8 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                 raise HTTPException(422, "فیلتر ظرفیت باتری فقط برای گوشی موبایل پشتیبانی می‌شود.")
             return catalogue.search(q, limit, offset, parse_budget(max_price_toman),
                                     category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah,
-                                    user_lat=user_lat, user_lon=user_lon, sort_by=sort_by)
+                                    user_lat=user_lat, user_lon=user_lon, sort_by=sort_by,
+                                    source_filters={'colour': colour, 'size': size, 'connector': connector},reference_product_id=reference_product_id)
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc
 
