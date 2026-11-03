@@ -8,7 +8,7 @@ async function position(page){await page.getByRole('region',{name:'گفت‌وگ
 test('approved outlined branding is used by the app and browser icons',async({page,request})=>{
   await mockAssistant(page,request);await page.goto('/');
   await expect(page.locator('.chat-header .brand-mark')).toHaveAttribute('src','/icons/torob-companion.svg');
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','/icons/torob-companion.svg');
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href','/icons/torob-companion.svg');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href','/icons/apple-touch-icon.png');
   const svg=await(await request.get('/icons/torob-companion.svg')).text();expect(svg).toContain('ترب');expect(svg).not.toMatch(/<text|@font-face|base64/);
   const ico=await(await request.get('/favicon.ico')).body();expect([...ico.slice(0,4)]).toEqual([0,0,1,0]);
