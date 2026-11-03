@@ -10,6 +10,7 @@ from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.intent import AssistantRequest
 from apps.api.models import OfferPage, Product, ProductPage, SearchExplanation
 from tools.prepare_data import normalize_text
+from apps.api.shopping_intent import operating_system
 from apps.api.selection import recommend_selection
 
 
@@ -136,6 +137,11 @@ def explain_search(catalogue: Catalogue, raw_page: dict, query: str, budget: str
                 raise CatalogueUnavailable('source category mismatch')
             reasons.append(f'دستهٔ منبع با فیلتر «{page.category_name}» مطابقت دارد.')
         reasons.extend(selection.evidence.get(product.product_id, []))
+        if operating_system(query):
+            values = [spec.value for spec in product.specs
+                      if spec.value and re.search(r'سیستم\s*عامل|operating\s*system|^os$|^اندروید$', normalize_text(spec.key or ''))]
+            if values:
+                reasons.append('سیستم عامل طبق مشخصات منبع: ' + '؛ '.join(values[:2]))
         budget_offer = None
         if page.min_battery_capacity_mah is not None:
             capacity = product.battery_capacity

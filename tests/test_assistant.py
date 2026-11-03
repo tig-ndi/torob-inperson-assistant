@@ -981,7 +981,9 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
 
     def test_recorded_nearest_without_coordinates_keeps_clean_query_and_clarifies(self):
-        self.response = completion(proposal(action='search', query='ترین فروشگاه گوشی'))
+        # Location words no longer enter the constrained query choices. The
+        # remaining seller-noun fragment must still be repaired by the host.
+        self.response = completion(proposal(action='search', query='فروشگاه گوشی سامسونگ'))
         result = self.post(body('نزدیک‌ترین فروشگاه گوشی سامسونگ می‌خوام')).json()
         self.assertEqual(result['status'], 'needs_input')
         self.assertEqual(result['question_code'], 'location')

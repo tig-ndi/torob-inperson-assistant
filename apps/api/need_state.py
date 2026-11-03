@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from apps.api.models import PendingRequirement, AssistantNeedState, BatteryRequirement
 from apps.api.category import detect_category_intent
 from apps.api.purchase_language import affirmative_purchase_text
+from apps.api.shopping_intent import operating_system, negated_operating_system
 from tools.prepare_data import normalize_text
 
 if TYPE_CHECKING:
@@ -19,12 +20,20 @@ if TYPE_CHECKING:
     from apps.api.intent import AssistantRequest
 
 
-FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی')
+FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی', 'سیستم عامل')
 GENERIC_RELEASE = {'بدون این شرط', 'بدون این فیلتر'}
 ALL_RELEASE = {'همه شرط های اجرا نشده را حذف کن', 'همه شرط های حل نشده را حذف کن',
                'همه فیلترهای اجرا نشده را حذف کن'}
 CONTINUE = {'ادامه بده', 'ادامه', 'باشه', 'بله', 'آره', 'اره', 'اوکی'}
 FIELD_PATTERN = re.compile(r'(?<!\w)(' + '|'.join(FIELDS) + r')(?:ش|اش|م|مون|و)?(?!\w)')
+
+
+def generic_release(text: str) -> bool:
+    cleaned = normalize_text(text).strip(' .!؟')
+    first, *rest = re.split(r'[،؛,;]', cleaned, maxsplit=1)
+    if not re.fullmatch(r'بدون این (?:شرط|فیلتر)(?:\s+(?:ادامه(?:\s+بده)?|بگرد|جستجو\s*کن))?', first.strip()):
+        return False
+    return not rest or bool(re.match(r'^\s*(?:سقف\s+)?بودجه\b', rest[0]) and not FIELD_PATTERN.search(rest[0]))
 
 
 def field_is_negated(clause: str, literal: str) -> bool:
@@ -50,17 +59,19 @@ class PendingUpdate:
 
 def is_need_control(text: str, *, include_ack: bool = False) -> bool:
     text = normalize_text(text)
-    return (text in GENERIC_RELEASE | ALL_RELEASE or include_ack and text in CONTINUE or
+    return (generic_release(text) or text in ALL_RELEASE or include_ack and text in CONTINUE or
             bool(re.search(r'(?:حذف|بردار|مهم نیست|بی خیال|صرف نظر|فیلتر نکن|اعمال نکن|در نظر نگیر|کنار بگذار)', text)
                  and (FIELD_PATTERN.search(text) or re.search(r'حداقل\s+(?:ظرفیت\s+)?(?:باتری|باطری)',text) or 'فاصله' in text
+                      or re.search(r'سیستم\s*عامل|اندروید|android|ios', text)
                       or 'شرط' in text and ('اجرا نشده' in text or 'حل نشده' in text))))
 
 
-def update_pending(items: list[PendingRequirement], text: str) -> PendingUpdate:
+def update_pending(items: list[PendingRequirement], text: str, *, supported_fields: tuple[str, ...] = ()) -> PendingUpdate:
+    from apps.api.visit_intent import referenced_colour
     cleaned = normalize_text(text)
     if cleaned in ALL_RELEASE:
         return PendingUpdate([], controlled=True)
-    if cleaned in GENERIC_RELEASE:
+    if generic_release(cleaned):
         if not items:
             # No pending source-field constraint: let battery/scope handling own
             # the phrase instead of interpreting it as a deletion of that state.
@@ -68,7 +79,9 @@ def update_pending(items: list[PendingRequirement], text: str) -> PendingUpdate:
         if len(items) == 1:
             return PendingUpdate([], controlled=True)
         return PendingUpdate(list(items), 'requirement_choice', True)
-    updated = {normalize_text(item.key): item for item in items}
+    updated = {normalize_text(item.key): item for item in items if item.key not in supported_fields}
+    if referenced_colour(cleaned) and not re.search(r'(?<!\w)رنگ(?:ش|اش)?(?!\w)', cleaned):
+        updated['رنگ'] = PendingRequirement(key='رنگ', source_text=text)
     controlled = False
     operations: dict[str, set[str]] = {}
     # Segmentation affects only attribution of a removal operator; monetary and
@@ -77,6 +90,8 @@ def update_pending(items: list[PendingRequirement], text: str) -> PendingUpdate:
         matches = list(FIELD_PATTERN.finditer(clause))
         for index, match in enumerate(matches):
             key = match[1]
+            if key in supported_fields:
+                continue
             literal = re.escape(match[0])
             field = rf'{literal}(?:\s+(?:را|رو))?\s+'
             tail = clause[match.start():matches[index + 1].start() if index + 1 < len(matches) else len(clause)]
@@ -157,8 +172,14 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
         # Purchasing preference survives; size/memory do not transfer to shoes.
         pending = [item for item in pending if normalize_text(item.key) == 'قسطی']
     topic = query or old_topic
-    update = update_pending(pending, request.messages[-1].content) if topic else PendingUpdate([])
     semantic_category = category or (None if changed else request.context_category)
+    latest = request.messages[-1].content
+    supported_platform = semantic_category == 'گوشی موبایل' and operating_system(latest) and operating_system(topic or '') and not negated_operating_system(latest)
+    update = update_pending(pending, latest, supported_fields=('سیستم عامل',) if supported_platform else ()) if topic else PendingUpdate([])
+    if topic and negated_operating_system(latest):
+        by_key = {item.key:item for item in update.items}
+        by_key['سیستم عامل'] = PendingRequirement(key='سیستم عامل',source_text=latest)
+        update = PendingUpdate(list(by_key.values()), update.clarification, update.controlled) if len(by_key)<=8 else PendingUpdate(update.items,'requirement_limit',True)
     resolved = AssistantNeedState(
         topic_query=topic, category_name=semantic_category,
         category_cleared=request.category_cleared if category is None else False,

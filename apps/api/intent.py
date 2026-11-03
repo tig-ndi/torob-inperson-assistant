@@ -11,7 +11,7 @@ from apps.api.catalogue import search_expression
 from apps.api.category import CAT_MOBILE_PHONE, detect_category_intent
 from apps.api.battery import strip_capacity_clause
 from apps.api.models import BatteryRequirement, AssistantNeedState
-from apps.api.need_state import is_need_control
+from apps.api.need_state import is_need_control, generic_release
 from apps.api.visit_intent import is_constraint_followup, wants_nearest
 from apps.api.purchase_language import affirmative_purchase_text
 from tools.prepare_data import normalize_text
@@ -133,7 +133,7 @@ NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES,
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
 BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
-QUERY_STOPWORDS = frozenset('هر روز زیر حضوری من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+QUERY_STOPWORDS = frozenset('هر روز زیر حضوری نزدیک اطراف نزدیکترین نزدیکم اطرافم ترین من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
 GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
 MAX_TOPIC_WORDS = 4
 TOPIC_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛]')
@@ -479,7 +479,7 @@ def query_choices(request: AssistantRequest) -> list[str]:
 def releases_unsupported(request: AssistantRequest) -> bool:
     return bool(request.context_query and len(request.messages) > 1
                 and matches_question(request.messages[-2].content, 'unsupported_filter')
-                and normalize_text(request.messages[-1].content) in {'بدون این شرط', 'بدون این فیلتر'})
+                and generic_release(request.messages[-1].content))
 
 
 def clear_product_topic(text: str, category_names) -> str | None:

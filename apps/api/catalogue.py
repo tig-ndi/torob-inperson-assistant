@@ -14,7 +14,7 @@ from tools.prepare_data import normalize_text
 from apps.api.hours import evaluate_hours, tehran_time
 from apps.api.credit import evaluate_credit
 from apps.api.battery import assess_capacity
-from apps.api.shopping_intent import retrieval_query,matches_product_kind,preference_rank
+from apps.api.shopping_intent import retrieval_query,matches_product_kind,preference_rank,MODEL_WORDS
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -68,6 +68,15 @@ def search_expression(query: str) -> str:
         raise InvalidQuery("جست‌وجو باید بین ۱ تا ۱۲ واژه داشته باشد.")
     # Every token is literal. User-supplied FTS operators never become syntax.
     return " AND ".join('"' + word + '"' for word in words)
+
+
+def retrieval_expression(query: str) -> str:
+    cleaned = retrieval_query(query)
+    search_expression(cleaned)  # Preserve the public token bound and validation.
+    aliases = {word: group for group in MODEL_WORDS for word in group}
+    words = re.findall(r'[^\W_]+', normalize_text(cleaned))
+    return ' AND '.join('(' + ' OR '.join('"' + value + '"' for value in aliases[word]) + ')'
+                        if word in aliases else '"' + word + '"' for word in words)
 
 
 def decode_list(raw: str | None) -> list:
@@ -163,7 +172,7 @@ class Catalogue:
                sort_by: str = 'relevance') -> dict:
         if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
-        expression = search_expression(retrieval_query(query))
+        expression = retrieval_expression(query)
         with self.connect() as connection:
             provenance = self.provenance(connection)
             @lru_cache(maxsize=1024)
@@ -217,14 +226,11 @@ class Catalogue:
         Existence is independent of price: an unaffordable refinement must remain
         empty in its category, not silently widen to cheaper accessories.
         """
-        search_expression(query)
-        terms = set(re.findall(r'[^\W_]+', normalize_text(query)))
         with self.connect() as connection:
-            rows = connection.execute(
-                'SELECT DISTINCT brand_name,model FROM products WHERE category_name=? '
-                'AND (brand_name IS NOT NULL OR model IS NOT NULL)', (category_name,))
-            return any(terms <= set(re.findall(r'[^\W_]+', normalize_text(
-                ' '.join(part for part in row if part)))) for row in rows)
+            return connection.execute(
+                'SELECT 1 FROM product_search JOIN products p ON p.product_id=product_search.product_id '
+                'WHERE product_search MATCH ? AND p.category_name=? LIMIT 1',
+                (retrieval_expression(query), category_name)).fetchone() is not None
 
     def detail(self, product_id: str) -> dict | None:
         with self.connect() as connection:

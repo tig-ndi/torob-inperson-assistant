@@ -7,12 +7,12 @@ from fastapi import APIRouter,HTTPException
 from pydantic import Field
 from apps.api.visit import VisitRequest
 from apps.api.category import detect_category_intent
-from apps.api.catalogue import Catalogue,InvalidQuery,search_expression,decode_list,haversine_distance_m
+from apps.api.catalogue import Catalogue,InvalidQuery,retrieval_expression,decode_list,haversine_distance_m
 from apps.api.hours import TEHRAN,evaluate_hours
 from apps.api.credit import evaluate_credit
 from apps.api.battery import assess_capacity
 from apps.api.routing import cached_route
-from apps.api.shopping_intent import retrieval_query,matches_product_kind
+from apps.api.shopping_intent import matches_product_kind
 from tools.prepare_data import normalize_text
 
 
@@ -29,7 +29,7 @@ def destinations_router(catalogue:Catalogue):
     router=APIRouter()
     @router.post('/destinations')
     def destinations(body:DestinationRequest):
-        try:expression=search_expression(retrieval_query(body.query))
+        try:expression=retrieval_expression(body.query)
         except InvalidQuery as exc:raise HTTPException(422,'عبارت خرید معتبر نیست.') from exc
         when=datetime.now(TEHRAN)
         if body.local_time:
