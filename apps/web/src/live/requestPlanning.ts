@@ -1,6 +1,13 @@
 // Longest phrase wins within a family, but never hides a different purchase.
 const families=[['قاب برای گوشی','کاور برای گوشی','قاب گوشی','کاور گوشی'],['کیف گوشی'],['شارژر برای گوشی','شارژر برای موبایل','شارژر برای لپ تاپ','شارژر لپ تاپ','شارژر موبایل','شارژر گوشی','شارژر'],['کابل برای گوشی','کابل شارژ','کابل'],['هدفون','هندزفری'],['گوشی دکمه ای','گوشی','موبایل'],['کفش','کتانی'],['لپ تاپ'],['باتری','باطری'],['پاوربانک']];
 const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
+export function selectedProductIndex(text:string,count:number):number|null{
+  const value=normalized(text).replace(/[.؟!،]+$/,'');
+  const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(?:گزینه\s+)?(اولی|اول|دومی|دوم|سومی|سوم)(?:\s+(?:را|رو))?\s+(?:می\s*(?:خواهم|خوام)|انتخاب\s*کن|فروشگاه(?:\s*ها)?(?:ش|یش)?\s*(?:را|رو)?\s*(?:ببینیم|نشان\s*بده|نشون\s*بده))$/.exec(value);
+  if(!match)return null;
+  const index=/^اول/.test(match[1]!)?0:/^دوم/.test(match[1]!)?1:2;
+  return index<count?index:null;
+}
 export function purchaseTopics(text:string):string[]{
   const clauses=normalized(text).split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
   let rest=clauses.map(clause=>{
