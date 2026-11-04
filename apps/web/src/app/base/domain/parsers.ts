@@ -29,7 +29,10 @@ export function parseNeedState(value: unknown): NeedState {
   if (new Set(normalized).size !== normalized.length || (pending_requirements.length && !topic_query)) throw new ContractError();
   const review_topics = list(s.review_topics, x => oneOf(x, topics), 2);
   if (new Set(review_topics).size !== review_topics.length) throw new ContractError();
-  return { version: 1, topic_query, category_name, pending_requirements, review_topics,
+  const sf=s.source_filters===undefined?null:record(s.source_filters);
+  const source_filters=sf?{colour:nullableText(sf.colour,32),size:nullableText(sf.size,4),connector:sf.connector===null?null:oneOf(sf.connector,['usb-c','micro-usb','lightning'] as const)}:undefined;
+  if(source_filters?.size&&!/^\d{1,2}(?:\.5)?$/.test(source_filters.size))throw new ContractError();
+  return { version: 1, topic_query, category_name, pending_requirements, review_topics, ...(source_filters?{source_filters}:{}),...(s.reference_product_id===undefined?{}:{reference_product_id:s.reference_product_id===null?null:identifier(s.reference_product_id)}),
     category_cleared: bool(s.category_cleared), max_price_toman: money(s.max_price_toman),
     budget_needs_input: bool(s.budget_needs_input), offer_sort: oneOf(s.offer_sort, sorts),
     battery_requirement: parseBattery(s.battery_requirement) };

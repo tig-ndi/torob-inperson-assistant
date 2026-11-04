@@ -59,6 +59,7 @@ export function searchCatalogue(input: SearchInput, signal: AbortSignal): Promis
   if (input.sort === 'nearest' && !input.position) throw new ContractError('ابتدا موقعیت جست‌وجو را مشخص کنید.');
   const params = queryString({ q: input.query, offset: integer(input.offset ?? 0, 0, 1000000), limit: integer(input.limit ?? 12, 1, 50),
     max_price_toman: input.maxPrice, category_cleared: input.categoryCleared,
+    reference_product_id:input.referenceProductId,colour:input.sourceFilters?.colour,size:input.sourceFilters?.size,connector:input.sourceFilters?.connector,
     category_name: input.categoryCleared ? null : input.categoryName,
     min_battery_capacity_mah: input.minimumBattery == null ? null : integer(input.minimumBattery, 0, 1000000),
     sort_by: input.sort ?? 'relevance', ...locationParams(input.position ?? null) });
@@ -77,6 +78,7 @@ export function loadOffers(productId: string, filters: Filters, position: Positi
   }, signal);
 }
 export type AssistantInput = {
+  referenceProductId?:string|null;
   messages: AssistantMessage[];
   needState: NeedState | null;
   position: Position | null;
@@ -93,7 +95,7 @@ export function assistantBody(input: AssistantInput, requestId: string): Record<
       messages.some((m, i) => m.role !== (i % 2 ? 'assistant' : 'user') || !m.content.trim() || m.content.length > 1000) ||
       messages.reduce((sum, m) => sum + m.content.length, 0) > 3000) throw new ContractError('پیام‌ها باید کوتاه و به ترتیب گفت‌وگو باشند.');
   if (input.reviewTopicsOverride && (input.reviewTopicsOverride.length > 2 || input.reviewTopicsOverride.some(t => !['camera', 'battery'].includes(t)))) throw new ContractError();
-  return { request_id: requestId, messages, ...(input.needState ? { context_need_state: parseNeedState(input.needState) } : {}),
+  return { request_id: requestId, messages,...(input.referenceProductId?{reference_product_id:identifier(input.referenceProductId)}:{}), ...(input.needState ? { context_need_state: parseNeedState(input.needState) } : {}),
     ...(Object.hasOwn(input, 'budgetOverride') ? { max_price_toman: money(input.budgetOverride) } : {}),
     ...(input.offerSortOverride === undefined ? {} : { context_offer_sort: oneOf(input.offerSortOverride, ['price', 'nearest']) }),
     ...(input.batteryOverride === undefined ? {} : { context_battery_requirement: parseBattery(input.batteryOverride) }),

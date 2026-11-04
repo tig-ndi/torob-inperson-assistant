@@ -35,7 +35,7 @@ function Fields<T>({items,fields,id,columns,actions=false}:{items:T[];fields:Fie
   return <div className="comparison-table-wrap"><table className="comparison-table" style={{'--compare-count':items.length} as import('react').CSSProperties}>
     <caption className="sr-only">مقایسهٔ اطلاعات ثبت‌شدهٔ {fa(items.length)} گزینه</caption>
     <thead><tr><th scope="col">معیار مقایسه</th>{columns.map((column,i)=><th key={column.id} scope="col"><small>گزینهٔ {fa(i+1)}</small><strong title={column.name}>{column.name}</strong>{column.sub&&<span className="comparison-column-sub">{column.sub}</span>}{actions&&<div className="comparison-column-actions">{column.remove&&<Hint text="حذف فقط این گزینه از مقایسه"><button type="button" className="icon-button" aria-label={column.removeLabel} onClick={column.remove}><Trash2 size={17}/></button></Hint>}{column.action&&<button className="comparison-continue" onClick={column.action}>{column.actionLabel}</button>}</div>}</th>)}</tr></thead>
-    <tbody>{fields.map(field=><tr key={field.key} data-comparison-field={field.key}><th scope="row">{field.label}</th>{items.map((item,i)=><td key={id(item)}><span className="comparison-mobile-label" title={columns[i]?.name}>گزینهٔ {fa(i+1)} · {columns[i]?.name}</span><div className="comparison-cell">{field.value(item)}</div></td>)}</tr>)}</tbody>
+    <tbody>{fields.map(field=><tr key={field.key} data-comparison-field={field.key}><th scope="row">{field.label}</th>{items.map((item,i)=><td key={id(item)}><span className="comparison-mobile-label" title={columns[i]?.name}>گزینهٔ {fa(i+1)}</span><div className="comparison-cell">{field.value(item)}</div></td>)}</tr>)}</tbody>
   </table></div>;
 }
 const productFields:Field<Product>[]=[
@@ -85,7 +85,8 @@ export default function ComparisonSheet({a,onMap}:{a:Shopping;onMap:()=>void}){
   const important=/حافظه داخلی|ظرفیت حافظه|مقدار RAM|ظرفیت باتری|توان خروجی|نوع درگاه|جنس زیره|جنس رویه|سایز/;
   const memoryFields:Field<Product>[]=a.models.some(p=>memoryVariants(p))?(['storage','ram'] as const).map(kind=>({key:'variant:'+kind,label:kind==='storage'?'حافظه داخلی همین نسخه':'رم همین نسخه',value:p=>{const item=memoryVariants(p)?.[kind];return item?.value?<><span>{fa(item.value)}</span><small className="comparison-muted block">{item.note}</small></>:<Signal tone="caution">{item?.note??missing}</Signal>;}})):[];
   const highlighted=allSpecs.filter(f=>important.test(f.label)&&!(/حافظه|RAM|رم/i.test(f.label)&&memoryFields.length)).slice(0,4);
-  const primaryProducts=[...productFields.filter(f=>['brand','min-price'].includes(f.key)),...memoryFields,...highlighted];
+  const topicSpecs=allSpecs.filter(f=>a.need?.review_topics.some(topic=>(topic==='camera'?/دوربین اصلی|رزولوشن دوربین/:/ظرفیت باتری/).test(f.label))).slice(0,2);
+  const primaryProducts=[productFields.find(f=>f.key==='min-price')!,...topicSpecs,...memoryFields,...highlighted.filter(f=>!topicSpecs.some(t=>t.key===f.key))];
   const detailedProducts=productRows.filter(f=>!primaryProducts.some(x=>x.key===f.key));
   const primaryOffers=offerFields.filter(f=>['price','price-date','inventory','distance','hours','address','warranty','credit'].includes(f.key));
   const detailedOffers=offerFields.filter(f=>!primaryOffers.some(x=>x.key===f.key));
@@ -95,6 +96,7 @@ export default function ComparisonSheet({a,onMap}:{a:Shopping;onMap:()=>void}){
   return <div className="comparison-sheet">
     <nav className="comparison-tabs" aria-label="نوع مقایسه">{(['products','offers'] as const).map(kind=><button key={kind} type="button" aria-pressed={tab===kind} disabled={!(kind==='products'?a.models.length:a.compare.length)} onClick={()=>setTab(kind)}>{kind==='products'?<Package size={17}/>:<Store size={17}/>} {kind==='products'?'محصول‌ها':'فروشگاه‌ها'} · {fa(kind==='products'?a.models.length:a.compare.length)}</button>)}</nav>
     {priceSummary&&<section className="comparison-glance" aria-label="جمع‌بندی قیمت انتخاب‌ها"><p>{priceSummary}</p></section>}
+
     <label className="comparison-differences"><input type="checkbox" checked={differences} onChange={e=>setDifferences(e.target.checked)}/>فقط تفاوت‌ها را نشان بده</label>
     {count<2&&<p className="comparison-note">برای دیدن تفاوت‌ها، گزینهٔ دیگری را از کارت‌های نتایج به مقایسه اضافه کن. انتخاب فعلی محفوظ است.</p>}
     <details className="comparison-options"><summary>ابزارها، راهنما و پاک‌کردن مقایسه</summary>

@@ -10,7 +10,10 @@ export type BatteryRequirement = {
   status: 'unspecified' | 'awaiting_minimum' | 'no_minimum' | 'minimum';
   minimum_mah: number | null;
 };
+export type SourceFilters = {colour:string|null;size:string|null;connector:'usb-c'|'micro-usb'|'lightning'|null};
 export type NeedState = {
+  source_filters?: SourceFilters;
+  reference_product_id?: string|null;
   version: 1;
   topic_query: string | null;
   category_name: string | null;
@@ -46,7 +49,7 @@ export type CataloguePage = Omit<ProductPage, 'items'> & {
   provenance: Provenance;
 };
 export type CatalogueSearch = {
-  query: string; offset?: number; limit?: number; maxPrice: string | null;
+  query: string; offset?: number; limit?: number; maxPrice: string | null; sourceFilters?: SourceFilters; referenceProductId?:string|null;
   categoryName?: string | null; categoryCleared?: boolean; minimumBattery?: number | null;
   sort?: 'relevance' | 'nearest'; position?: Position | null;
 };

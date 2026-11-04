@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import * as api from './client';
 import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
-import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights, directMeters } from './data';
+import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {purchaseTopics,conversationHistory,recommendedFirst,selectedProductIndex} from './requestPlanning';
+import {purchaseTopics,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex} from './requestPlanning';
 import type { AssistantMessage } from '../api';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
+import {currentMapOffers} from './mapResults';
 import {useUpgrades} from './useUpgrades';
 import {useFollowupAlternatives,type FollowupEvent} from './useFollowupAlternatives';
 import {travelFromText,firstShopOffers,sellerConcern as getSellerConcern,type TravelMode} from './upgrades';
@@ -48,7 +49,7 @@ export function useShopping() {
   const [followupEvent,setFollowupEvent]=useState<FollowupEvent|null>(null);
   const [safetyAcknowledged,setSafetyAcknowledged]=useJourneyState('query','',':safety');
   const pending=useRef(thread.filter(m=>m.role==='user'&&m.kind!=='action').at(-1)?.text??''),lastGuidance=useRef(readSession('guidance','',v=>typeof v==='string'?v:''));
-  const retainOffers=useCallback((rows:Offer[])=>setMapLibrary(old=>[...new Map([...old,...rows].map(o=>[o.offer_id,o])).values()]),[]);
+  const retainOffers=useCallback((rows:Offer[])=>setMapLibrary(old=>[...new Map([...old,...rows].map(o=>[o.offer_id,o])).values()].slice(-500)),[]);
   const say=useCallback((role:ChatEntry['role'],text:string,kind:ChatEntry['kind']='message')=>setThread(t=>[...t.slice(-99),{id:crypto.randomUUID(),role,text,kind}]),[]);
   const [busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[toast,setToast]=useState<string|null>(null);
   const [reload,setReload]=useState(0),[weight,setWeight]=useJourneyState('weight',50);
@@ -99,7 +100,7 @@ export function useShopping() {
     })();return()=>c.abort();
   },[products,position,filters,visitIntent,travelMode,reload]);
   const [roadConsent,setRoadConsent]=useJourneyState('bool',false,':roadConsent');
-  const routeTargets=useMemo(()=>firstShopOffers([...(selected?[selected]:[]),...compare,...candidateVisits.flatMap(v=>v.insights.open_offers.items),...offers,...mapLibrary.filter(o=>models.some(p=>p.product_id===o.product_id))]).slice(0,3),[selected,compare,candidateVisits,offers,mapLibrary,models]);
+  const routeTargets=useMemo(()=>firstShopOffers(selected?[selected]:compare).slice(0,3),[selected,compare]);
   const upgrades=useUpgrades({journeyId,position,mode:travelMode,targets:routeTargets,products,query:need?.topic_query??query,radius:filters.radius,consent:roadConsent,flash});
   const arrivalOffers=useMemo(()=>[...new Map([...(selected?[selected]:[]),...compare,...candidateVisits.flatMap(v=>v.insights.open_offers.items),...offers,...mapLibrary.filter(o=>models.some(p=>p.product_id===o.product_id))].map(o=>[o.offer_id,o])).values()].slice(0,30),[selected,compare,candidateVisits,offers,mapLibrary,models]);
   const [arrivalTick,setArrivalTick]=useState(0);
@@ -116,8 +117,8 @@ export function useShopping() {
   const safetyKey=JSON.stringify([sellerConcern,position,upgrades.roadRevision,selected?.offer_id,visitIntent?.localTime,travelMode,travelMinutes,arrivalChecks[selected?.offer_id??'']?.risk,selected?.opening_hours.status]);
   const safetyRisk=selected?(arrivalChecks[selected.offer_id]?.risk??(selected.opening_hours.status==='declared_closed'?'closed':selected.opening_hours.status==='unknown'?'unknown':'ready')):null;
   const needsSafetyReview=!!selected&&(!!sellerConcern||safetyRisk!=='ready'||arrivalBusy||!!arrivalError)&&safetyAcknowledged!==safetyKey;
-  const restoreResult=(item:RecentResult)=>{setFollowupEvent(null);setQuestionCode('');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setProducts(item.page.items);setProductPage(item.page);setQuery(item.query);setNeed(item.need);setMessages([{role:'user',content:item.query.slice(0,1000)}]);setVisitIntent(item.visit);setNeedsLocation(false);setExplanation(null);setPrepared(null);setRestoredTrip(null);setFilters({...item.filters});setAssistantResults(item.assistant);setScreen('results');setOverlay(null);setProduct(null);setSelected(null);setMapFocus(null);say('assistant',`نتایج «${item.query}» را دوباره آوردم. نشانگرهای قبلی روی نقشه مانده‌اند؛ ساعت و موجودی را هنگام انتخاب فروشگاه دوباره بررسی می‌کنیم.`,'action');};
-  const mapOffers=useMemo(()=>mapLibrary.map(o=>({...o,direct_distance_meters:position&&o.shop.lat!=null&&o.shop.lon!=null?directMeters(position,{lat:o.shop.lat,lon:o.shop.lon}):null})),[mapLibrary,position]);
+  const restoreResult=(item:RecentResult)=>{setFollowupEvent(null);setQuestionCode('');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setProducts(item.page.items);setProductPage(item.page);setQuery(item.query);setNeed(item.need);setMessages([{role:'user',content:item.query.slice(0,1000)}]);setVisitIntent(item.visit);setNeedsLocation(false);setExplanation(null);setPrepared(null);setRestoredTrip(null);setFilters({...item.filters});setAssistantResults(item.assistant);setScreen('results');setOverlay(null);setProduct(null);setSelected(null);setMapFocus(null);say('assistant',`نتایج «${item.query}» را دوباره آوردم. نقشه با همین نتایج به‌روز شد؛ ساعت و موجودی را هنگام انتخاب فروشگاه دوباره بررسی می‌کنیم.`,'action');};
+  const mapOffers=useMemo(()=>currentMapOffers(mapLibrary,[...products,...(product?[product]:[]),...candidateVisits.map(v=>v.product)],filters,position),[mapLibrary,products,product,candidateVisits,filters,position]);
   useEffect(()=>{if(screen==='compare'){setScreen(product?'stores':'results');setOverlay('comparison');}},[screen,product]);
   const clearComparison=()=>{setCompare([]);setModels([]);flash('انتخاب‌های مقایسه پاک شدند؛ نتایج و گفت‌وگو محفوظ‌اند.');};
   const go=(next:Screen)=>{
@@ -132,7 +133,7 @@ export function useShopping() {
     if(!more){setProducts([]);setProductPage(null);setExplanation(null);setQuestionCode('');}
     if(!more&&!preserveContext){setAssistantResults(false);setExplanation(null);setNeed(null);setMessages(silent&&pending.current?[{role:'user',content:pending.current}]:[]);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);if(!silent){say('user',q);setVisitIntent(null);setNeedsLocation(false);}}
     void run(async signal=>{
-      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,filters,signal,more?products.length:0);
+      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,filters,signal,more?products.length:0);
       if(signal.aborted)return;setProductPage(result);setProducts(old=>more?[...old,...result.items]:result.items);
       if(silent&&localIntent){
         setAssistantResults(true);
@@ -203,7 +204,8 @@ export function useShopping() {
     const history=conversationHistory(messages,{role:'user' as const,content:q},thread.filter(m=>m.role==='assistant'&&m.kind!=='action').at(-1)?.text);
     setScreen('decide');setQuery(q);setOverlay(null);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);
     void run(async signal=>{
-      const turn=await api.sendAssistant({messages:history,needState:need,position,budgetOverride:filters.max||null,offerSortOverride:filters.sort},signal).catch(async error=>{
+      const referenceIndex=productReferenceIndex(q,products.length);
+      const turn=await api.sendAssistant({messages:history,needState:need,referenceProductId:referenceIndex===null?undefined:products[referenceIndex]?.product_id,position,budgetOverride:filters.max||null,offerSortOverride:filters.sort},signal).catch(async error=>{
         if(!signal.aborted){try{setStatus(await api.assistantStatus(signal));}catch{/* Preserve the original failure if the status check also fails. */}}
         throw error;
       });
@@ -213,7 +215,7 @@ export function useShopping() {
       say('assistant',answer);if(turn.question_code==='location'||/موقعیت|مختصات/.test(answer))setNeedsLocation(true);
       setExplanation(turn.explanation);setAssistantResults(true);
       setFilters(f=>({...f,...visitPreferences(q),max:turn.max_price_toman??visitPreferences(q).max??'',sort:turn.offer_sort}));
-      if(turn.products){const ordered=recommendedFirst(turn.products.items,turn.explanation?.recommended_product_id);setProductPage({...turn.products,items:ordered});setProducts(ordered);setQuery(turn.query??q);setScreen('results');}
+      if(turn.products){setProduct(null);setSelected(null);setOffers([]);setPrepared(null);setFollowupEvent(null);const ordered=recommendedFirst(turn.products.items,turn.explanation?.recommended_product_id);setProductPage({...turn.products,items:ordered});setProducts(ordered);setQuery(turn.query??q);setScreen('results');}
       setStatus(await api.assistantStatus(signal));
     });
   };
@@ -288,7 +290,7 @@ export function useShopping() {
   const newConversation=()=>{setFollowupEvent(null);setQuestionCode('');setPurchaseQueue([]);deferredAsk.current=null;setJourneyId(crypto.randomUUID());setTravelMinutes('');setTravelMode('walking');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setThread([]);setMessages([]);setNeed(null);setQuery('');setProducts([]);setProductPage(null);setProduct(null);setOffers([]);setSelected(null);setCompare([]);setModels([]);setPrepared(null);setExplanation(null);setInsights(null);setVisitIntent(null);setNeedsLocation(false);setRestoredTrip(null);setFilters({...DEFAULT_FILTERS});setMapMode('auto');setMapFocus(null);setMapLibrary([]);setPicking(false);lastGuidance.current='';setScreen('home');setOverlay(null);pending.current='';};
   const applyFilters=(f:Filters)=>{
     setFilters(f);setOverlay(null);
-    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
+    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
     else if(product&&['contact','trip'].includes(screen))setScreen('stores');
   };
   const applySuggestedBudget=(max:string)=>{
@@ -308,7 +310,7 @@ export function useShopping() {
     if(product&&['stores','contact','trip'].includes(screen)){setScreen('stores');return;}
     setQuery(topic);setScreen('results');setProducts([]);setProductPage(null);
     void run(async signal=>{
-      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
+      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
       if(!signal.aborted){setProducts(page.items);setProductPage(page);}
     });
   };

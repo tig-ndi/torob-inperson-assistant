@@ -48,3 +48,10 @@ export function recommendedFirst<T extends {product_id:string}>(items:T[],id:str
   const candidate=items.find(p=>p.product_id===id);
   return candidate?[candidate,...items.filter(p=>p.product_id!==id)]:items;
 }
+
+export function productReferenceIndex(text:string,count:number):number|null{
+ const value=normalized(text);
+ const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(اولی|دومی|سومی)(?=\s|$)/.exec(value);
+ if(!match||!/رنگ|سایز|سفید|مشکی|آبی|قرمز|سبز|طوسی|صورتی/.test(value)||/نمی\s*خوا|نباش|نه\b/.test(value))return null;
+ const index=match[1]==='اولی'?0:match[1]==='دومی'?1:2;return index<count?index:null;
+}
