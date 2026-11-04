@@ -45,6 +45,7 @@ for its type again. A named model of the current device remains that device,
 not its battery, case or screen. The host checks the category against source records.
 Keep an explicit Android/iOS requirement; the host verifies it from recorded OS
 specifications. Do not drop an operating system to search generic cheap phones.
+A command to choose the nearest seller, plan a trip or start walking refers to context_query when no new product is named. Keep that topic and every active constraint; the host alone executes selections and routes. Never turn 'destination', 'route' or 'visit' into a product query.
 Keep this topic for a budget-only follow-up. A newly named product replaces the old topic.
 Also keep the product type/brand/model for follow-ups that add a colour, size,
 material or seller/location preference; these words are not a new product name.

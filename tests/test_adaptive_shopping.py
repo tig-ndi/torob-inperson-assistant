@@ -168,3 +168,45 @@ class AdaptiveShoppingTests(unittest.TestCase):
         from apps.api.source_filters import requested_filters
         self.assertNotIn('size',requested_filters('سایز ۳۸ تا ۴۰'))
         self.assertEqual(requested_filters('سایز را ۳۸ کن')['size'],'38')
+
+    def test_smartphone_kind_uses_recorded_evidence_and_survives_budget_change(self):
+        self.add('smart_android','گوشی مدل هوشمند آلفا','گوشی موبایل',[{'key':'سیستم عامل','value':'Android 14'}])
+        self.add('smart_ios','گوشی مدل هوشمند بتا','گوشی موبایل',[{'key':'سیستم عامل','value':'iOS 18'}])
+        self.add('basic_phone','گوشی ساده مدل گاما','گوشی موبایل',[{'key':'نوع گوشی','value':'ساده'}])
+        first=self.post('گوشی هوشمند می‌خواهم؛ خودت نزدیک‌ترین مقصد را انتخاب کن',user_lat=35.7,user_lon=51.4)
+        self.assertEqual(first['status'],'results')
+        self.assertIn('هوشمند',first['query'])
+        self.assertIn('smart_android',[p['product_id'] for p in first['products']['items']])
+        self.assertIn('smart_ios',[p['product_id'] for p in first['products']['items']])
+        self.assertNotIn('basic_phone',[p['product_id'] for p in first['products']['items']])
+        changed=self.post('تا بیست میلیون تومان',context_need_state=first['need_state'],user_lat=35.7,user_lon=51.4)
+        self.assertIn('هوشمند',changed['query'])
+
+    def test_excluded_shop_never_returns_as_a_visit_destination(self):
+        always=json.dumps({day:{'status':'declared','shifts':[{'start_time':'00:00','end_time':'23:59'}]} for day in ('mon','tue','wed','thu','fri','sat','sun')})
+        with closing(sqlite3.connect(self.database)) as db,db:
+            db.execute('UPDATE shops SET weekly_hours=? WHERE shop_id=?',(always,'shop_one'))
+        original=self.agent_client.post('/api/local/destinations',json={'query':'گوشی','lat':35.7,'lon':51.4,'local_time':'12:00'}).json()
+        self.assertTrue(any(s['shop_id']=='shop_one' for s in original['selections']))
+        base={'query':'گوشی','local_time':'12:00','lat':35.7,'lon':51.4,'exclude_shop_ids':['shop_one']}
+        response=self.agent_client.post('/api/local/destinations',json=base)
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertTrue(all(s['shop_id']!='shop_one' for s in response.json()['selections']))
+        response=self.agent_client.post('/api/local/destinations',json={**base,'exclude_shop_ids':['x'*121]})
+        self.assertEqual(response.status_code,422)
+
+
+    def test_a_delegation_command_keeps_the_topic_and_budget_without_hiding_new_purchases(self):
+        state=fixtures.phone_battery_state(topic_query='گوشی هوشمند',max_price_toman='20000000',battery_requirement={'status':'unspecified','minimum_mah':None})
+        result=self.post('خودت نزدیک ترین مقصد قابل مراجعه را انتخاب کن',context_need_state=state)
+        self.assertEqual(result['query'],'گوشی هوشمند')
+        self.assertEqual(result['need_state']['max_price_toman'],'20000000')
+        from apps.api.purchase_context import refines_purchase
+        self.assertFalse(refines_purchase('خودت یک کفش انتخاب کن','گوشی هوشمند','گوشی موبایل'))
+        self.assertFalse(refines_purchase('خودت یک کلاه انتخاب کن','گوشی هوشمند','گوشی موبایل'))
+
+
+    def test_action_verbs_do_not_become_shoe_specs_or_new_product_names(self):
+        result=self.post('خودت یک کفش زنانه تا سه میلیون تومان انتخاب کن',context_query='گوشی هوشمند',context_category='گوشی موبایل')
+        self.assertEqual(result['query'],'کفش زنانه')
+        self.assertEqual(result['max_price_toman'],'3000000')

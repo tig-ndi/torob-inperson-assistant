@@ -2,7 +2,7 @@
 from datetime import datetime,timedelta
 from math import ceil
 from functools import lru_cache
-from typing import Literal
+from typing import Literal,Annotated
 from fastapi import APIRouter,HTTPException
 from pydantic import Field
 from apps.api.visit import VisitRequest
@@ -22,6 +22,7 @@ from apps.api.source_filters import SourceFilters, matches_source_filters
 class DestinationRequest(VisitRequest):
     source_filters: SourceFilters = Field(default_factory=SourceFilters)
     reference_product_id:str|None=Field(default=None,min_length=1,max_length=120)
+    exclude_shop_ids:list[Annotated[str,Field(min_length=1,max_length=120)]]=Field(default_factory=list,max_length=20)
     product_id:str=''
     query:str=Field(min_length=1,max_length=120)
     category_name:str|None=Field(default=None,max_length=200)
@@ -74,6 +75,9 @@ def destinations_router(catalogue:Catalogue):
             low=int(body.min_price_toman) if body.min_price_toman is not None else None
             high=int(body.max_price_toman) if body.max_price_toman is not None else None
             params=[expression,body.query,category,category,body.lat,body.lon,body.search_km*1000,low,low,high,high]
+            if body.exclude_shop_ids:
+                base+='AND s.shop_id NOT IN ('+','.join('?' for _ in body.exclude_shop_ids)+') '
+                params.extend(body.exclude_shop_ids)
             if body.credit or body.payment_provider:base+='AND payment_matches(s.payment_options,o.price_toman,p.category_name)=1 '
             if body.fast_delivery_only:base+='AND s.supports_fast_delivery=1 '
             if body.reference_product_id is not None:

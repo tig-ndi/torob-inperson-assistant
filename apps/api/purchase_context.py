@@ -9,6 +9,13 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
     text = normalize_text(text)
     from apps.api.category import detect_category_intent
     current = category or detect_category_intent(topic)
+    # A tool command about this purchase must not become a new literal product
+    # such as 'مقصد قابل مراجعه'. Unknown nouns still take the normal topic path.
+    command_words=set('خودت نزدیک نزدیکترین ترین کوتاه کوتاهترین سریع سریعترین ارزان ارزون تر بهترین مقصد قابل مراجعه را رو انتخاب انتخابش کن کنید تصمیم بگیر برای من برام بهم همین این محصول کالا فروشگاه جا جای شروع کنم حرکت مسیر پیاده ماشین خودرو دوچرخه بریم برم برنامه رفتن تعیین آماده بچین با به و از بین گزینه ها گزینهها یکی اولی دومی سومی'.split())
+    words=re.findall(r'[^\W_]+',text)
+    if (re.search(r'انتخاب(?:ش)?\s*(?:کن|کنید)|تصمیم\s*بگیر|برنامه.*بچین|مسیر.*(?:تعیین|آماده)\s*کن',text)
+            and words and all(word in command_words for word in words)):
+        return True
     if re.match(r'^(?:کدامشان|کدومشون|از این(?:ها| ها)|بین این(?:ها| ها))\b', text):
         return True
     # A target device after "for" describes the existing accessory. A request

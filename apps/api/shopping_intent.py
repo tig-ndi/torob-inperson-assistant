@@ -71,6 +71,14 @@ def platform_topic(query, latest, previous, category):
     query = ' '.join(query.split())
     if wanted:
         query += ' اندروید' if wanted == 'android' else ' ios'
+    latest_smart=bool(re.search(r'گوشی\s+هوشمند',latest))
+    keep_smart=bool(re.search(r'گوشی\s+هوشمند',normalize_text(previous or '')))
+    any_kind=bool(re.search(r'نوع گوشی.*فرقی ن(?:دارد|داره)',latest))
+    if latest_smart or keep_smart and not keypad_request(latest) and not any_kind:
+        query=re.sub(r'دکمه\s*ای|هوشمند','',query).strip()
+        query=re.sub(r'^گوشی', 'گوشی هوشمند',query)
+    elif any_kind:
+        query=re.sub(r'دکمه\s*ای|هوشمند','',query).strip()
     return query
 
 
@@ -84,6 +92,8 @@ def retrieval_query(query):
     if operating_system(text):
         text = re.sub(r'(?<!\w)(?:اندروید(?:ی)?|android|ios|آی\s*او\s*اس)(?!\w)|سیستم\s*عامل', ' ', text)
         text = ' '.join(text.split()) or 'گوشی'
+    if re.search(r'گوشی\s+هوشمند',text):
+        text=re.sub(r'هوشمند','',text).strip()
     if text in {'شارژر موبایل','شارژر گوشی'}:return 'شارژر'
     if re.search(r'گوشی\s+دکمه\s*ای',text):
         return re.sub(r'دکمه\s*ای','',text).strip()
@@ -101,6 +111,12 @@ def matches_product_kind(query,category,title,specs):
     if re.search(r'(?<!\w)کفش(?!\w)',query) and not re.search(r'بند|کفی|واکس|هولدر|جاکفشی|برس|بوگیر|کاور|لوازم',query):
         if not re.search(r'کفش|کتانی',category) or re.search(r'بند|کفی|زیره|واکس|هولدر|جاکفشی|برس|بوگیر|کاور|اکسسوری|دستگاه|اسکیت|کفشور|سگ|گربه',category):
             return 0
+    if re.search(r'گوشی\s+هوشمند',query):
+        if category!='گوشی موبایل':return 0
+        recorded=json.loads(specs or '[]')
+        return int(recorded_operating_system(recorded) in {'android','ios'} or any(
+            normalize_text(spec.get('key') or '') in {'نوع گوشی','نوع تلفن همراه'} and
+            normalize_text(spec.get('value') or '') in {'هوشمند','smartphone'} for spec in recorded))
     if keypad_request(query):
         if category!='گوشی موبایل':return 0
         title=normalize_text(title or '')
