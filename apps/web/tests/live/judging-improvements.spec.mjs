@@ -7,10 +7,10 @@ for(const width of [320,1440])test(`comparison starts compact and keeps every de
   await page.goto('/');await send(page);const checks=page.getByRole('checkbox',{name:'مقایسه',exact:true});await checks.nth(0).click();await checks.nth(1).click();await page.getByRole('button',{name:'مقایسهٔ انتخاب‌ها',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'مقایسهٔ کامل انتخاب‌ها'}),advanced=dialog.locator('.comparison-all-fields');
   await expect(advanced).not.toHaveAttribute('open','');expect(await dialog.locator('.dialog-content').evaluate(el=>el.scrollHeight)).toBeLessThan(2500);
-  await expect(dialog.locator('[data-comparison-field="brand"]').first()).toBeVisible();await dialog.getByRole('checkbox',{name:'فقط تفاوت‌ها را نشان بده'}).check();await expect(dialog.locator('[data-comparison-field="brand"]')).toHaveCount(0);
-  await dialog.getByRole('checkbox',{name:'فقط تفاوت‌ها را نشان بده'}).uncheck();await advanced.locator('summary').first().click();await expect(dialog.getByRole('rowheader',{name:'جزئیات · مشخصه 79',exact:true})).toBeVisible();
+  await expect(dialog.locator('.comparison-table tbody tr').first()).toHaveAttribute('data-comparison-field','min-price');await advanced.locator('summary').first().click();await expect(dialog.locator('[data-comparison-field="brand"]').first()).toBeVisible();await dialog.getByRole('checkbox',{name:'فقط تفاوت‌ها را نشان بده'}).check();await expect(dialog.locator('[data-comparison-field="brand"]')).toHaveCount(0);
+  await dialog.getByRole('checkbox',{name:'فقط تفاوت‌ها را نشان بده'}).uncheck();await expect(dialog.getByRole('rowheader',{name:'جزئیات · مشخصه 79',exact:true})).toBeVisible();
   expect(await advanced.innerText()).not.toMatch(/evidence_count|capacity_mah|exact_source_value/);
-  if(width<1000)await expect(dialog.locator('.comparison-mobile-label').first()).toContainText(products.items[0].persian_title);
+  if(width<1000)await expect(dialog.locator('.comparison-table thead strong').first()).toHaveAttribute('title',products.items[0].persian_title);
   await page.screenshot({path:`../../.local/live-qa/judging-compact-comparison-${width}.png`});await page.keyboard.press('Escape');await layout(page);
 });
 
