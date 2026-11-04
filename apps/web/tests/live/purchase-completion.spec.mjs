@@ -10,7 +10,7 @@ async function fixture(page,request,{failure=false,prepare=true}={}){
  await expect(chat(page)).toHaveAttribute('data-purchase-stage','ready');await expect(chat(page).getByRole('button',{name:'بزن بریم',exact:true})).toBeEnabled();return {calls,roads};
 }
 const chat=page=>page.locator('.chat-pane .purchase-journey');
-const map=page=>page.locator('[data-map-panel] .purchase-journey');
+const map=page=>page.viewportSize().width>=1000?chat(page):page.locator('[data-map-panel] .purchase-journey');
 async function begin(page,panel=chat(page)){
  await panel.getByRole('button',{name:'بزن بریم',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن',exact:true});await expect(d).toBeVisible();await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).click();await expect(d.locator('.route-total')).toBeVisible();await d.getByRole('button',{name:'بستن',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');
 }
@@ -65,12 +65,29 @@ test('selecting a shop on the map continues through purchase without returning t
  await page.setViewportSize({width:390,height:844});const f=await fixture(page,request,{prepare:false});await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await page.locator('.map-store-choice').first().click();await page.getByRole('button',{name:'بررسی و شروع خرید از این فروشگاه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','ready');await begin(page,map(page));await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(page.locator('[data-map-panel]')).toBeVisible();expect(f.calls).toHaveLength(1);
 });
 
-for(const width of [1024,1440])test(`desktop journey card leaves the selected map destination unobscured at ${width}px`,async({page,request})=>{
- await page.setViewportSize({width,height:900});await fixture(page,request);await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});const pin=page.locator('.real-pin.chosen'),panel=page.locator('.map-journey-panel'),chatPane=page.locator('.chat-pane');
- await expect.poll(async()=>{const [p,j,c]=await Promise.all([pin.boundingBox(),panel.boundingBox(),chatPane.boundingBox()]);return !!p&&p.x>j.x+j.width+8&&p.x+p.width<c.x&&p.y>90&&p.y+p.height<880;}).toBe(true);
+for(const width of [1024,1440])test(`desktop shows one journey card and leaves the map destination unobscured at ${width}px`,async({page,request})=>{
+ await page.setViewportSize({width,height:900});await fixture(page,request);await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});await expect(page.locator('.purchase-journey')).toHaveCount(1);await expect(page.locator('[data-map-panel] .purchase-journey')).toHaveCount(0);const pin=page.locator('.real-pin.chosen'),chatPane=page.locator('.chat-pane');
+ await expect.poll(async()=>{const [p,c]=await Promise.all([pin.boundingBox(),chatPane.boundingBox()]);return !!p&&p.x>=0&&p.x+p.width<c.x&&p.y>90&&p.y+p.height<880;}).toBe(true);
  await page.screenshot({path:`../../.local/purchase-desktop-focus-${width}.png`});await layout(page);
 });
 
 test('postponement does not claim a saved ending when local storage fails',async({page,request})=>{
  await page.setViewportSize({width:390,height:844});await fixture(page,request);await page.route('**/api/local/trips',r=>r.request().method()==='POST'?r.fulfill({status:500,json:{detail:'ذخیرهٔ آزمایشی ناموفق بود'}}):r.continue());await chat(page).locator('.journey-more>summary').click();await chat(page).getByRole('button',{name:'ادامه در فرصتی دیگر',exact:true}).click();await expect(page.getByRole('alert')).toContainText('ذخیرهٔ آزمایشی ناموفق بود');await expect(chat(page)).toHaveAttribute('data-purchase-stage','ready');await expect(chat(page).getByRole('button',{name:'ادامه در فرصتی دیگر',exact:true})).toBeEnabled();
+});
+
+for(const width of [320,390,1024,1440])test(`journey steps expose transport and a contextual back action without duplicate desktop panels at ${width}px`,async({page,request})=>{
+ await page.setViewportSize({width,height:width===320?568:900});const f=await fixture(page,request);const panel=chat(page),steps=panel.getByRole('list',{name:'مراحل مراجعه'}),modes=panel.getByRole('group',{name:'وسیلهٔ رفتن'});
+ await expect(steps.locator('li')).toHaveCount(4);for(const step of await steps.locator('li').all())await expect(step.locator('svg')).toHaveCount(1);
+ await expect(modes.getByRole('button',{name:'پیاده',exact:true})).toHaveAttribute('aria-pressed','true');const selected=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:selected')).offer_id);
+ await modes.getByRole('button',{name:'خودرو',exact:true}).click();await expect(modes.getByRole('button',{name:'خودرو',exact:true})).toHaveAttribute('aria-pressed','true');
+ await panel.getByRole('button',{name:'تنظیم زمان حرکت و جزئیات مسیر',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'});await expect(d.getByRole('button',{name:'خودرو',exact:true})).toHaveAttribute('aria-pressed','true');await d.getByRole('button',{name:'دوچرخه',exact:true}).click();await d.getByRole('button',{name:'بستن',exact:true}).click();await expect(modes.getByRole('button',{name:'دوچرخه',exact:true})).toHaveAttribute('aria-pressed','true');expect(f.roads).toHaveLength(0);
+ if(width>=1000){await expect(page.locator('.purchase-journey')).toHaveCount(1);await expect(page.locator('[data-map-panel] .purchase-journey')).toHaveCount(0);}
+ await expect.poll(async()=>{const nav=await panel.locator('.journey-step-nav').boundingBox(),scroll=await page.locator('[data-chat-scroll]').boundingBox();return nav.y>=scroll.y-1&&nav.y+nav.height<=scroll.y+scroll.height+1;}).toBe(true);await page.screenshot({path:`../../.local/journey-controls-${width}.png`});await panel.getByRole('button',{name:'بازگشت به انتخاب فروشگاه',exact:true}).click();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','stores');expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:selected')).offer_id)).toBe(selected);await layout(page);expect(f.calls).toHaveLength(1);
+});
+for(const width of [390,1440])test(`back follows each visit stage and lets the user correct a completion at ${width}px`,async({page,request})=>{
+ await page.setViewportSize({width,height:900});const f=await fixture(page,request);await begin(page);const panel=map(page),selected=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:selected')).offer_id);
+ await panel.getByRole('button',{name:'بازگشت به آماده‌شدن',exact:true}).click();await expect(panel).toHaveAttribute('data-purchase-stage','ready');await panel.getByRole('button',{name:'بزن بریم',exact:true}).click();await expect(panel).toHaveAttribute('data-purchase-stage','en_route');
+ await panel.getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await panel.getByRole('button',{name:'بازگشت به مسیر',exact:true}).click();await expect(panel).toHaveAttribute('data-purchase-stage','en_route');
+ await panel.getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await panel.getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(panel).toHaveAttribute('data-purchase-stage','done');await panel.getByRole('button',{name:'بازگشت برای اصلاح نتیجه',exact:true}).click();await expect(panel).toHaveAttribute('data-purchase-stage','arrived');await expect(panel.locator('[data-completed-visit]')).toHaveCount(0);
+ await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','arrived');expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:selected')).offer_id)).toBe(selected);expect(f.calls).toHaveLength(1);await layout(page);
 });

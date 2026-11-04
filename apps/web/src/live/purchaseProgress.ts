@@ -12,6 +12,11 @@ export function advancePurchase(p:PurchaseProgress,action:PurchaseAction,now=new
  if(action==='cancelled'||action==='later')return {...p,stage:'done',result:action,finishedAt:now};
  return p;
 }
+export function rewindPurchase(p:PurchaseProgress):PurchaseProgress{
+ if(p.stage==='ready'||p.stage==='problem')return p;
+ const stage:PurchaseStage=p.stage==='en_route'?'ready':p.stage==='arrived'?(p.startedAt?'en_route':'ready'):p.problem?'problem':p.result==='purchased'||p.result==='not_purchased'?'arrived':p.startedAt?'en_route':'ready';
+ return {...p,stage,result:null,finishedAt:null,startedAt:stage==='ready'?null:p.startedAt};
+}
 export function purchaseAction(text:string):PurchaseAction|null{
  const s=text.replace(/\u200c/g,' ').replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[.!؟،]/g,'').trim();
  if(/^(?:بزن بریم|شروع کن|شروع حرکت|شروع مسیریابی|راه بیفتیم|حرکت کنیم)$/.test(s))return 'start';
