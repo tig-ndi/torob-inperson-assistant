@@ -4,7 +4,7 @@ import Hint from './Hint';
 import {replyPlan,type ReplyAction,type ReplyContext,type ReplyPanel} from './replySuggestions';
 
 export function replyContext(a:Shopping):ReplyContext{return {
-  screen:a.screen,topic:a.need?.topic_query??a.product?.persian_title??(a.screen==='decide'?'':a.query),questionCode:a.questionCode||(a.need?.budget_needs_input?'budget':''),
+  delegatedState:a.delegation?.status,screen:a.screen,topic:a.need?.topic_query??a.product?.persian_title??(a.screen==='decide'?'':a.query),questionCode:a.questionCode||(a.need?.budget_needs_input?'budget':''),
   lastQuestion:a.thread.filter(m=>m.role==='assistant'&&m.kind!=='action').at(-1)?.text??'',
   history:a.messages.filter(m=>m.role==='user').map(m=>m.content).join(' '),budget:a.filters.max,
   appliedFields:Object.entries(a.need?.source_filters??{}).filter(([,v])=>v!==null).map(([key])=>({colour:'رنگ',size:'سایز',connector:'درگاه'} as Record<string,string>)[key]!),needsLocation:a.needsLocation,selected:!!a.selected,openOnly:a.filters.open,

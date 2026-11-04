@@ -6,7 +6,7 @@ export type ReplyAction=Choice&(
 );
 export type ReplyContext={screen:string;topic:string;questionCode:string;lastQuestion:string;history:string;
   budget:string;needsLocation:boolean;selected:boolean;openOnly:boolean;batteryStatus:string;pending:string[];
-  completed:boolean;hasResults:boolean;appliedFields?:string[]};
+  completed:boolean;hasResults:boolean;delegatedState?:'pending'|'planned'|'blocked';appliedFields?:string[]};
 export type ReplyPlan={hint:string;primary:ReplyAction[];more:ReplyAction[]};
 const message=(id:string,label:string,text:string):ReplyAction=>({id,label,kind:'message',text});
 const panel=(id:ReplyPanel,label:string):ReplyAction=>({id,label,kind:'panel',panel:id});
@@ -20,6 +20,7 @@ export function budgetPresets(topic:string):{label:string;value:string}[]{
 export function replyPlan(c:ReplyContext):ReplyPlan{
   const common:ReplyAction[]=[budget,panel('topic','اصلاح کالای موردنظر'),{id:'location',label:'تغییر موقعیت جست‌وجو',kind:'overlay',overlay:'location'}];
   if(c.questionCode==='requirement_choice'&&c.appliedFields?.length)return {hint:'فقط شرطی را انتخاب کن که می‌خواهی حذف شود.',primary:[panel('requirements','انتخاب شرط برای حذف')],more:[]};
+  if(c.questionCode==='phone_kind')return {hint:'فقط نوع گوشی را انتخاب کن؛ بقیهٔ تصمیم با همراه خرید است.',primary:[message('smartphone','هوشمند','گوشی هوشمند می‌خواهم'),message('keypad','دکمه‌ای','گوشی دکمه ای می‌خواهم'),message('any-phone','فرقی ندارد','نوع گوشی فرقی ندارد')],more:[]};
   if(c.questionCode==='connector')return {hint:'فقط درگاه دستگاه لازم است؛ کالای موردنظر همان شارژر است.',primary:[message('usb-c','تایپ سی','درگاه تایپ سی باشد'),message('micro-usb','میکرو USB','درگاه میکرو USB باشد'),message('lightning','لایتنینگ','درگاه لایتنینگ باشد')],more:[]};
   if(c.needsLocation)return {hint:'نقطهٔ شروع جست‌وجو را مشخص کن.',primary:[{id:'map',label:'روی نقشه انتخاب می‌کنم',kind:'map'},{id:'gps',label:'موقعیت فعلی من',kind:'gps'}],more:[{id:'location',label:'انتخاب محله یا مختصات',kind:'overlay',overlay:'location'}]};
   if(c.questionCode==='product_kind'&&/شارژر/.test(c.lastQuestion)&&/دستگاه|درگاه/.test(c.lastQuestion))return {hint:'شارژر را برای کدام دستگاه می‌خواهی؟',primary:[message('phone-charger','برای گوشی','شارژر برای گوشی می‌خواهم'),message('laptop-charger','برای لپ‌تاپ','شارژر برای لپ‌تاپ می‌خواهم')],more:[panel('topic','دستگاه یا مدل دیگری دارم')]};
@@ -34,7 +35,9 @@ export function replyPlan(c:ReplyContext):ReplyPlan{
   if(c.screen==='results'&&c.hasResults&&footwear)return {hint:'برای انتخاب کفش، گروه موردنظر را مشخص کن.',primary:['مردانه','زنانه','کودک'].map(kind=>message('shoe-'+kind,`کفش ${kind}`,`کفش ${kind==='کودک'?'بچگانه':kind} می‌خواهم`)),more:[budget,compare]};
   if(c.screen==='results'&&!c.hasResults&&c.appliedFields?.length)return {hint:'تطابق ثبت‌شده پیدا نشد؛ فقط همان شرط یا مدل را تغییر بده.',primary:[message('remove-applied','بدون شرط '+c.appliedFields[0],c.appliedFields[0]+' را حذف کن'),panel('topic','مدل دیگری بررسی کنیم')],more:[budget]};
   if(c.screen==='results'&&!c.hasResults)return {hint:'گزینه‌ای با این شرایط پیدا نشد؛ فقط همان مورد لازم را تغییر بده.',primary:[panel('budget','بودجهٔ دیگری انتخاب می‌کنم'),panel('topic','کالای دیگری بررسی کنیم')],more:[{id:'location',label:'تغییر موقعیت جست‌وجو',kind:'overlay',overlay:'location'}]};
-  if(c.screen==='results')return {hint:'قدم بعدی همین خرید را انتخاب کن.',primary:c.budget?[compare,message('nearest','فروشگاه نزدیک‌تر','نزدیک‌ترین فروشگاه همین کالا را بررسی کن')]:[{id:'budget-preset',kind:'budget',...budgetPresets(c.topic)[1]!},compare],more:[...common,message('nearest','فروشگاه نزدیک‌تر','نزدیک‌ترین فروشگاه همین کالا را بررسی کن')]};
+  if(c.delegatedState==='planned')return {hint:'مقصد انتخاب شده؛ با گفت‌وگو هم می‌توانی ادامه بدهی.',primary:[message('start-trip','شروع کنیم','بزن بریم'),budget],more:[...common,message('finish-trip','این خرید تمام شد','این خرید تمام شد')]};
+  if(c.delegatedState)return {hint:'همین خرید محفوظ است؛ فقط شرط موردنیاز را تغییر بده.',primary:[],more:common};
+  if(c.screen==='results')return {hint:'قدم بعدی همین خرید را انتخاب کن.',primary:c.budget?[compare,message('nearest','فروشگاه نزدیک‌تر','نزدیک‌ترین فروشگاه همین کالا را بررسی کن')]:[{id:'budget-preset',kind:'budget',...budgetPresets(c.topic)[1]!},compare],more:[message('delegate','خودت انتخاب و برنامه‌ریزی کن','خودت نزدیک ترین مقصد را انتخاب کن و برنامه رفتن را بچین'),...common,message('nearest','فروشگاه نزدیک‌تر','نزدیک‌ترین فروشگاه همین کالا را بررسی کن')]};
   if(c.screen==='stores')return {hint:'پیش از رفتن، فروشگاه‌ها را با شرایط خودت بررسی کن.',primary:[message('compare-shops','مقایسهٔ فروشگاه‌ها','فروشگاه‌ها را مقایسه کن'),c.openOnly?message('all-hours','همهٔ ساعت‌ها','فیلتر فقط باز را بردار'):message('open-only','فقط فروشگاه باز','فقط فروشگاه‌های باز همین کالا را بررسی کن')],more:[...common,{id:'travel',label:'روش رفتن و ساعت مراجعه',kind:'overlay',overlay:'travel'}]};
   if(c.selected&&c.screen==='contact')return {hint:'نتیجهٔ پیگیری خودت را بگو تا قدم بعدی همین خرید را بررسی کنم.',primary:[message('report-stock','کالا موجود نبود','کالا موجود نبود'),message('report-answer','پاسخی نگرفتم','فروشگاه جواب نداد')],more:common};
   if(c.selected)return {hint:'برنامهٔ مراجعه را از همین‌جا ادامه بده.',primary:[{id:'alternatives',label:'جایگزین‌ها را ببینیم',kind:'overlay',overlay:'alts'},{id:'travel',label:'روش رفتن و زمان',kind:'overlay',overlay:'travel'}],more:[...common,...(c.screen==='trip'?[{id:'finish',label:'این خرید را تمام کردم',kind:'finish'} as ReplyAction]:[])]};

@@ -3,7 +3,7 @@ const families=[['قاب برای گوشی','کاور برای گوشی','قاب
 const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
 export function selectedProductIndex(text:string,count:number):number|null{
   const value=normalized(text).replace(/[.؟!،]+$/,'');
-  const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(?:گزینه\s+)?(اولی|اول|دومی|دوم|سومی|سوم)(?:\s+(?:را|رو))?\s+(?:می\s*(?:خواهم|خوام)|انتخاب\s*کن|فروشگاه(?:\s*ها)?(?:ش|یش)?\s*(?:را|رو)?\s*(?:ببینیم|نشان\s*بده|نشون\s*بده))$/.exec(value);
+  const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(?:گزینه\s+)?(اولی|اول|دومی|دوم|سومی|سوم)(?:\s+(?:را|رو))?\s+(?:می\s*(?:خواهم|خوام)|انتخاب\s*کن|خوبه|خوب\s*است|بردار|فروشگاه(?:\s*ها)?(?:ش|یش)?\s*(?:را|رو)?\s*(?:ببینیم|نشان\s*بده|نشون\s*بده))$/.exec(value);
   if(!match)return null;
   const index=/^اول/.test(match[1]!)?0:/^دوم/.test(match[1]!)?1:2;
   return index<count?index:null;
@@ -54,4 +54,9 @@ export function productReferenceIndex(text:string,count:number):number|null{
  const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(اولی|دومی|سومی)(?=\s|$)/.exec(value);
  if(!match||!/رنگ|سایز|سفید|مشکی|آبی|قرمز|سبز|طوسی|صورتی/.test(value)||/نمی\s*خوا|نباش|نه\b/.test(value))return null;
  const index=match[1]==='اولی'?0:match[1]==='دومی'?1:2;return index<count?index:null;
+}
+
+export function samePurchaseFamily(a:string,b:string){
+ const family=(s:string)=>families.findIndex(names=>names.some(n=>n===normalized(s)||n.replace(" برای "," ")===normalized(s)));
+ const index=family(a);return index>=0&&index===family(b);
 }

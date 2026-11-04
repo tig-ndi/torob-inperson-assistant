@@ -17,7 +17,7 @@ export function visitIntent(text:string,context:string|null):VisitIntent|null {
   const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');
   if(!/نزدیک|اطراف|حضوری|الان.*باز|فروشگاه.*باز|شب|کیلومتر|کجا.*بخر/.test(input))return null;
   // Leave additional product/payment requirements to the bounded intent interpreter.
-  if(/رنگ|سایز|دوربین|حافظه|گارانتی|اندروید|سیستم.?عامل|سامسونگ|شیائومی|آیفون|اپل|نوکیا|هانوفر|دکمه|سالمند|پدر|مادر|باتری|باطری|سبک|درشت|بلند|مناسب|ضد|پیاده.?روی|تایپ.?سی|نوع.?سی|فردا|دیروز|هفته|شنبه|جمعه|[a-z]/i.test(input))return null;
+  if(/رنگ|سایز|دوربین|حافظه|گارانتی|هوشمند|اندروید|سیستم.?عامل|سامسونگ|شیائومی|آیفون|اپل|نوکیا|هانوفر|دکمه|سالمند|پدر|مادر|باتری|باطری|سبک|درشت|بلند|مناسب|ضد|پیاده.?روی|تایپ.?سی|نوع.?سی|فردا|دیروز|هفته|شنبه|جمعه|[a-z]/i.test(input))return null;
   if(/تومان|تومن|میلیون|میلیارد|بودجه/.test(input)&&!visitPreferences(text).max)return null;
   if(purchaseTopics(text).length>1||/نمی.?خوا(?:هم|م)|نمی.?خوام/.test(text))return null;
   const topics=['قاب گوشی','کاور گوشی','کیف گوشی','شارژر موبایل','شارژر گوشی','شارژر','کابل شارژ','هدفون','گوشی','موبایل','کفش','لپ تاپ','لپ‌تاپ','باتری','پاوربانک'];
