@@ -8,6 +8,7 @@ import {Slider} from '../prototype/ui';
 import Hint from './Hint';
 import {comparisonValue} from './comparisonValues';
 import {memoryVariants} from './memoryVariants';
+import {chargerFacts,type ChargerFact} from './chargerFacts';
 import {comparisonPriceSummary} from './comparisonSummary';
 
 type Field<T>={key:string;label:string;value:(item:T)=>ReactNode};
@@ -85,8 +86,13 @@ export default function ComparisonSheet({a,onMap}:{a:Shopping;onMap:()=>void}){
   const important=/حافظه داخلی|ظرفیت حافظه|مقدار RAM|ظرفیت باتری|توان خروجی|نوع درگاه|جنس زیره|جنس رویه|سایز/;
   const memoryFields:Field<Product>[]=a.models.some(p=>memoryVariants(p))?(['storage','ram'] as const).map(kind=>({key:'variant:'+kind,label:kind==='storage'?'حافظه داخلی همین نسخه':'رم همین نسخه',value:p=>{const item=memoryVariants(p)?.[kind];return item?.value?<><span>{fa(item.value)}</span><small className="comparison-muted block">{item.note}</small></>:<Signal tone="caution">{item?.note??missing}</Signal>;}})):[];
   const highlighted=allSpecs.filter(f=>important.test(f.label)&&!(/حافظه|RAM|رم/i.test(f.label)&&memoryFields.length)).slice(0,4);
+  const chargerCell=(fact:ChargerFact|undefined)=>fact?.value?<><span>{fa(fact.value)}</span><small className="comparison-muted block">{fact.note}</small></>:fact?.conflicting?<Signal tone="caution">{fact.note}</Signal>:missing;
+  const chargerFields:Field<Product>[]=a.models.some(p=>chargerFacts(p))?[
+    {key:'charger:power',label:'توان ثبت‌شدهٔ شارژر',value:p=>chargerCell(chargerFacts(p)?.power)},
+    {key:'charger:connector',label:'درگاه خروجی شارژر',value:p=>chargerCell(chargerFacts(p)?.connector)},
+  ]:[];
   const topicSpecs=allSpecs.filter(f=>a.need?.review_topics.some(topic=>(topic==='camera'?/دوربین اصلی|رزولوشن دوربین/:/ظرفیت باتری/).test(f.label))).slice(0,2);
-  const primaryProducts=[productFields.find(f=>f.key==='min-price')!,...topicSpecs,...memoryFields,...highlighted.filter(f=>!topicSpecs.some(t=>t.key===f.key))];
+  const primaryProducts=[productFields.find(f=>f.key==='min-price')!,...topicSpecs,...memoryFields,...chargerFields,...highlighted.filter(f=>!topicSpecs.some(t=>t.key===f.key)&&!(chargerFields.length&&/توان خروجی|نوع درگاه/.test(f.label)))];
   const detailedProducts=productRows.filter(f=>!primaryProducts.some(x=>x.key===f.key));
   const primaryOffers=offerFields.filter(f=>['price','price-date','inventory','distance','hours','address','warranty','credit'].includes(f.key));
   const detailedOffers=offerFields.filter(f=>!primaryOffers.some(x=>x.key===f.key));
