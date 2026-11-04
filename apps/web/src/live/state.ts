@@ -280,7 +280,7 @@ export function useShopping() {
     setInsights(null);setInsightsError(null);setInsightsBusy(false);
     if(!product||!position)return;
     const c=new AbortController();setInsightsBusy(true);
-    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,filters,visitIntent?.localTime,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation)say('assistant',visitGuidance(v,position.label));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
+    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,{...filters,sort:undefined},visitIntent?.localTime,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation)say('assistant',visitGuidance(v,position.label));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
     return()=>c.abort();
   },[product?.product_id,position,filters,visitIntent,reload,delegation?.id]);
   useEffect(()=>{
