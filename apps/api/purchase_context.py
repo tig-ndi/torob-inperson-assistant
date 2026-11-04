@@ -3,10 +3,34 @@ import re
 from tools.prepare_data import normalize_text
 
 
+def purchase_question(text: str) -> bool:
+    """Questions about an existing choice do not request another product."""
+    text = normalize_text(text)
+    if re.search(r'به جای|عوض کن|جدید.*می\s*خوا|دیگه.*می\s*خوا', text):
+        return False
+    return bool(re.search(r'(?:چرا|دلیل).*(?:انتخاب|پیشنهاد|همین|این فروشگاه)|'
+                          r'(?:این|همین|همون|اولی|دومی|سومی).*(?:می\s*خوره|سازگار|مناسب.*هست)|'
+                          r'(?:سازگاری|سازگار بودن).*(?:این|همین|مدل)', text))
+
+
+def retained_identity(latest: str, previous: str | None, proposed: str | None) -> str | None:
+    """A field edit may shorten a repeated head, not silently erase its qualifiers."""
+    if not previous or not proposed:
+        return proposed
+    text = normalize_text(latest)
+    if (re.search(r'بودجه|قیمت|میلیون|تومان|رنگ|سایز|درگاه', text)
+            and not re.search(r'به جای|نوع.*عوض|مدل.*(?:دیگه|دیگر)|فرقی ن(?:داره|دارد)', text)
+            and set(normalize_text(proposed).split()) < set(normalize_text(previous).split())):
+        return previous
+    return proposed
+
+
 def refines_purchase(text: str, topic: str | None, category: str | None = None) -> bool:
     if not topic:
         return False
     text = normalize_text(text)
+    if purchase_question(text):
+        return True
     from apps.api.category import detect_category_intent
     current = category or detect_category_intent(topic)
     # A tool command about this purchase must not become a new literal product

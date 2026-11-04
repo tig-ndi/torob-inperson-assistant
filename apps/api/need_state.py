@@ -154,6 +154,8 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     from apps.api.explanations import requested_review_topics
     from apps.api.intent import clear_product_topic
     old_topic = request.context_query
+    from apps.api.purchase_context import retained_identity
+    query = retained_identity(request.messages[-1].content, old_topic, query)
     changed = False
     if query and old_topic and normalize_text(query) != normalize_text(old_topic):
         old_category = request.context_category or detect_category_intent(old_topic)

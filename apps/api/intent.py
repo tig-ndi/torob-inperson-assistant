@@ -295,7 +295,8 @@ def multiple_topic_heads(text: str, category_names, identity_words=None) -> bool
     sequences = _category_sequences(category_names)
     heads = {sequence[0] for sequence in sequences}
     signatures = []
-    for segment in MENTION_SEPARATORS.split(_strip_budget_phrases(text)):
+    purchase_text = ' ؛ '.join(product_clauses(text, prioritize=False))
+    for segment in MENTION_SEPARATORS.split(_strip_budget_phrases(purchase_text)):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
         start = next((index for index, token in enumerate(tokens) if token in heads), None)
         if start is None:
@@ -483,6 +484,11 @@ def query_choices(request: AssistantRequest) -> list[str]:
             query = ' '.join(tokens[start:start + width])
             if query and len(query) <= 120 and query not in candidates:
                 candidates.append(query)
+    # A field edit can mention the head again after a budget clause. Keep the
+    # validated prior identity available even when lexical windows start there.
+    if request.context_query and re.search(r'بودجه|قیمت|میلیون|تومان|رنگ|سایز|درگاه', normalize_text(latest)):
+        context = normalize_text(request.context_query)
+        return [context, *[q for q in candidates if q != context]][:6]
     return candidates[:6]
 
 

@@ -27,6 +27,7 @@ from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, i
 from tools.prepare_data import normalize_text
 from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import platform_topic
+from apps.api.purchase_context import refines_purchase, retained_identity
 from apps.api.models import BatteryRequirement
 
 
@@ -225,6 +226,11 @@ class AssistantService:
                 if not isinstance(content, str) or len(content) > 6000:
                     raise AgentError('invalid_output', 502)
                 plan = IntentPlan.model_validate_json(content)
+                if (plan.query and request.context_query and is_constraint_followup(request.messages[-1].content)
+                        and detect_category_intent(request.messages[-1].content) is None):
+                    plan = plan.model_copy(update={'query': normalize_text(request.context_query)})
+                plan = plan.model_copy(update={'query': retained_identity(
+                    request.messages[-1].content, request.context_query, plan.query)})
                 if plan.query is not None and plan.query not in query_choices(request):
                     raise AgentError('invalid_output', 502)
             except (KeyError, IndexError, TypeError, AttributeError, ValueError, ValidationError) as exc:
@@ -232,12 +238,17 @@ class AssistantService:
             latest_msg = request.messages[-1].content
             latest_has_capacity_unit = bool(re.search(r'(?<!\w)' + UNIT + r'(?!\w)', normalize_text(latest_msg)))
             capacity_reply = capacity_followup(request)
-            from apps.api.purchase_context import refines_purchase
             refinement = refines_purchase(latest_msg, request.context_query, request.context_category)
             latest_category = None if refinement else detect_category_intent(affirmative_purchase_text(latest_msg))
             category_names = await asyncio.to_thread(self.catalogue.category_names)
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
             latest_span = None if refinement else product_span(latest_msg, category_names, identity_words)
+            field_message = re.sub(r'^(?:(?:لطفا|لطفاً|فقط|هم|و)\s+)+', '', normalize_text(latest_msg))
+            if (request.context_query and latest_category is None and is_constraint_followup(latest_msg)
+                    and field_only_topic(field_message, category_names)):
+                # A value like «سفید» can itself head a catalogue category. The
+                # explicit field phrase owns that value, not the product identity.
+                refinement, latest_span = True, None
             if (request.context_query and is_constraint_followup(latest_msg)
                     and latest_category is None and field_only_topic(latest_span, category_names)):
                 # A large catalogue also contains categories beginning with
@@ -340,7 +351,7 @@ class AssistantService:
                             self.catalogue.matches_identity, plan.query, 'گوشی موبایل'))
             requirement = resolve_requirement(request, battery_phone)
             if (refinement and request.context_battery_requirement and request.context_battery_requirement.status=='awaiting_minimum'
-                    and re.search(r'دوام|شارژدهی|مهم|اولویت', normalize_text(latest_msg))):
+                    and re.search(r'دوام|شارژدهی|(?:باتری|باطری).*(?:مهم|اولویت)', normalize_text(latest_msg))):
                 requirement = BatteryRequirement(status='no_minimum')
             if battery_phone and requirement.status in {'minimum', 'awaiting_minimum', 'no_minimum'} and plan.query is None:
                 query = authoritative or next(iter(query_choices(request)), None)
@@ -396,7 +407,7 @@ class AssistantService:
             if not budget_uncertain and (
                 is_ambiguous_product_intent(
                     routing_message,
-                    context_category=request.context_category,
+                    context_category=latest_category or request.context_category,
                     context_query=request.context_query,
                     category_cleared=request.category_cleared,
                 )
@@ -404,13 +415,16 @@ class AssistantService:
                     plan.query is not None
                     and is_ambiguous_product_intent(
                         f'{plan.query} {routing_message}',
-                        context_category=request.context_category,
+                        context_category=latest_category or request.context_category,
                         context_query=request.context_query,
                         category_cleared=request.category_cleared,
                     )
                 )
             ):
                 plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
+
+            if plan.query:
+                plan = plan.model_copy(update={'query': retained_identity(latest_msg, request.context_query, plan.query)})
 
             page = None
             effective_category = None

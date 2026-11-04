@@ -83,7 +83,7 @@ def edited_filters(previous, text, available, *, has_pending=False):
     if re.match(r'^بدون این (?:شرط|فیلتر)', text) and len(active) == 1 and not has_pending:
         values[active[0]] = None
     for field, label in FIELD_NAMES.items():
-        if re.search(label + r'(?:\s+(?:را|رو))?\s+(?:حذف کن|بردار|مهم نیست)', text):
+        if re.search(label + r'(?:ش|اش)?(?:\s+(?:را|رو|دیگه|دیگر|برای من|برام))*\s+(?:حذف کن|بردار|مهم نیست|فرقی ن(?:داره|دارد)|هر\s*چی)', text):
             values[field] = None
     for field, value in requested_filters(text).items():
         if available(field):

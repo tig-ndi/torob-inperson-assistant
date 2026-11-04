@@ -39,11 +39,11 @@ def is_constraint_followup(text: str) -> bool:
     return bool(re.match(
         r'^(?:(?:لطفا|لطفاً|فقط|هم|و|من|به|از|در)\s+)*'
         r'(?:درگاه|تایپ|type|usb|میکرو|لایتنینگ|رنگ|سایز|اندازه|جنس|حافظه|رم|وزن|توان|گارانتی|قسطی|سیستم\s*عامل|اندروید|android|ios|'
-        r'نزدیک|نزدیکترین|مکان|محل|موقعیت)(?:\s|$)|'
+        r'نزدیک|نزدیکترین|مکان|محل|موقعیت)(?:ش|اش)?(?:\s|$)|'
         r'^(?:فروشگاه|فروشنده|مغازه)\s+(?:نزدیک|اطراف)(?:\s|$)', text))
 
 
 def has_unsupported_modifier(text: str) -> bool:
     # These source fields need their own semantics/coverage evaluation. Detecting
     # a request for them does not implement a filter or prove a matching variant.
-    return negated_operating_system(text) or referenced_colour(text) or bool(re.search(r'(?<!\w)(?:رنگ|سایز|اندازه|جنس|حافظه|رم|وزن|توان|گارانتی|قسطی)(?!\w)', normalize_text(text)))
+    return negated_operating_system(text) or referenced_colour(text) or bool(re.search(r'(?<!\w)(?:رنگ|سایز|اندازه|جنس|حافظه|رم|وزن|توان|گارانتی|قسطی)(?:ش|اش)?(?!\w)', normalize_text(text)))
