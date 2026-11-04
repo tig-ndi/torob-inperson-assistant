@@ -2,7 +2,7 @@ import type {Offer} from './data.ts';
 import type {ArrivalCheck} from './journey.ts';
 import type {RoadRoute} from './upgrades.ts';
 
-export type DelegatedVisit={id:string;goal:'nearest'|'balanced'|'cheapest';status:'pending'|'planned'|'blocked';request:string;phoneKind:'ask'|'smart'|'basic'|'any'|null;excluded:string[];offerId:string|null;note:string};
+export type DelegatedVisit={id:string;goal:'nearest'|'fastest'|'balanced'|'cheapest';status:'pending'|'planned'|'blocked';request:string;phoneKind:'ask'|'smart'|'basic'|'any'|null;excluded:string[];offerId:string|null;note:string};
 const clean=(s:string)=>s.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
 export function visitCommand(text:string):'delegate'|'alternative'|'cancel'|null{
  const s=clean(text);
@@ -13,7 +13,7 @@ export function visitCommand(text:string):'delegate'|'alternative'|'cancel'|null
  return null;
 }
 export function visitGoal(text:string,fallback:DelegatedVisit['goal']='balanced'):DelegatedVisit['goal']{
- const s=clean(text);return /نزدیک|کوتاه ترین|سریع ترین|زودتر/.test(s)?'nearest':/ارزان|ارزون|کمترین قیمت/.test(s)?'cheapest':fallback;
+ const s=clean(text);return /سریع\s*ترین|زودتر|کمترین زمان/.test(s)?'fastest':/نزدیک|کوتاه\s*ترین|کمترین مسافت/.test(s)?'nearest':/ارزان|ارزون|کمترین قیمت/.test(s)?'cheapest':fallback;
 }
 export function phoneKind(text:string):DelegatedVisit['phoneKind']{
  const s=clean(text);return /فرقی نداره|فرقی ندارد|تفاوتی ندارد|هر نوع|هرکدام|هر کدوم/.test(s)?'any':/دکمه|گوشی ساده/.test(s)?'basic':/هوشمند|اندروید|android|ios|آیفون/i.test(s)?'smart':null;

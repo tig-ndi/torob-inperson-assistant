@@ -3,7 +3,7 @@ import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 import {chooseLocation} from './visit-fixtures.mjs';
 
-async function fixture(page,request,{query='هدفون',safe=true,routeFailure=false}={}){
+async function fixture(page,request,{query='هدفون',safe=true,routeFailure=false,splitRoutes=false}={}){
  const calls=[],products=await mockAssistant(page,request,calls,query),product=products.items.find(p=>p.offer_summary.offer_count>0);
  const source=await(await request.get(`/api/products/${product.product_id}/offers?user_lat=35.7&user_lon=51.4`)).json(),original=source.items[0];
  const template=await(await request.post('/api/followups/prepare',{data:{product_id:product.product_id,offer_id:original.offer_id,shop_id:original.shop_id}})).json();
@@ -12,13 +12,32 @@ async function fixture(page,request,{query='هدفون',safe=true,routeFailure=f
  await page.route('**/api/local/destinations',r=>{const b=r.request().postDataJSON();destinations.push(b);const offered=rows.filter(o=>!b.exclude_shop_ids?.includes(o.shop_id)&&(!b.reference_product_id||b.reference_product_id===o.product_id));return r.fulfill({json:{product_ids:[product.product_id],selections:offered.map(o=>({product_id:o.product_id,shop_id:o.shop_id,offer_id:o.offer_id})),matched_models:3,matched_shops:offered.length}});});
  await page.route('**/api/local/visit-insights',r=>r.fulfill({json:{evaluated_at:clock,time_source:'server_clock',nearby_km:2,search_km:15,nearby:{shops:3,declared_open:3,declared_closed:0,unknown:0,truncated:false},open_offers:{...source,items:rows},markets:[],limitations:[]}}));
  await page.route('**/api/followups/prepare',r=>{const b=r.request().postDataJSON();return r.fulfill({json:{...template,selected_offer:rows.find(o=>o.offer_id===b.offer_id)??original,hours_evaluated_at:clock}});});
- await page.route('**/api/local/road-routes',r=>{const b=r.request().postDataJSON();roads.push(b);return r.fulfill({json:{items:b.selections.map(s=>{if(routeFailure)return {...s,status:'unavailable',reason:'آزمایش قطع سرویس مسیر'};loaded.add(s.offer_id);const index=rows.findIndex(o=>o.offer_id===s.offer_id);return {...s,status:'ready',mode:b.mode,distance_meters:[2000,1000,200][index]??1000,duration_seconds:[1500,600,100][index]??600,endpoint_offset_meters:0,computed_at:clock,geometry:{type:'LineString',coordinates:[[51.4,35.7],[51.401,35.701],[51.402,35.702]]},steps:[]};})}});});
+ await page.route('**/api/local/road-routes',r=>{const b=r.request().postDataJSON();roads.push(b);return r.fulfill({json:{items:b.selections.map(s=>{if(routeFailure)return {...s,status:'unavailable',reason:'آزمایش قطع سرویس مسیر'};loaded.add(s.offer_id);const index=rows.findIndex(o=>o.offer_id===s.offer_id);return {...s,status:'ready',mode:b.mode,distance_meters:(splitRoutes?[800,1500,200]:[2000,1000,200])[index]??1000,duration_seconds:[1500,600,100][index]??600,endpoint_offset_meters:0,computed_at:clock,geometry:{type:'LineString',coordinates:[[51.4,35.7],[51.401,35.701],[51.402,35.702]]},steps:[]};})}});});
  await page.route('**/api/local/arrival-checks',r=>{const b=r.request().postDataJSON();return r.fulfill({json:{items:b.selections.map(s=>{const road=b.use_road_route&&loaded.has(s.offer_id),index=rows.findIndex(o=>o.offer_id===s.offer_id),mins=[25,10,2][index]??10;return {...s,departure_at:clock,arrival_at:clock,minutes_min:mins,minutes_max:mins,basis:road?'street_route':'rough_walking_range',departure_status:'declared_open',arrival_status:'declared_open',margin_status:'declared_open',margin_minutes:10,risk:safe&&index!==2?'ready':'closing_soon',inventory_status:'unconfirmed'};}),limitations:[]}});});
  return {rows,roads,calls,destinations,products};
 }
 async function start(page){await page.goto('/');await chooseLocation(page);await send(page,'هدفون میخوام خودت نزدیک ترین مقصد را انتخاب کن و برنامه رفتن را بچین، پیاده میرم');}
 async function consent(page){await page.getByRole('button',{name:'اجازهٔ مسیر و ادامهٔ انتخاب خودکار',exact:true}).click();}
 const card=page=>page.getByRole('region',{name:'انتخاب و برنامهٔ خودکار',exact:true});
+
+test('mobile visit results lead with one destination and expand alternatives without duplicating warnings',async({page,request})=>{
+ await page.setViewportSize({width:320,height:568});await fixture(page,request);await page.goto('/');await chooseLocation(page);await send(page,'هدفون نزدیک من میخوام');
+ const panel=page.locator('[data-visit-decision]');await expect(panel.locator('[data-visit-candidate]')).toHaveCount(3);await expect(panel.locator('[data-visit-candidate]:visible')).toHaveCount(1);await expect(panel.locator('.arrival-warning')).toHaveCount(0);
+ await panel.locator('.decision-details>summary').click();await expect(panel.locator('[data-visit-candidate]:visible')).toHaveCount(3);await expect(panel.getByRole('button',{name:'روی نقشه',exact:true})).toHaveCount(3);await layout(page);
+});
+
+for(const width of [320,1440])test(`explanation and compatibility questions preserve the prepared visit at ${width}px`,async({page,request})=>{
+ await page.setViewportSize({width,height:width===320?568:900});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');
+ const snapshot=()=>page.evaluate(()=>Object.fromEntries(['selected','need','delegation','mode','screen','mapLibrary'].map(k=>[k,sessionStorage.getItem('inperson-journey:v2:'+k)])));
+ await expect(card(page).getByRole('button',{name:'مسیر همین انتخاب',exact:true})).toBeVisible();
+ const before=await snapshot(),calls=f.calls.length;
+ await send(page,'چرا همین فروشگاه رو انتخاب کردی؟');await expect(page.locator('.chat-message.assistant').last()).toContainText('مقصد آزمایشی b');await expect(page.locator('.chat-message.assistant').last()).toContainText('۱۰ دقیقه');expect(await snapshot()).toEqual(before);expect(f.calls).toHaveLength(calls);
+ await send(page,'این مدل به A54 من میخوره؟');await expect(page.locator('.chat-message.assistant').last()).toContainText('بدون شاهد تأیید نمی‌کنم');expect(await snapshot()).toEqual(before);expect(f.calls).toHaveLength(calls);await layout(page);
+});
+
+test('fastest delegation chooses travel time when the shortest safe road takes longer',async({page,request})=>{
+ await fixture(page,request,{splitRoutes:true});await page.goto('/');await chooseLocation(page);await send(page,'هدفون میخوام خودت سریع ترین مقصد را انتخاب کن و برنامه رفتن را بچین، پیاده میرم');await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی b');await page.reload();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:delegation')).goal)).toBe('fastest');
+});
 
 test('mobile delegation selects the fastest safe road and creates a plan without clicking products',async({page,request})=>{
  await page.setViewportSize({width:390,height:844});const f=await fixture(page,request);await start(page);await expect(card(page)).toBeVisible();expect(f.roads).toHaveLength(0);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی b');await expect(page.locator('.chat-message.assistant').filter({hasText:'برای ساعت'})).toHaveCount(0);await expect(card(page)).toContainText('موجودی هنوز تأیید نشده');expect(f.roads[0].selections).toHaveLength(3);await card(page).getByRole('button',{name:'مسیر همین انتخاب',exact:true}).click();await expect(page.locator('[data-map-panel]')).toBeVisible();await page.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).first().click();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await layout(page);

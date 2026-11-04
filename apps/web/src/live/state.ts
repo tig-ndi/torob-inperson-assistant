@@ -4,7 +4,8 @@ import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {purchaseTopics,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex} from './requestPlanning';
+import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex} from './requestPlanning';
+import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
 import {visitCommand,visitGoal,phoneKind,broadPhone,selectVisit,type DelegatedVisit} from './delegatedVisit';
@@ -154,6 +155,8 @@ export function useShopping() {
   const ask=(value:string,retrying=false)=>{
     const displayText=value.trim().slice(0,1000);let q=displayText;if(!q)return;setCompletedVisit(null);
     if(!statusChecked){deferredAsk.current=q;pending.current=q;if(!retrying)say('user',displayText);setScreen('decide');setBusy(true);return;}
+    const aboutSelection=answerPurchaseQuestion(q,{product:product??(selected?knownProducts[selected.product_id]:null)??null,recommended:products.find(p=>p.product_id===explanation?.recommended_product_id)??null,products,selected,offers:candidateOffers.length?candidateOffers:offers,checks:arrivalChecks,routes:upgrades.roadRoutes,note:delegation?.status==='planned'?delegation.note:''});
+    if(aboutSelection){if(!retrying)say('user',displayText);say('assistant',aboutSelection);return;}
     if(delegation?.status==='planned'&&/اگر|اگه|فرض/.test(q)&&/بسته|ناموجود|جواب نداد/.test(q)){
       if(!retrying)say('user',displayText);say('assistant','اگر هنگام پیگیری بسته یا ناموجود بود، همین‌جا نتیجه را بگو؛ آن فروشگاه را کنار می‌گذارم و مقصد بعدی را با همین شرایط بررسی می‌کنم. فعلاً انتخاب فعلی محفوظ است.');return;
     }
@@ -207,7 +210,7 @@ export function useShopping() {
     }
     if(purchaseQueue.length&&requestedTopics.length===1){
       const chosen=requestedTopics[0]!;
-      setPurchaseQueue(old=>old.filter(topic=>!purchaseTopics(topic).some(t=>purchaseTopics(chosen).includes(t))));
+      setPurchaseQueue(old=>exclusivePurchase(q)?[]:old.filter(topic=>!purchaseTopics(topic).some(t=>purchaseTopics(chosen).includes(t))));
       if(!/نزدیک|اطراف|حضوری|کجا/.test(q))q+='؛ فروشگاه‌های نزدیک برای خرید حضوری را بررسی کن';
     }
     if(/(?:روی|تو(?:ی)?)\s*نقشه|نقشه.*(?:نشان|نشون|ببین)/.test(q)&&!/گوشی|شارژر|هدفون|کفش|لپ.?تاپ|موبایل|کابل/.test(q)&&(products.length||selected)){
@@ -232,7 +235,7 @@ export function useShopping() {
     const requestedTime=parseVisitClock(q)??(/الان|همین حالا|ساعت فعلی/.test(q)?null:visitIntent?.localTime??null);
     let intent=parseVisitIntent(q,context);
     if(!intent&&context&&Object.keys(preferences).length&&!requestedTopics.length)intent={topic:context,nearbyKm:visitIntent?.nearbyKm??2,localTime:requestedTime,reuseProduct:true};if(intent&&!intent.localTime&&requestedTime)intent={...intent,localTime:requestedTime};
-    setVisitIntent(intent??(requestedTime||wantsVisit||task?.status==='pending'?{topic:context??'',nearbyKm:visitIntent?.nearbyKm??2,localTime:requestedTime}:null));
+    setVisitIntent(intent??(requestedTime||wantsVisit||task?.status==='pending'?{topic:context??'',nearbyKm:visitIntent?.nearbyKm??2,localTime:requestedTime}:!changesPurchase?visitIntent:null));
     if(intent&&intent.topic===context&&need?.pending_requirements.length)intent=null;
     if(intent){
       if(intent.topic!==context){setNeed(null);setAssistantResults(false);setProduct(null);setSelected(null);}
@@ -255,7 +258,7 @@ export function useShopping() {
       });
       if(signal.aborted)return;
       const answer=turn.question??turn.explanation?.summary??'نتیجهٔ جست‌وجوی اطلاعات ثبت‌شده آماده است.';
-      setMessages([...history,{role:'assistant',content:answer.slice(0,1000)}]);setNeed(turn.need_state);setQuestionCode(turn.question_code??'');if(requestedTime||wantsVisit)setVisitIntent({topic:turn.need_state.topic_query??turn.query??'',nearbyKm:visitIntent?.nearbyKm??2,localTime:requestedTime});
+      setMessages([...history,{role:'assistant',content:answer.slice(0,1000)}]);setNeed(turn.need_state);setQuestionCode(turn.question_code??'');if(requestedTime||wantsVisit||visitIntent&&!changesPurchase)setVisitIntent({topic:turn.need_state.topic_query??turn.query??'',nearbyKm:visitIntent?.nearbyKm??2,localTime:requestedTime});
       say('assistant',answer);if(turn.question_code==='location'||/موقعیت|مختصات/.test(answer))setNeedsLocation(true);
       setExplanation(turn.explanation);setAssistantResults(true);
       setFilters(f=>({...f,...visitPreferences(q),max:turn.max_price_toman??visitPreferences(q).max??'',sort:turn.offer_sort}));
