@@ -10,5 +10,5 @@ export async function layout(page){const bounds=await page.evaluate(()=>{const e
 export async function acknowledgeVisit(page){
  const button=page.getByRole('button',{name:'با آگاهی از هشدار ادامه می‌دهم',exact:true});
  await page.waitForTimeout(250);
- if(await button.count()){await expect(button).toBeEnabled();await button.click();}
+ if(await button.count()){await expect(button).toBeEnabled();if(await page.evaluate(()=>navigator.maxTouchPoints>0))await button.tap();else await button.click();}
 }

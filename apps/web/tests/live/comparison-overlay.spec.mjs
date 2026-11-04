@@ -33,7 +33,7 @@ test('seller comparison includes source fields and opens the same selections on 
 
 test('icon hints appear on hover and keyboard focus without leaving the viewport',async({page,request})=>{
   await page.setViewportSize({width:1440,height:900});await mockAssistant(page,request);await page.goto('/');
-  for(const [name,text] of [['انتخاب موقعیت روی نقشه','بدون نیاز به GPS'],['نمایش همهٔ فروشگاه‌ها','نتایج فعلی و قبلی'],['نمای کل ایران','دیتاست در تهران']]){
+  for(const [name,text] of [['انتخاب موقعیت روی نقشه','بدون نیاز به GPS'],['نمایش همهٔ فروشگاه‌ها','همین خرید'],['نمای کل ایران','دیتاست در تهران']]){
     await page.getByRole('button',{name,exact:true}).hover();const hint=page.getByRole('tooltip');await expect(hint).toContainText(text);const box=await hint.boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(1440);expect(box.y).toBeGreaterThanOrEqual(0);await page.mouse.move(700,700);await expect(hint).toBeHidden();
   }
   const history=page.getByRole('button',{name:'برنامه‌ها و نتایج قبلی',exact:true});await page.keyboard.press('Tab');await history.focus();await expect(page.getByRole('tooltip')).toContainText('برنامه‌های ذخیره‌شده');await expect(history).toHaveAttribute('aria-describedby',/.+/);await page.keyboard.press('Escape');await expect(page.getByRole('tooltip')).toBeHidden();await page.screenshot({path:'../../.local/live-qa/professional-home-desktop.png'});
