@@ -1,3 +1,4 @@
+import {openJourneyTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {send,layout} from './helpers.mjs';
 import {visitFixture,chooseLocation} from './visit-fixtures.mjs';
@@ -25,7 +26,7 @@ for(const width of [320,390,1440])test(`sorting keeps the current scroll positio
 for(const width of [320,390])test(`24-hour travel controls and prechecked routing wait for the route button at ${width}px`,async({page,request})=>{
  await page.setViewportSize({width,height:844});await visitFixture(page,request);const roads=[];
  await page.route('**/api/local/road-routes',r=>{roads.push(r.request().postDataJSON());return r.fulfill({json:{items:[]}});});
- await page.goto('/');await chooseLocation(page);await send(page,'شارژر موبایل نزدیک من برای ساعت ۲۳:۳۰');await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();await page.locator('[data-offer]').first().getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();await page.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();
+ await page.goto('/');await chooseLocation(page);await send(page,'شارژر موبایل نزدیک من برای ساعت ۲۳:۳۰');await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();await page.locator('[data-offer]').first().getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();await openJourneyTools(page);await page.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();
  const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'}),hour=d.getByRole('combobox',{name:'ساعت حرکت: ساعت',exact:true}),minute=d.getByRole('combobox',{name:'ساعت حرکت: دقیقه',exact:true}),consent=d.getByRole('checkbox',{name:/مختصات مبدأ و مقصد/}),route=d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true});
  await expect(hour.locator('option')).toHaveCount(24);await expect(minute.locator('option')).toHaveCount(60);await expect(hour).toHaveValue('23');await expect(minute).toHaveValue('30');
  await expect(consent).toBeChecked();await expect(route).toBeEnabled();expect(roads).toHaveLength(0);await page.screenshot({path:`../../.local/time24-default-${width}.png`});

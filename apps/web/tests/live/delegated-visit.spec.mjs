@@ -29,7 +29,7 @@ test('mobile visit results lead with one destination and expand alternatives wit
 for(const width of [320,1440])test(`explanation and compatibility questions preserve the prepared visit at ${width}px`,async({page,request})=>{
  await page.setViewportSize({width,height:width===320?568:900});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');
  const snapshot=()=>page.evaluate(()=>Object.fromEntries(['selected','need','delegation','mode','screen','mapLibrary'].map(k=>[k,sessionStorage.getItem('inperson-journey:v2:'+k)])));
- await expect(card(page).getByRole('button',{name:'مسیر همین انتخاب',exact:true})).toBeVisible();
+ await expect(card(page).getByRole('button',{name:'بزن بریم',exact:true})).toBeVisible();
  const before=await snapshot(),calls=f.calls.length;
  await send(page,'چرا همین فروشگاه رو انتخاب کردی؟');await expect(page.locator('.chat-message.assistant').last()).toContainText('مقصد آزمایشی b');await expect(page.locator('.chat-message.assistant').last()).toContainText('۱۰ دقیقه');expect(await snapshot()).toEqual(before);expect(f.calls).toHaveLength(calls);
  await send(page,'این مدل به A54 من میخوره؟');await expect(page.locator('.chat-message.assistant').last()).toContainText('بدون شاهد تأیید نمی‌کنم');expect(await snapshot()).toEqual(before);expect(f.calls).toHaveLength(calls);await layout(page);
@@ -40,7 +40,7 @@ test('fastest delegation chooses travel time when the shortest safe road takes l
 });
 
 test('mobile delegation selects the fastest safe road and creates a plan without clicking products',async({page,request})=>{
- await page.setViewportSize({width:390,height:844});const f=await fixture(page,request);await start(page);await expect(card(page)).toBeVisible();expect(f.roads).toHaveLength(0);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی b');await expect(page.locator('.chat-message.assistant').filter({hasText:'برای ساعت'})).toHaveCount(0);await expect(card(page)).toContainText('موجودی هنوز تأیید نشده');expect(f.roads[0].selections).toHaveLength(3);await card(page).getByRole('button',{name:'مسیر همین انتخاب',exact:true}).click();await expect(page.locator('[data-map-panel]')).toBeVisible();await page.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).first().click();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await layout(page);
+ await page.setViewportSize({width:390,height:844});const f=await fixture(page,request);await start(page);await expect(card(page)).toBeVisible();expect(f.roads).toHaveLength(0);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی b');await expect(page.locator('.chat-message.assistant').filter({hasText:'برای ساعت'})).toHaveCount(0);await expect(card(page)).toContainText('موجودی هنوز تأیید نشده');expect(f.roads[0].selections).toHaveLength(3);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(page.locator('[data-map-panel]')).toBeVisible();await page.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).first().click();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await layout(page);
 });
 
 test('delegation asks phone kind once and continues through location without forgetting it',async({page,request})=>{
@@ -52,7 +52,7 @@ test('asking the assistant to select from existing results does not repeat the p
 });
 
 test('another destination excludes the previous shop and preserves mobile conversation and route',async({page,request})=>{
- await page.setViewportSize({width:320,height:568});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await card(page).getByRole('button',{name:'گزینهٔ دیگر',exact:true}).click();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی a');expect(f.destinations.at(-1).exclude_shop_ids).toContain('delegated_shop_b');await layout(page);await page.screenshot({path:fileURLToPath(new URL('../../../../.local/live-qa/delegated-visit-320.png',import.meta.url))});
+ await page.setViewportSize({width:320,height:568});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await card(page).locator('.journey-more>summary').click();await card(page).getByRole('button',{name:'گزینهٔ دیگر',exact:true}).click();await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('مقصد آزمایشی a');expect(f.destinations.at(-1).exclude_shop_ids).toContain('delegated_shop_b');await layout(page);await page.screenshot({path:fileURLToPath(new URL('../../../../.local/live-qa/delegated-visit-320.png',import.meta.url))});
 });
 
 test('unsafe arrival never becomes a ready departure plan',async({page,request})=>{
@@ -72,7 +72,7 @@ test('a budget reply before phone kind is retained when the choice continues',as
 });
 
 test('changing travel mode replans the same purchase and spoken completion ends it',async({page,request})=>{
- await page.setViewportSize({width:390,height:844});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await send(page,'با ماشین میرم');await expect.poll(()=>f.roads.at(-1)?.mode).toBe('driving');await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('خودرو');await send(page,'بزن بریم');await expect(page.getByRole('dialog',{name:'انتخاب مسیریاب',exact:true})).toBeVisible();await page.keyboard.press('Escape');await send(page,'این خرید تمام شد');await expect(card(page)).toHaveCount(0);await expect(page.locator('[data-completed-visit]')).toBeVisible();await layout(page);
+ await page.setViewportSize({width:390,height:844});const f=await fixture(page,request);await start(page);await consent(page);await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await send(page,'با ماشین میرم');await expect.poll(()=>f.roads.at(-1)?.mode).toBe('driving');await expect(card(page)).toHaveAttribute('data-delegated-status','planned');await expect(card(page)).toContainText('خودرو');await send(page,'بزن بریم');await expect(page.locator('[data-map-panel] .purchase-journey')).toHaveAttribute('data-purchase-stage','en_route');await page.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).click();await send(page,'این خرید تمام شد');await expect(card(page)).toHaveCount(0);await expect(page.locator('.chat-pane [data-completed-visit]')).toBeVisible();await layout(page);
 });
 
 test('a rejected seller is excluded when the assistant chooses the next destination',async({page,request})=>{

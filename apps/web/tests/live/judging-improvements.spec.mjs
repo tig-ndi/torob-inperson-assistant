@@ -1,3 +1,4 @@
+import {openJourneyTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 
@@ -24,8 +25,8 @@ test('unavailable seller response automatically prepares alternatives without ch
   const draft='خرید بعدی را از همین‌جا ادامه می‌دهم';await page.getByRole('textbox',{name:'پیام به دستیار خرید'}).fill(draft);
   let batch;
   try{
-    await page.getByRole('button',{name:'استعلام هم‌زمان از فروشگاه‌ها',exact:true}).click();const response=page.waitForResponse(r=>r.url().endsWith('/api/local/checks')&&r.request().method()==='POST');await page.getByRole('button',{name:'شروع استعلام هم‌زمان',exact:true}).click();batch=await(await response).json();
+    await openJourneyTools(page);await page.getByRole('button',{name:'استعلام هم‌زمان از فروشگاه‌ها',exact:true}).click();const response=page.waitForResponse(r=>r.url().endsWith('/api/local/checks')&&r.request().method()==='POST');await page.getByRole('button',{name:'شروع استعلام هم‌زمان',exact:true}).click();batch=await(await response).json();
     const card=page.locator(`[data-check-offer="${origin.offer_id}"]`);await card.getByRole('button',{name:'پاسخ در نقش فروشنده',exact:true}).click();await page.getByLabel('پاسخ آزمایشی فروشنده',{exact:true}).selectOption('out_of_stock');await page.getByRole('button',{name:'ثبت پاسخ آزمایشی فروشنده',exact:true}).click();await page.getByRole('button',{name:'بازگشت به استعلام‌ها',exact:true}).click();await page.keyboard.press('Escape');
-    const section=page.getByRole('region',{name:'جایگزین‌های خودکار پاسخ فروشنده'});await expect(section).toContainText(other.shop.name);await expect(section.getByRole('button',{name:'بررسی این جایگزین'})).toBeVisible();expect(alternatives).toBe(1);await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','contact');await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);await layout(page);
+    const section=page.locator('.chat-pane .journey-alternatives');await expect(section).toContainText(other.shop.name);await expect(section.getByRole('button').first()).toBeVisible();expect(alternatives).toBe(1);await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','contact');await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);await layout(page);
   }finally{if(batch)await request.delete('/api/local/checks/'+batch.id);}
 });

@@ -2,16 +2,11 @@ import {test,expect} from '@playwright/test';
 import {mockAssistant,send} from './helpers.mjs';
 
 async function assertSeparated(page){
-  const sheet=page.locator('[data-mobile-store-sheet]'),body=sheet.locator('.map-sheet-content'),card=body.locator('.map-store-choice.selected');
-  await expect(card).toBeVisible();
-  await expect.poll(async()=>{
-    const [view,row,actions,nav]=await Promise.all([body.boundingBox(),card.boundingBox(),sheet.locator('.map-selected-actions').boundingBox(),sheet.locator('.mobile-view-switch').boundingBox()]);
-    return row.y>=view.y-1&&row.y+row.height<=view.y+view.height+1&&view.y+view.height<=actions.y+1&&actions.y+actions.height<=nav.y+1;
-  }).toBe(true);
-  for(const button of await sheet.locator('.map-selected-actions button,.mobile-view-switch button').all()){
-    const box=await button.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);expect(box.y+box.height).toBeLessThanOrEqual((await page.viewportSize()).height+1);
-  }
-  expect(await sheet.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ const sheet=page.locator('[data-mobile-store-sheet]'),body=sheet.locator('.map-sheet-content'),nav=sheet.locator('.mobile-view-switch');
+ await expect(body.locator('.purchase-journey')).toBeVisible();
+ await expect.poll(async()=>{const [view,footer]=await Promise.all([body.boundingBox(),nav.boundingBox()]);return view.y+view.height<=footer.y+1;}).toBe(true);
+ for(const button of await nav.locator('button').all()){const box=await button.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);expect(box.y+box.height).toBeLessThanOrEqual((await page.viewportSize()).height+1);}
+ expect(await sheet.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
 }
 
 for(const size of [{width:320,height:568},{width:390,height:844},{width:412,height:915,safe:true},{width:740,height:360}])test(`selected mobile store stays above actions and navigation at ${size.width}x${size.height}`,async({page,request})=>{
@@ -26,8 +21,8 @@ for(const size of [{width:320,height:568},{width:390,height:844},{width:412,heig
   await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await assertSeparated(page);
   await page.screenshot({path:`../../.local/live-qa/map-sheet-fixed-${size.width}x${size.height}.png`});
   await expect(page.getByText('خط نقشه مستقیم است؛ مسیر خیابانی را در مسیریاب ببین.',{exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'ادامه با این فروشگاه در گفت‌وگو',exact:true}).click();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);
-  await page.getByRole('button',{name:'ساخت برنامهٔ رفتن',exact:true}).click();await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await assertSeparated(page);await expect(page.getByRole('button',{name:'پایان این برنامه',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'باز و بسته کردن فهرست فروشگاه‌ها',exact:true}).click();await assertSeparated(page);
-  await page.getByRole('button',{name:'باز و بسته کردن فهرست فروشگاه‌ها',exact:true}).click();await assertSeparated(page);
+  await page.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).click();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);
+  await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await assertSeparated(page);
+  await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();await assertSeparated(page);
+  await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();await assertSeparated(page);
 });

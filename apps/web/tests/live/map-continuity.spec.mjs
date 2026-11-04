@@ -1,3 +1,4 @@
+import {openJourneyTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 
@@ -38,7 +39,7 @@ for(const width of [320,390])test(`mobile map drawer preserves conversation and 
   expect(await page.locator('[data-chat-scroll]').evaluate(el=>el.scrollTop)).toBeCloseTo(scroll,0);await layout(page);
   await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','full');expect(await canvas.evaluate(el=>el===document.querySelector('.maplibregl-canvas'))).toBe(true);await expect(pin).toHaveAttribute('aria-label',new RegExp(offer.shop.name));await expect.poll(async()=>Math.abs((await pin.boundingBox()).y-pinBefore.y)).toBeLessThan(2);
   await handle.focus();await page.keyboard.press('Enter');await expect(sheet).toHaveAttribute('data-sheet-stop','peek');await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBeGreaterThanOrEqual(280);await expect.poll(async()=>{const selectedRow=await page.locator('.map-store-choice.selected').boundingBox(),listBox=await sheet.locator('.map-sheet-content').boundingBox();return selectedRow.y>=listBox.y-1&&selectedRow.y+selectedRow.height<=listBox.y+listBox.height+1;}).toBe(true);await page.waitForTimeout(350);await page.screenshot({path:`../../.local/live-qa/map-sheet-peek-${width}.png`});
-  await handle.focus();await page.keyboard.press('Enter');await page.getByRole('button',{name:'ادامه با این فروشگاه در گفت‌وگو',exact:true}).click();await expect(panel).toBeHidden();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','contact');await expect(page.getByRole('button',{name:'کپی پیش‌نویس'})).toBeVisible();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);
+  await handle.focus();await page.keyboard.press('Enter');await page.getByRole('button',{name:'بررسی و شروع خرید از این فروشگاه',exact:true}).click();await expect(panel.locator('.purchase-journey')).toHaveAttribute('data-purchase-stage','ready');await panel.getByRole('button',{name:'رفتن به گفت‌وگو',exact:true}).click();await expect(panel).toBeHidden();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','contact');await openJourneyTools(page);await expect(page.getByRole('button',{name:'کپی پیش‌نویس'})).toBeVisible();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);
 });
 
 test('desktop shop selection stays in floating chat and focuses the unobscured map',async({page,request})=>{
@@ -48,5 +49,5 @@ test('desktop shop selection stays in floating chat and focuses the unobscured m
   await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','stores');
   await expect.poll(async()=>{const pin=await page.locator('.real-pin.chosen').boundingBox(),chat=await page.locator('.chat-pane').boundingBox();return pin&&pin.x>=0&&pin.x+pin.width<chat.x;}).toBe(true);
   await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});await page.screenshot({path:'../../.local/live-qa/floating-desktop-selected.png'});
-  await page.locator(`[data-offer="${offers[1].offer_id}"]`).getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();await expect(page.getByRole('button',{name:'کپی پیش‌نویس'})).toBeVisible();expect(await canvas.evaluate(el=>el===document.querySelector('.maplibregl-canvas'))).toBe(true);await expect(page.locator('[data-map-panel]')).toBeVisible();await layout(page);
+  await page.locator(`[data-offer="${offers[1].offer_id}"]`).getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();await openJourneyTools(page);await expect(page.getByRole('button',{name:'کپی پیش‌نویس'})).toBeVisible();expect(await canvas.evaluate(el=>el===document.querySelector('.maplibregl-canvas'))).toBe(true);await expect(page.locator('[data-map-panel]')).toBeVisible();await layout(page);
 });

@@ -22,7 +22,7 @@ export function runReply(a:Shopping,action:ReplyAction,onOpen:(panel:ReplyPanel)
 }
 export function RepliesTrigger({onOpen}:{onOpen:(panel:ReplyPanel)=>void}){return <button type="button" className="replies-trigger" aria-label="پاسخ‌های آماده" aria-haspopup="dialog" onClick={()=>onOpen('suggestions')}><MessageSquareMore size={17}/><span>پاسخ آماده</span></button>;}
 export default function QuickReplies({a,onOpen}:{a:Shopping;onOpen:(panel:ReplyPanel)=>void}){
-  if(a.busy||a.needsLocation||!a.thread.length||a.screen==='home')return null;
+  if(a.activePurchase&&['contact','trip'].includes(a.screen)||a.busy||a.needsLocation||!a.thread.length||a.screen==='home')return null;
   const plan=replyPlan(replyContext(a));if(!plan.primary.length)return null;
   return <div className="suggestions-strip"><div className="quick-replies" role="group" aria-label="پیشنهادهای ادامهٔ گفت‌وگو">{plan.primary.map(action=><button type="button" key={action.id} onClick={()=>runReply(a,action,onOpen)}>{action.label}</button>)}</div><Hint text="پاسخ‌های آمادهٔ بیشتر؛ فقط اطلاعات مرتبط با همین مرحلهٔ خرید"><button type="button" className="replies-more icon-button" aria-label="پاسخ‌های آماده" aria-haspopup="dialog" onClick={()=>onOpen('suggestions')}><MessageSquareMore size={18}/></button></Hint></div>;
 }

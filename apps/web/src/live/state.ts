@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import * as api from './client';
+import {advancePurchase,freshProgress,purchaseAction,type PurchaseAction,type PurchaseProgress} from './purchaseProgress';
 import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
@@ -21,6 +22,8 @@ export function useShopping() {
   const [delegation,setDelegation]=useJourneyState<DelegatedVisit|null>('delegation',null);
   const [purchaseQueue,setPurchaseQueue]=useJourneyState<string[]>('purchaseQueue',[]);
   const [journeyId,setJourneyId]=useJourneyState<string>('query',crypto.randomUUID(),':journey');
+  const [pendingDeparture,setPendingDeparture]=useState<string|null>(null);
+  const [purchaseProgress,setPurchaseProgress]=useJourneyState<PurchaseProgress|null>('purchaseProgress',null);
   const [completedVisit,setCompletedVisit]=useJourneyState<{id:string;shopName:string;productName:string}|null>('completed',null);
   const [voiceRequest,setVoiceRequest]=useState<{text:string|null;mode:'record'|'listen'}>({text:null,mode:'record'});
   const [screen,setScreen]=useJourneyState<Screen>('screen','home'),[overlay,setOverlay]=useState<Overlay>(null);
@@ -50,7 +53,7 @@ export function useShopping() {
   const [destinationCoverage,setDestinationCoverage]=useState<{models:number;shops:number}|null>(null);
   const [candidateVisits,setCandidateVisits]=useState<{product:Product;insights:VisitInsights}[]>([]),[candidateBusy,setCandidateBusy]=useState(false),[candidateError,setCandidateError]=useState<string|null>(null);
   const [candidateVersion,setCandidateVersion]=useState(''),[arrivalVersion,setArrivalVersion]=useState('');
-  const [followupEvent,setFollowupEvent]=useState<FollowupEvent|null>(null);
+  const [followupEvent,setFollowupEvent]=useJourneyState<FollowupEvent|null>('followupEvent',null);
   const [safetyAcknowledged,setSafetyAcknowledged]=useJourneyState('query','',':safety');
   const pending=useRef(thread.filter(m=>m.role==='user'&&m.kind!=='action').at(-1)?.text??''),lastGuidance=useRef(readSession('guidance','',v=>typeof v==='string'?v:''));
   const retainOffers=useCallback((rows:Offer[])=>setMapLibrary(old=>[...new Map([...old,...rows].map(o=>[o.offer_id,o])).values()].slice(-500)),[]);
@@ -153,21 +156,20 @@ export function useShopping() {
     });
   };
   const ask=(value:string,retrying=false)=>{
-    const displayText=value.trim().slice(0,1000);let q=displayText;if(!q)return;setCompletedVisit(null);
+    const displayText=value.trim().slice(0,1000);let q=displayText;if(!q)return;
+    const progressAction=purchaseAction(q);if(selected&&progressAction){if(!retrying)say('user',displayText);actOnPurchase(progressAction);return;}
+    if(purchaseProgress?.stage==='done'){newConversation();setThread(thread);if(!retrying)say('user',displayText);deferredAsk.current=q;setBusy(true);setScreen('decide');return;}
+    setCompletedVisit(null);
     if(!statusChecked){deferredAsk.current=q;pending.current=q;if(!retrying)say('user',displayText);setScreen('decide');setBusy(true);return;}
     const aboutSelection=answerPurchaseQuestion(q,{product:product??(selected?knownProducts[selected.product_id]:null)??null,recommended:products.find(p=>p.product_id===explanation?.recommended_product_id)??null,products,selected,offers:candidateOffers.length?candidateOffers:offers,checks:arrivalChecks,routes:upgrades.roadRoutes,note:delegation?.status==='planned'?delegation.note:''});
     if(aboutSelection){if(!retrying)say('user',displayText);say('assistant',aboutSelection);return;}
     if(delegation?.status==='planned'&&/اگر|اگه|فرض/.test(q)&&/بسته|ناموجود|جواب نداد/.test(q)){
       if(!retrying)say('user',displayText);say('assistant','اگر هنگام پیگیری بسته یا ناموجود بود، همین‌جا نتیجه را بگو؛ آن فروشگاه را کنار می‌گذارم و مقصد بعدی را با همین شرایط بررسی می‌کنم. فعلاً انتخاب فعلی محفوظ است.');return;
     }
-    if(selected&&delegation?.status==='planned'&&/برنامه.*ذخیره\s*کن/.test(q)){if(!retrying)say('user',displayText);saveCurrentPlan();return;}
-    if(selected&&delegation?.status==='planned'&&/^(?:بزن بریم|شروع کن|شروع مسیریابی|راه بیفتیم)[.!؟]*$/.test(q)){
-      if(!retrying)say('user',displayText);if(needsSafetyReview){say('assistant','پیش از شروع، هشدار زمان رسیدن را بررسی کن؛ هنوز نمی‌توانم حرکت را پیشنهاد کنم.');}else setOverlay('nav');return;
-    }
+    if(selected&&/برنامه.*ذخیره\s*کن/.test(q)){if(!retrying)say('user',displayText);saveCurrentPlan();return;}
     if(selected&&/مسیر.*(?:نشون|نشان|ببین)|برو(?: به)? نقشه/.test(q)&&!/اگر|اگه|فرض/.test(q)){
       if(!retrying)say('user',displayText);showOffer(selected);return;
     }
-    if(delegation?.status==='planned'&&/^(?:این خرید تمام شد|پایان این خرید|خریدم|کارم تمام شد)[.!؟]*$/.test(q)){if(!retrying)say('user',displayText);finishTrip();return;}
     const command=visitCommand(q),contextBefore=need?.topic_query??product?.category_name??visitIntent?.topic??(query||null);
     const namedTopics=purchaseTopics(q),oldTopics=purchaseTopics(contextBefore??'');
     const changesPurchase=namedTopics.length>0&&oldTopics.length>0&&!namedTopics.some(t=>oldTopics.some(old=>samePurchaseFamily(t,old)));
@@ -266,7 +268,7 @@ export function useShopping() {
       setStatus(await api.assistantStatus(signal));
     });
   };
-  useEffect(()=>{if(statusChecked&&deferredAsk.current){const text=deferredAsk.current;deferredAsk.current=null;setBusy(false);ask(text,true);}},[statusChecked]);
+  useEffect(()=>{if(statusChecked&&deferredAsk.current){const text=deferredAsk.current;deferredAsk.current=null;setBusy(false);ask(text,true);}},[statusChecked,purchaseProgress?.stage]);
   const choose=(p:Product)=>{setQuestionCode('');setCompletedVisit(null);controller.current?.abort();setRestoredTrip(null);setProduct(p);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);setPrepared(null);setScreen('stores');setMapMode('auto');setOverlay(null);say('assistant',`فروشگاه‌های «${p.persian_title??'این محصول'}» را بررسی می‌کنم. قیمت و ساعت کاری را با فاصلهٔ رفتن کنار هم می‌بینیم.`,'action');setReload(n=>n+1);};
   useEffect(()=>{
     if(!product||!['stores','compare'].includes(screen))return;
@@ -280,7 +282,7 @@ export function useShopping() {
     setInsights(null);setInsightsError(null);setInsightsBusy(false);
     if(!product||!position)return;
     const c=new AbortController();setInsightsBusy(true);
-    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,{...filters,sort:undefined},visitIntent?.localTime,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation)say('assistant',visitGuidance(v,position.label));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
+    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,{...filters,sort:undefined},visitIntent?.localTime,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation&&!['en_route','arrived','problem','done'].includes(purchaseProgress?.stage??''))say('assistant',visitGuidance(v,position.label));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
     return()=>c.abort();
   },[product?.product_id,position,filters,visitIntent,reload,delegation?.id]);
   useEffect(()=>{
@@ -289,11 +291,12 @@ export function useShopping() {
   },[product?.product_id,product?.category_name,position,filters,flash]);
   const moreOffers=()=>{if(!product)return;void run(async signal=>{const page=await api.offers(product.product_id,filters,position,signal,offers.length,visitIntent?.localTime??null);if(signal.aborted)return;setOffers(old=>[...old,...page.items]);setHasMore(page.has_more);});};
   const contact=(o:Offer)=>{
+    if(purchaseProgress?.stage==='done')setPurchaseProgress(freshProgress(o.offer_id));
     setDelegation(null);setRestoredTrip(null);selectOffer(o);setScreen('contact');setOverlay(null);setPrepared(null);
     say('assistant',`پیش‌نویس پیگیری برای «${o.shop.name??'فروشگاه انتخاب‌شده'}» را آماده می‌کنم. تماس و واتساپ در این دیتاست به‌صورت شبیه‌سازی‌اند.`,'action');
     void run(async signal=>{if(product?.product_id!==o.product_id){const item=knownProducts[o.product_id]??await api.product(o.product_id,signal);if(signal.aborted)return;setProduct(item);}const p=await api.prepare(o,position,signal,visitIntent?.localTime??null);if(!signal.aborted){setPrepared(p);setSelected(p.selected_offer);}});
   };
-  const restore=(trip:SavedTrip)=>{setDelegation(null);setFollowupEvent(null);setQuestionCode('');setJourneyId('saved:'+trip.id);setCompletedVisit(null);setVisitIntent(null);setFilters({...DEFAULT_FILTERS,sort:position?'nearest':'price'});void run(async signal=>{
+  const restore=(trip:SavedTrip)=>{setPurchaseProgress(null);setDelegation(null);setFollowupEvent(null);setQuestionCode('');setJourneyId('saved:'+trip.id);setCompletedVisit(null);setVisitIntent(null);setFilters({...DEFAULT_FILTERS,sort:position?'nearest':'price'});void run(async signal=>{
     const [p,prepared]=await Promise.all([api.product(trip.product_id,signal),api.request('/api/followups/prepare',signal,{product_id:trip.product_id,offer_id:trip.offer_id,shop_id:trip.shop_id,user_lat:position?.lat??null,user_lon:position?.lon??null})]);
     const ready=parsePrepared(prepared);
     const others=await Promise.all(trip.alternatives.map(async selection=>parsePrepared(await api.request('/api/followups/prepare',signal,{...selection,user_lat:position?.lat??null,user_lon:position?.lon??null})).selected_offer));
@@ -314,7 +317,7 @@ export function useShopping() {
   const beginPick=()=>{setPicking(true);setMapFocus(null);setMapMode('open');setOverlay(null);};
   const finishPick=(lat:number,lon:number)=>{updatePosition({lat,lon,source:'manual',label:'نقطهٔ انتخاب‌شده روی نقشه',accuracyMeters:null});flash('موقعیت جست‌وجو ثبت شد');};
   const showPlace=(place:Place)=>{setMapFocus({...place});setMapMode('open');setOverlay(null);};
-  const selectOffer=(o:Offer|null)=>{if(o&&delegation?.status==='planned'&&o.offer_id!==delegation.offerId)setDelegation(null);if(o&&['contact','trip'].includes(screen)&&o.product_id!==product?.product_id&&knownProducts[o.product_id])setProduct(knownProducts[o.product_id]!);if(selected?.offer_id!==o?.offer_id){setPrepared(null);setRestoredTrip(null);}setSelected(current=>current?.offer_id===o?.offer_id?current:o);if(o?.shop.lat!=null&&o.shop.lon!=null)setMapFocus({lat:o.shop.lat,lon:o.shop.lon,label:o.shop.name??'فروشگاه'});};
+  const selectOffer=(o:Offer|null)=>{if(o&&delegation?.status==='planned'&&o.offer_id!==delegation.offerId)setDelegation(null);if(o&&['contact','trip'].includes(screen)&&o.product_id!==product?.product_id&&knownProducts[o.product_id])setProduct(knownProducts[o.product_id]!);if(selected?.offer_id!==o?.offer_id){setPrepared(null);setRestoredTrip(null);setPurchaseProgress(o?freshProgress(o.offer_id):null);setCompletedVisit(null);}setSelected(current=>current?.offer_id===o?.offer_id?current:o);if(o?.shop.lat!=null&&o.shop.lon!=null)setMapFocus({lat:o.shop.lat,lon:o.shop.lon,label:o.shop.name??'فروشگاه'});};
   const showOffer=(o:Offer)=>{selectOffer(o);if(o.shop.lat!==null&&o.shop.lon!==null)showPlace({lat:o.shop.lat,lon:o.shop.lon,label:o.shop.name??'فروشگاه'});else{setOverlay('nav');flash('مختصات این فروشگاه ثبت نشده؛ آدرس متنی را بررسی کن.');}};
   const resumeVisit=()=>{
     if(!position)return;
@@ -330,12 +333,60 @@ export function useShopping() {
   useEffect(()=>{if(position&&needsLocation&&!busy)resumeVisit();},[position?.lat,position?.lon,needsLocation,busy]);
   useEffect(()=>{if(delegation?.status==='pending'&&delegation.phoneKind!=='ask'&&products.length&&!position&&!busy&&!questionCode)setNeedsLocation(true);},[delegation,products,position,busy,questionCode]);
   const stop=()=>{setDelegation(null);deferredAsk.current=null;controller.current?.abort();setBusy(false);say('assistant','بررسی را متوقف کردم. می‌توانی پیامت را ویرایش کنی یا دوباره تلاش کنی.');};
-  const finishTrip=()=>{
-    if(screen!=='trip'||!selected)return;setDelegation(null);setFollowupEvent(null);setQuestionCode('');setJourneyId(crypto.randomUUID());controller.current?.abort();setBusy(false);setError(null);setCompletedVisit({id:crypto.randomUUID(),shopName:selected.shop.name??'فروشگاه انتخاب‌شده',productName:product?.persian_title??'محصول انتخاب‌شده'});
-    say('user','این برنامهٔ مراجعه را تمام کردم.','action');say('assistant','این برنامه را بستیم. حالا برای خرید حضوری چی لازم داری؟ می‌توانیم اطراف همین موقعیت ادامه بدهیم یا نقطهٔ دیگری انتخاب کنیم. گفت‌وگو و نتایج قبلی هم در دسترس‌اند.');
-    setProduct(null);setProducts([]);setProductPage(null);setSelected(null);setCompare([]);setModels([]);setOffers([]);setHasMore(false);setPrepared(null);setRestoredTrip(null);setNeed(null);setMessages([]);setQuery('');setVisitIntent(null);setInsights(null);setNeedsLocation(false);setExplanation(null);setAssistantResults(false);setProbable([]);setMapPreviewError(null);setFilters({...DEFAULT_FILTERS,sort:position?'nearest':'price'});loadedOffersKey.current=null;lastGuidance.current='';writeSession('guidance','');pending.current='';setPicking(false);setMapFocus(null);setOverlay(null);setTravelMinutes('');setSafetyAcknowledged('');setMapMode('closed');setScreen('home');
+  useEffect(()=>{
+    if(!selected)return;
+    const reply=upgrades.replyByOffer[selected.offer_id];
+    const event=followupEvent?.offer_id===selected.offer_id?followupEvent:null;
+    const latest=event&&(!reply||event.createdAt>=Date.parse(reply.responded_at))?{outcome:event.outcome,source:event.source}:reply?{outcome:reply.outcome,source:'simulated' as const}:null;
+    if(!latest)return;
+    setPurchaseProgress(old=>{
+      const p=old?.offerId===selected.offer_id?old:freshProgress(selected.offer_id);
+      if(p.stage==='done'||JSON.stringify(p.evidence)===JSON.stringify(latest))return p;
+      if(['closed','out_of_stock','no_answer'].includes(latest.outcome))return {...p,evidence:latest,stage:'problem',problem:latest.outcome==='closed'?'closed':latest.outcome==='out_of_stock'?'out_of_stock':null};
+      return {...p,evidence:latest,...(p.stage==='problem'?{stage:p.startedAt?'arrived' as const:'ready' as const,problem:null}:{})};
+    });
+  },[selected?.offer_id,followupEvent,upgrades.replyByOffer]);
+  const activePurchase=selected?(purchaseProgress?.offerId===selected.offer_id?purchaseProgress:freshProgress(selected.offer_id)):null;
+  const actOnPurchase=(action:PurchaseAction,postponementSaved=false)=>{
+    if(!selected||!activePurchase)return;
+    if(action==='later'&&!postponementSaved&&!saved.some(t=>t.offer_id===selected.offer_id)){
+      void run(async signal=>{const trip=await api.saveTrip(selected,[],[]);if(signal.aborted)return;setSaved(old=>[trip,...old]);actOnPurchase('later',true);});return;
+    }
+    if(action==='available'){recordVisitResult('available');flash('طبق گزارش تو، کالا موجود است.');return;}
+    if(action==='start'&&visitIntent?.localTime){setPendingDeparture(selected.offer_id);setVisitIntent(i=>i?{...i,localTime:null}:null);flash('ساعت حرکت را به الان تغییر دادم؛ بازبودن هنگام رسیدن را دوباره بررسی می‌کنم.');return;}
+    if(action==='start'&&needsSafetyReview){setScreen('trip');flash('هشدار مراجعه را بررسی کن؛ بعد حرکت را شروع کنیم.');return;}
+    if(action==='start'&&!position){setOverlay('location');return;}
+    const current=(action==='purchased'||action==='not_purchased')&&activePurchase.stage!=='done'?{...activePurchase,stage:'arrived' as const}:activePurchase;
+    const next=advancePurchase(current,action);
+    if(next===activePurchase){flash(action==='arrive'?'اول حرکت را شروع کن.':'نتیجهٔ خرید را بعد از رسیدن ثبت کنیم.');return;}
+    setPurchaseProgress(next);setScreen('trip');setOverlay(null);
+    if(action==='start'){
+      setDelegation(null);setVisitIntent(i=>i?{...i,localTime:null}:null);showOffer(selected);
+      if(travelMode!=='manual'&&!roadConsent&&!upgrades.roadRoutes.some(r=>r.offer_id===selected.offer_id))setOverlay('travel');
+      say('assistant',`راه افتادیم به سمت «${selected.shop.name??'فروشگاه'}». مسیر و قدم بعدی روی نقشه است؛ وقتی رسیدی «رسیدم» را بزن.`,'action');
+    }else if(action==='arrive')say('assistant','رسیدی؛ حالا بازبودن و موجودی را بررسی کن. خرید کردی یا مشکلی پیش آمد؟','action');
+    else if(action==='closed'||action==='out_of_stock'){
+      setDelegation(null);setFollowupEvent({id:crypto.randomUUID(),offer_id:selected.offer_id,outcome:action,source:'user_report',createdAt:Date.now()});
+    }else if(next.stage==='done'){
+      setDelegation(null);setCompletedVisit({id:crypto.randomUUID(),shopName:selected.shop.name??'فروشگاه',productName:product?.persian_title??'محصول انتخاب‌شده'});
+      say('assistant',action==='purchased'?'خریدت انجام شد؛ این خرید تمام شد. می‌توانی از برنامه خارج شوی؛ خرید بعدی هر وقت خودت خواستی.':action==='later'?'مراجعه را برای بعد گذاشتیم؛ فعلاً کاری باقی نمانده. ادامهٔ همین خرید از این صفحه در دسترس است.':'این مراجعه تمام شد؛ خریدی ثبت نکردیم. می‌توانی خارج شوی یا هر وقت خواستی خرید دیگری شروع کنی.','action');
+    }
   };
-  const newConversation=()=>{setDelegation(null);setFollowupEvent(null);setQuestionCode('');setPurchaseQueue([]);deferredAsk.current=null;setJourneyId(crypto.randomUUID());setTravelMinutes('');setTravelMode('walking');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setThread([]);setMessages([]);setNeed(null);setQuery('');setProducts([]);setProductPage(null);setProduct(null);setOffers([]);setSelected(null);setCompare([]);setModels([]);setPrepared(null);setExplanation(null);setInsights(null);setVisitIntent(null);setNeedsLocation(false);setRestoredTrip(null);setFilters({...DEFAULT_FILTERS});setMapMode('auto');setMapFocus(null);setMapLibrary([]);setPicking(false);lastGuidance.current='';setScreen('home');setOverlay(null);pending.current='';};
+  useEffect(()=>{
+    if(!pendingDeparture)return;
+    if(selected?.offer_id!==pendingDeparture||activePurchase?.stage!=='ready'){setPendingDeparture(null);return;}
+    if(visitIntent?.localTime||arrivalBusy||arrivalVersion!==arrivalKey)return;
+    setPendingDeparture(null);
+    if(needsSafetyReview){flash('برای حرکت در همین زمان، هشدار مراجعه را بررسی کن.');return;}
+    actOnPurchase('start');
+  },[pendingDeparture,selected?.offer_id,activePurchase?.stage,visitIntent?.localTime,arrivalBusy,arrivalVersion,arrivalKey,needsSafetyReview]);
+  const finishTrip=()=>actOnPurchase('cancelled');
+  const resumePurchase=()=>{if(!selected)return;setFollowupEvent(null);setVisitIntent(i=>i?{...i,localTime:null}:null);setPurchaseProgress(freshProgress(selected.offer_id));setCompletedVisit(null);setScreen('trip');};
+  const recordVisitResult=(outcome:'available'|'closed'|'out_of_stock',source:'user_report'|'simulated'='user_report')=>{
+    if(!selected)return;setDelegation(null);setFollowupEvent({id:crypto.randomUUID(),offer_id:selected.offer_id,outcome,source,createdAt:Date.now()});
+    if(activePurchase&&(outcome==='closed'||outcome==='out_of_stock'))setPurchaseProgress({...advancePurchase(activePurchase,outcome),evidence:{outcome,source}});
+  };
+  const newConversation=()=>{setPendingDeparture(null);setPurchaseProgress(null);setDelegation(null);setFollowupEvent(null);setQuestionCode('');setPurchaseQueue([]);deferredAsk.current=null;setJourneyId(crypto.randomUUID());setTravelMinutes('');setTravelMode('walking');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setThread([]);setMessages([]);setNeed(null);setQuery('');setProducts([]);setProductPage(null);setProduct(null);setOffers([]);setSelected(null);setCompare([]);setModels([]);setPrepared(null);setExplanation(null);setInsights(null);setVisitIntent(null);setNeedsLocation(false);setRestoredTrip(null);setFilters({...DEFAULT_FILTERS});setMapMode('auto');setMapFocus(null);setMapLibrary([]);setPicking(false);lastGuidance.current='';setScreen('home');setOverlay(null);pending.current='';};
   useEffect(()=>{
     if(delegation?.status!=='pending'||delegation.phoneKind==='ask'||needsLocation||busy||candidateBusy||arrivalBusy||upgrades.roadBusy||!position||!products.length||questionCode||need?.pending_requirements.length||need?.budget_needs_input||need?.battery_requirement.status==='awaiting_minimum')return;
     if(candidateVersion!==candidateContext)return;
@@ -355,7 +406,7 @@ export function useShopping() {
     if(delegation?.status==='pending'&&delegation.phoneKind!=='ask'&&!busy&&!questionCode&&productPage&&!products.length){setDelegation(old=>old?{...old,status:'blocked',note:'با شرایط فعلی کالای منطبق پیدا نشد؛ بودجه یا شرط همین خرید را تغییر بده تا انتخاب را ادامه بدهم.'}:old);}
   },[delegation,busy,questionCode,productPage,products.length]);
   const saveCurrentPlan=()=>{
-    if(!selected||!delegation||delegation.status!=='planned')return;
+    if(!selected)return;
     if(saved.some(t=>t.offer_id===selected.offer_id)){flash('این برنامه قبلاً ذخیره شده است.');return;}
     if(needsSafetyReview){flash('هشدار زمان رسیدن را پیش از ذخیره بررسی کن.');return;}
     void run(async signal=>{const trip=await api.saveTrip(selected,[],[]);if(signal.aborted)return;setSaved(old=>[trip,...old]);say('assistant','برنامهٔ همین مقصد در برنامه‌های قبلی ذخیره شد.','action');});
@@ -387,6 +438,6 @@ export function useShopping() {
       if(!signal.aborted){setProducts(page.items);setProductPage(page);}
     });
   };
-  return {...upgrades,saveCurrentPlan,delegation,cancelDelegation:()=>{setDelegation(null);setQuestionCode('');},retryDelegation:()=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',note:''}:old);setReload(n=>n+1);upgrades.retryRoad();},questionCode,applySuggestedBudget,purchaseQueue,agentAlternatives,retryAgentAlternatives,sellerConcern,voiceRequest,openVoice:(text:string|null=null,mode:'record'|'listen'='record')=>{setVoiceRequest({text,mode});setOverlay('voice');},recordFollowup:(o:Offer,outcome:import('./data').Report['outcome'],source:import('./data').Report['source'])=>setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source,createdAt:Date.now()}),setFollowupFromCheck:(o:Offer,outcome:'closed'|'out_of_stock'|'no_answer')=>{if(upgrades.replyByOffer[o.offer_id]?.outcome!==outcome)setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source:'simulated',createdAt:Date.now()});},roadConsent,setRoadConsent,routeTargets,followupEvent,journeyId,expandVisit:()=>{setFilters(f=>({...f,radius:Math.min(1000,Math.max(30,f.radius*2))}));setVisitIntent(i=>i?{...i,nearbyKm:Math.min(50,Math.max(5,i.nearbyKm*2))}:i);},setVisitTime:(clock:string|null)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setVisitIntent(i=>({topic:i?.topic??query??product?.category_name??'',nearbyKm:i?.nearbyKm??2,localTime:clock,reuseProduct:true}));},travelMode,setTravelMode:(mode:TravelMode)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setTravelMode(mode);},travelMinutes,setTravelMinutes,arrivalChecks,arrivalBusy,arrivalError,destinationCoverage,candidateVisits,candidateOffers,candidateBusy,candidateError,needsSafetyReview,safetyRisk,acknowledgeSafety:()=>setSafetyAcknowledged(safetyKey),completedVisit,finishTrip,rememberOffers:retainOffers,mapOffers,knownProducts,recentResults,restoreResult,mapPreviewBusy,mapPreviewError,screen,go,setScreen,overlay,setOverlay,filters,setFilters,applyFilters,position,setPosition:updatePosition,summary,saved,setSaved,query,products,productPage,product,offers,hasMore,selected,setSelected:selectOffer,compare,toggleCompare,models,toggleModel,clearComparison,probable,prepared,status,agentMessage,agent,setAgent,messages,need,explanation,restoredTrip,busy,error,setError,toast,flash,search,ask,choose,moreOffers,contact,restore,locate,weight,setWeight,retry:()=>setReload(n=>n+1),run,thread,say,needsLocation,resumeVisit,insights,insightsBusy,insightsError,visitIntent,mapMode,setMapMode,picking,beginPick,finishPick,setPicking,mapFocus,clearMapFocus:()=>setMapFocus(null),showPlace,showOffer,stop,newConversation,retryMessage:()=>ask(pending.current,true)};
+  return {...upgrades,activePurchase,actOnPurchase,resumePurchase,recordVisitResult,saveCurrentPlan,delegation,cancelDelegation:()=>{setDelegation(null);setQuestionCode('');},retryDelegation:()=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',note:''}:old);setReload(n=>n+1);upgrades.retryRoad();},questionCode,applySuggestedBudget,purchaseQueue,agentAlternatives,retryAgentAlternatives,sellerConcern,voiceRequest,openVoice:(text:string|null=null,mode:'record'|'listen'='record')=>{setVoiceRequest({text,mode});setOverlay('voice');},recordFollowup:(o:Offer,outcome:import('./data').Report['outcome'],source:import('./data').Report['source'])=>setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source,createdAt:Date.now()}),setFollowupFromCheck:(o:Offer,outcome:'closed'|'out_of_stock'|'no_answer')=>{if(upgrades.replyByOffer[o.offer_id]?.outcome!==outcome)setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source:'simulated',createdAt:Date.now()});},roadConsent,setRoadConsent,routeTargets,followupEvent,journeyId,expandVisit:()=>{setFilters(f=>({...f,radius:Math.min(1000,Math.max(30,f.radius*2))}));setVisitIntent(i=>i?{...i,nearbyKm:Math.min(50,Math.max(5,i.nearbyKm*2))}:i);},setVisitTime:(clock:string|null)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setVisitIntent(i=>({topic:i?.topic??query??product?.category_name??'',nearbyKm:i?.nearbyKm??2,localTime:clock,reuseProduct:true}));},travelMode,setTravelMode:(mode:TravelMode)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setTravelMode(mode);},travelMinutes,setTravelMinutes,arrivalChecks,arrivalBusy,arrivalError,destinationCoverage,candidateVisits,candidateOffers,candidateBusy,candidateError,needsSafetyReview,safetyRisk,acknowledgeSafety:()=>setSafetyAcknowledged(safetyKey),completedVisit,finishTrip,rememberOffers:retainOffers,mapOffers,knownProducts,recentResults,restoreResult,mapPreviewBusy,mapPreviewError,screen,go,setScreen,overlay,setOverlay,filters,setFilters,applyFilters,position,setPosition:updatePosition,summary,saved,setSaved,query,products,productPage,product,offers,hasMore,selected,setSelected:selectOffer,compare,toggleCompare,models,toggleModel,clearComparison,probable,prepared,status,agentMessage,agent,setAgent,messages,need,explanation,restoredTrip,busy,error,setError,toast,flash,search,ask,choose,moreOffers,contact,restore,locate,weight,setWeight,retry:()=>setReload(n=>n+1),run,thread,say,needsLocation,resumeVisit,insights,insightsBusy,insightsError,visitIntent,mapMode,setMapMode,picking,beginPick,finishPick,setPicking,mapFocus,clearMapFocus:()=>setMapFocus(null),showPlace,showOffer,stop,newConversation,retryMessage:()=>ask(pending.current,true)};
 }
 export type Shopping = ReturnType<typeof useShopping>;

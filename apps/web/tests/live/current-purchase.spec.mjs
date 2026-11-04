@@ -1,3 +1,4 @@
+import {openJourneyTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 import {chooseLocation} from './visit-fixtures.mjs';
@@ -11,7 +12,7 @@ test('small comparison prioritizes price and keeps the differences control disco
 });
 
 test('one selected seller produces only one route target even with other comparisons',async({page,request})=>{
- await page.setViewportSize({width:390,height:844});await mockAssistant(page,request);await page.goto('/');await send(page);await chooseLocation(page);await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();await page.locator('[data-offer]').first().getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();const requests=[];await page.route('**/api/local/road-routes',r=>{requests.push(r.request().postDataJSON());return r.fulfill({json:{items:[]}});});await page.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'});await d.getByRole('checkbox',{name:/مختصات مبدأ و مقصد/}).check();await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).click();await expect.poll(()=>requests.length).toBeGreaterThan(0);expect(requests.every(r=>r.selections.length===1)).toBe(true);
+ await page.setViewportSize({width:390,height:844});await mockAssistant(page,request);await page.goto('/');await send(page);await chooseLocation(page);await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();await page.locator('[data-offer]').first().getByRole('button',{name:'بررسی با فروشگاه',exact:true}).click();const requests=[];await page.route('**/api/local/road-routes',r=>{requests.push(r.request().postDataJSON());return r.fulfill({json:{items:[]}});});await openJourneyTools(page);await page.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'});await d.getByRole('checkbox',{name:/مختصات مبدأ و مقصد/}).check();await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).click();await expect.poll(()=>requests.length).toBeGreaterThan(0);expect(requests.every(r=>r.selections.length===1)).toBe(true);
 });
 
 test('a colour reference sends the identity of the actual first visible product',async({page,request})=>{

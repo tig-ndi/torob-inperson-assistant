@@ -8,7 +8,16 @@ export async function send(page,text='گوشی می‌خواهم'){await page.ge
 export async function layout(page){const bounds=await page.evaluate(()=>{const el=document.querySelector('[data-chat-scroll]'),composer=document.querySelector('.message-composer').getBoundingClientRect();return {doc:document.documentElement.scrollWidth,w:innerWidth,scroll:el.scrollWidth,client:el.clientWidth,composer:composer.toJSON(),h:innerHeight};});expect(bounds.doc).toBeLessThanOrEqual(bounds.w+1);expect(bounds.scroll).toBeLessThanOrEqual(bounds.client+1);expect(bounds.composer.left).toBeGreaterThanOrEqual(0);expect(bounds.composer.right).toBeLessThanOrEqual(bounds.w+1);expect(bounds.composer.bottom).toBeLessThanOrEqual(bounds.h+1);}
 
 export async function acknowledgeVisit(page){
- const button=page.getByRole('button',{name:'با آگاهی از هشدار ادامه می‌دهم',exact:true});
+ const button=page.getByRole('button',{name:'با آگاهی از هشدار ادامه می‌دهم',exact:true}).first();
  await page.waitForTimeout(250);
  if(await button.count()){await expect(button).toBeEnabled();if(await page.evaluate(()=>navigator.maxTouchPoints>0))await button.tap();else await button.click();}
+}
+
+export async function openJourneyTools(page){
+ const details=page.locator('.chat-pane .journey-legacy-tools');
+ await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();
+}
+export async function openJourneyMore(page){
+ const details=page.locator('.chat-pane .purchase-journey .journey-more');
+ await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();
 }
