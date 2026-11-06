@@ -5,7 +5,7 @@ import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex} from './requestPlanning';
+import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic} from './requestPlanning';
 import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
@@ -170,8 +170,9 @@ export function useShopping() {
     if(selected&&/مسیر.*(?:نشون|نشان|ببین)|برو(?: به)? نقشه/.test(q)&&!/اگر|اگه|فرض/.test(q)){
       if(!retrying)say('user',displayText);showOffer(selected);return;
     }
-    const command=visitCommand(q),contextBefore=need?.topic_query??product?.category_name??visitIntent?.topic??(query||null);
-    const namedTopics=purchaseTopics(q),oldTopics=purchaseTopics(contextBefore??'');
+    const command=visitCommand(q),contextBefore=need?.topic_query??product?.category_name??shortPurchaseTopic(visitIntent?.topic??query);
+    const deviceReply=accessoryDeviceReply(q,contextBefore);
+    const namedTopics=deviceReply?[]:purchaseTopics(q),oldTopics=purchaseTopics(contextBefore??'');
     const changesPurchase=namedTopics.length>0&&oldTopics.length>0&&!namedTopics.some(t=>oldTopics.some(old=>samePurchaseFamily(t,old)));
     if(command==='cancel'){
       controller.current?.abort();setBusy(false);setDelegation(null);setQuestionCode('');if(!retrying)say('user',displayText);say('assistant','انتخاب خودکار را متوقف کردم؛ می‌توانی خودت گزینه‌ها را بررسی کنی.');return;
@@ -201,7 +202,7 @@ export function useShopping() {
     if(referencedIndex!==null&&!need?.pending_requirements.length&&!need?.budget_needs_input&&need?.battery_requirement.status!=='awaiting_minimum'){
       if(!retrying)say('user',displayText);const chosen=products[referencedIndex]!;if(task?.status==='pending'){setProducts([chosen]);setNeed(old=>old?{...old,reference_product_id:chosen.product_id}:old);setVisitIntent({topic:need?.topic_query??chosen.category_name??query,nearbyKm:visitIntent?.nearbyKm??2,localTime:visitIntent?.localTime??null,reuseProduct:true});setNeedsLocation(!position);setScreen('results');setQuestionCode('');return;}choose(chosen);return;
     }
-    const requestedTopics=purchaseTopics(q);
+    const requestedTopics=deviceReply?[]:purchaseTopics(q);
     if(requestedTopics.length>1){
       controller.current?.abort();setBusy(false);setError(null);
       if(!retrying)say('user',displayText);
@@ -232,7 +233,7 @@ export function useShopping() {
     if(task&&task.status!=='pending'){setDelegation({...task,id:crypto.randomUUID(),status:'pending',offerId:null,note:''});}
     pending.current=q;if(!retrying)say('user',displayText);
     const preferences=visitPreferences(q);setFilters(f=>({...f,...preferences}));
-    const context=need?.topic_query??product?.category_name??visitIntent?.topic??(query||null);
+    const context=need?.topic_query??product?.category_name??shortPurchaseTopic(visitIntent?.topic??query);
     const wantsVisit=/نزدیک|اطراف|حضوری|کجا.*بخر|کجا.*برم|پیاده|فروشگاه.*باز/.test(q);
     const requestedTime=parseVisitClock(q)??(/الان|همین حالا|ساعت فعلی/.test(q)?null:visitIntent?.localTime??null);
     let intent=parseVisitIntent(q,context);
@@ -321,10 +322,13 @@ export function useShopping() {
   const showOffer=(o:Offer)=>{selectOffer(o);if(o.shop.lat!==null&&o.shop.lon!==null)showPlace({lat:o.shop.lat,lon:o.shop.lon,label:o.shop.name??'فروشگاه'});else{setOverlay('nav');flash('مختصات این فروشگاه ثبت نشده؛ آدرس متنی را بررسی کن.');}};
   const resumeVisit=()=>{
     if(!position)return;
-    const topic=need?.topic_query||visitIntent?.topic.trim()||query;
+    const topic=need?.topic_query||shortPurchaseTopic(visitIntent?.topic??query);
     setNeedsLocation(false);setFilters(f=>({...f,sort:'nearest'}));
     if(need?.pending_requirements.length){say('assistant','موقعیت ثبت شد و نیاز قبلی محفوظ است؛ شرطِ باقی‌مانده را در همین گفت‌وگو مشخص کنیم.');return;}
     if(product&&visitIntent?.reuseProduct){setScreen('stores');setReload(n=>n+1);return;}
+    // A suspended natural-language request still needs intent interpretation.
+    // Never search its accumulated conversation as a literal product query.
+    if(!need?.topic_query&&pending.current&&status?.ready){ask(pending.current,true);return;}
     if(topic){say('assistant',`موقعیت ثبت شد؛ بررسی «${topic}» را از همان‌جا ادامه می‌دهم.`,'action');search(topic,false,true,true,visitIntent);}
     else if(pending.current)ask(pending.current,true);
   };

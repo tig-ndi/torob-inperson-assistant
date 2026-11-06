@@ -21,3 +21,8 @@ export async function openJourneyMore(page){
  const details=page.locator('.chat-pane .purchase-journey .journey-more');
  await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();
 }
+
+export async function openMobileTools(page){
+ const menu=page.locator('.mobile-header-menu');
+ if(await menu.isVisible()&&!await menu.evaluate(e=>e.open))await menu.locator('summary').click();
+}

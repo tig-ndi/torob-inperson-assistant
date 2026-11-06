@@ -1,3 +1,4 @@
+import {openMobileTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 
@@ -39,9 +40,9 @@ test('a named recommendation outside the first three is the first actionable car
 for(const size of [{width:320,height:568},{width:390,height:844}])test(`mobile chrome leaves room for reading and theme stays reachable at ${size.width}`,async({page,request})=>{
   await page.setViewportSize(size);await mockAssistant(page,request);await page.goto('/');await send(page);
   const reading=await page.locator('[data-chat-scroll]').evaluate(e=>e.clientHeight);expect(reading).toBeGreaterThan(size.height*.49);
-  await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر روشن',exact:true}).click();await expect(page.locator('.agent-app')).toHaveClass(/theme-light/);
-  await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true})).toBeFocused();await layout(page);
-  const checks=page.getByRole('checkbox',{name:'مقایسه',exact:true});await checks.nth(0).click();await checks.nth(1).click();await page.getByRole('button',{name:'مقایسهٔ انتخاب‌ها',exact:true}).click();
+  await openMobileTools(page);await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.getByRole('button',{name:'ظاهر روشن',exact:true}).click();await expect(page.locator('.agent-app')).toHaveClass(/theme-light/);
+  await openMobileTools(page);await page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true}).click();await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'انتخاب ظاهر برنامه',exact:true})).toBeFocused();await layout(page);
+  const checks=page.getByRole('checkbox',{name:'مقایسه',exact:true});await checks.nth(0).click();await checks.nth(1).click();await openMobileTools(page);await page.getByRole('button',{name:'مقایسهٔ انتخاب‌ها',exact:true}).click();
   const d=page.getByRole('dialog',{name:'مقایسهٔ کامل انتخاب‌ها'});const row=await d.locator('tbody tr').first().boundingBox(),dialog=await d.boundingBox();expect(row.y).toBeLessThan(dialog.y+dialog.height*.76+1); // Allow fractional-pixel layout rounding.
   expect(await d.locator('.dialog-content').evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);
   await page.screenshot({path:`../../.local/live-qa/refined-mobile-${size.width}.png`});

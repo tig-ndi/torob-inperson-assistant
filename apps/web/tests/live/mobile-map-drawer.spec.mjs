@@ -5,6 +5,7 @@ const map=page=>page.locator('[data-map-panel]');
 const selected=page=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:selected')??'null'));
 async function start(page,position=true){
  await page.goto('/');await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
+ await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();
  if(position){await map(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
  await page.getByRole('textbox',{name:'پیام به دستیار روی نقشه',exact:true}).fill('گوشی می‌خواهم');await page.getByRole('button',{name:'ارسال پیام روی نقشه',exact:true}).click();
 }
@@ -15,6 +16,13 @@ async function offersFixture(page,request,{unknown=false}={}){
  const far=structuredClone(offers.items[0]),near=structuredClone(offers.items[1]);
  far.shop.lat=unknown?null:35.74;far.shop.lon=unknown?null:51.46;near.shop.lat=unknown?null:35.7001;near.shop.lon=unknown?null:51.4001;
  await page.route('**/api/products/*/offers?*',route=>route.fulfill({json:{...offers,items:[far,near],has_more:false}}));
+ // The draft endpoint must describe the same fixture shop as the offer map;
+ // otherwise a real coordinate from the snapshot invalidates camera assertions.
+ await page.route('**/api/followups/prepare',async route=>{
+  const response=await route.fetch(),data=await response.json(),input=route.request().postDataJSON();
+  const row=[far,near].find(o=>o.offer_id===input.offer_id);if(row)data.selected_offer=row;
+  await route.fulfill({json:data});
+ });
  return {far,near};
 }
 
@@ -39,11 +47,16 @@ for(const width of [320,390])test(`thin map bar reports thinking, selects the ne
  const journey=map(page).locator('[data-mobile-store-sheet] [data-mobile-journey]');await expect(journey).toBeVisible();await expect(map(page).locator(':scope>[data-mobile-journey]')).toHaveCount(0);
  expect((await header.boundingBox()).height).toBeLessThanOrEqual(56);
  await expect(journey.getByRole('list',{name:'مراحل مراجعه'}).locator('li')).toHaveCount(4);
+ expect(await journey.locator('[aria-current=step] span').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(12);
  await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(journey).toBeHidden();
- await expect.poll(async()=>Math.round((await map(page).locator('[data-mobile-store-sheet]').boundingBox()).height)).toBe(44);
+ await expect.poll(async()=>Math.round((await map(page).locator('[data-mobile-store-sheet]').boundingBox()).height)).toBe(92);
  await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();await expect(journey).toBeVisible();
  await journey.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();await expect(page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'})).toBeVisible();await page.getByRole('button',{name:'بستن',exact:true}).click();
- await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});await page.screenshot({path:`../../.local/live-qa/mobile-drawer-compact-${width}.png`});
+ await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
+ const chosen=map(page).locator('.real-pin.chosen');
+ await expect.poll(async()=>{const [pin,credit]=await Promise.all([chosen.boundingBox(),map(page).locator('.map-credit').boundingBox()]);return !!pin&&!!credit&&pin.y+pin.height<credit.y;}).toBe(true);
+ expect(await chosen.evaluate(e=>{const b=e.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.closest('.real-pin')===e;})).toBe(true);
+ await page.screenshot({path:`../../.local/live-qa/mobile-drawer-compact-${width}.png`});
 });
 
 test('missing coordinates do not produce a false nearest-store selection',async({page,request})=>{

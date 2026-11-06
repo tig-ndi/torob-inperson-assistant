@@ -1,3 +1,4 @@
+import {openMobileTools} from './helpers.mjs';
 import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 
@@ -15,7 +16,7 @@ for(const width of [320,1440])test(`charger comparison presents normalized sourc
  a.category_name=b.category_name='شارژر گوشی';a.persian_title='شارژر ۱۵ وات';b.persian_title='شارژر ۲۵ وات';
  a.specs=[{section:'مشخصات کلی',key:'نوع درگاه خروجی',value:'Type-C'},{section:'مشخصات کلی',key:'نام و مدل',value:'شارژر ۱۵ وات'}];
  b.specs=[{section:'مشخصات کلی',key:'تعداد درگاه خروجی',value:'یک عدد TYPE-C'},{section:'مشخصات کلی',key:'حداکثر توان خروجی',value:'25 وات'}];
- await page.goto('/');await send(page,'شارژر گوشی میخوام');await page.getByRole('checkbox',{name:'مقایسه',exact:true}).nth(0).check();await page.getByRole('checkbox',{name:'مقایسه',exact:true}).nth(1).check();await page.getByRole('button',{name:'مقایسهٔ انتخاب‌ها',exact:true}).click();
+ await page.goto('/');await send(page,'شارژر گوشی میخوام');await page.getByRole('checkbox',{name:'مقایسه',exact:true}).nth(0).check();await page.getByRole('checkbox',{name:'مقایسه',exact:true}).nth(1).check();await openMobileTools(page);await page.getByRole('button',{name:'مقایسهٔ انتخاب‌ها',exact:true}).click();
  const dialog=page.getByRole('dialog',{name:'مقایسهٔ کامل انتخاب‌ها'}),power=dialog.locator('[data-comparison-field="charger:power"]');
  await expect(power).toContainText('۱۵ وات');await expect(power).toContainText('۲۵ وات');await expect(power).toContainText('عنوان/نام‌ومدل');await expect(power).not.toContainText('در منبع ثبت نشده');
  const connector=dialog.locator('[data-comparison-field="charger:connector"]');await expect(connector.locator('td')).toHaveCount(2);for(const cell of await connector.locator('td').all())await expect(cell).toContainText('USB Type-C');

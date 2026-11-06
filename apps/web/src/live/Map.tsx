@@ -29,7 +29,8 @@ type Props={replyByOffer?:Record<string,import('./upgrades').SellerReply>;roadRo
 function visiblePadding(m:maplibregl.Map,p:Props){
   const width=m.getContainer().clientWidth||innerWidth,height=m.getContainer().clientHeight||innerHeight;
   const top=Math.min(p.desktop?104:p.topInset??104,Math.max(20,height-150)),left=Math.min(100,width*.25);
-  return {top,left,right:Math.min(p.desktop?(p.rightInset??0)+100:Math.min(100,width*.25),Math.max(0,width-left-140)),bottom:Math.min(p.desktop?100:p.bottom+12,Math.max(0,height-top-(p.desktop?130:64)))};
+  const attributionHeight=m.getContainer().parentElement?.querySelector('.map-credit')?.getBoundingClientRect().height??24;
+  return {top,left,right:Math.min(p.desktop?(p.rightInset??0)+100:Math.min(100,width*.25),Math.max(0,width-left-140)),bottom:Math.min(p.desktop?100:p.bottom+attributionHeight+44,Math.max(0,height-top-(p.desktop?130:64)))};
 }
 export default function RealMap(p:Props){
   const el=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|null>(null),latest=useRef(p);latest.current=p;
@@ -149,5 +150,13 @@ export default function RealMap(p:Props){
   useEffect(()=>{if(p.focus)map.current?.flyTo({center:[p.focus.lon,p.focus.lat],zoom:15,padding:visiblePadding(map.current!,latest.current),duration:600});},[p.focus,ready]);
   useEffect(()=>{const m=map.current;if(!m||!ready)return;m.easeTo({center:p.focus?[p.focus.lon,p.focus.lat]:m.getCenter(),padding:visiblePadding(m,p),duration:260});},[p.bottom,p.topInset,p.rightInset,p.desktop]);
   useEffect(()=>{const m=map.current;if(!m||!ready||p.active===false)return;const route=p.roadRoutes?.find(r=>r.offer_id===p.selected);if(!route)return;const bounds=new maplibregl.LngLatBounds();route.geometry.coordinates.forEach(point=>bounds.extend(point));m.fitBounds(bounds,{absolutePadding:true,padding:visiblePadding(m,p),maxZoom:16,duration:600});},[ready,p.roadRoutes,p.selected,p.active]);
+  useEffect(()=>{
+    const m=map.current;
+    if(!m||!ready||p.desktop||p.active===false||p.focus||p.roadRoutes?.some(r=>r.offer_id===p.selected))return;
+    const selected=p.offers.find(o=>o.offer_id===p.selected);
+    if(selected?.shop.lon==null||selected.shop.lat==null)return;
+    // A selected label must remain in the usable map area as the drawer moves.
+    m.easeTo({center:[selected.shop.lon,selected.shop.lat],padding:visiblePadding(m,p),duration:260});
+  },[ready,p.selected,p.offers,p.bottom,p.topInset,p.active,p.desktop,p.focus,p.roadRoutes]);
   return <><div ref={el} data-road-point-count={p.roadRoutes?.reduce((n,r)=>n+r.geometry.coordinates.length,0)??0} data-map-ready={rendered} className="absolute inset-0" aria-label="نقشهٔ تعاملی ایران" style={{position:'absolute',inset:0,cursor:p.pick?'crosshair':undefined}}/>{error&&<div role="status" className="map-failure">نقشه دریافت نشد؛ فهرست فروشگاه‌ها همچنان در دسترس است.<button onClick={()=>{setError(false);setAttempt(n=>n+1);}}>تلاش دوباره</button></div>}<div className="map-credit" style={{bottom:p.desktop?8:p.bottom+6}}>© <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>{!!p.roadRoutes?.length&&<> · <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noreferrer">FOSSGIS / OSRM</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">اصلاح نقشه</a></>}</div></>;
 }

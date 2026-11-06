@@ -11,14 +11,21 @@ async function fixture(page,request,{failure=false,prepare=true}={}){
 }
 const chat=page=>page.locator('.chat-pane .purchase-journey');
 const map=page=>page.viewportSize().width>=1000?chat(page):page.locator('[data-mobile-journey]');
+async function expandMapDrawer(page){
+ if(page.viewportSize().width>=1000||!await page.locator('[data-map-panel]').isVisible())return;
+ const sheet=page.locator('[data-mobile-store-sheet]');await expect(sheet).toBeVisible();
+ if(await sheet.getAttribute('data-sheet-stop')==='collapsed')await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();
+}
 async function mapDetails(page){
+ await expandMapDrawer(page);
  if(page.viewportSize().width>=1000)return chat(page);
  const more=page.getByRole('button',{name:'جزئیات این مرحله',exact:true});
  if(await more.count())await more.click();else await page.getByRole('button',{name:'ادامهٔ مراحل خرید',exact:true}).click();
  return page.getByRole('dialog',{name:'ادامهٔ همین خرید',exact:true});
 }
 async function begin(page,panel=chat(page)){
- await panel.getByRole('button',{name:'بزن بریم',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن',exact:true});await expect(d).toBeVisible();await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).click();await expect(d.locator('.route-total')).toBeVisible();await d.getByRole('button',{name:'بستن',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');
+ await expandMapDrawer(page);
+ await panel.getByRole('button',{name:'بزن بریم',exact:true}).click();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن',exact:true});await expect(d).toBeVisible();await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).click();await expect(d.locator('.route-total')).toBeVisible();await d.getByRole('button',{name:'بستن',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');await expandMapDrawer(page);
 }
 for(const [width,height] of [[320,568],[390,844],[844,390],[1440,900]])test(`map leads from selected shop to a definite purchase ending at ${width}x${height}`,async({page,request})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewportSize({width,height});const f=await fixture(page,request);
@@ -27,11 +34,11 @@ for(const [width,height] of [[320,568],[390,844],[844,390],[1440,900]])test(`map
  if(width<1000)await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
  const startPanel=width<1000?map(page):chat(page);await begin(page,startPanel);
  await expect(map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true})).toBeVisible();await expect(width<1000?map(page):page.locator('.map-topbar')).toContainText('۱۰ دقیقه');const detail=await mapDetails(page);await expect(detail).toContainText('موقعیت زنده دنبال نمی‌شود');if(width<1000)await detail.getByRole('button',{name:'بستن',exact:true}).click();
- await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');
+ await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');await expandMapDrawer(page);
  await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','arrived');
  await page.screenshot({path:`../../.local/purchase-arrived-${width}.png`});
  await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(map(page)).toContainText('این خرید تمام است');await expect(map(page).getByRole('button',{name:'بزن بریم',exact:true})).toHaveCount(0);
- await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(map(page)).toContainText('خریدت انجام شد');await page.screenshot({path:`../../.local/purchase-done-${width}.png`});
+ await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expandMapDrawer(page);await expect(map(page)).toContainText('خریدت انجام شد');await page.screenshot({path:`../../.local/purchase-done-${width}.png`});
  await map(page).getByRole('button',{name:/^(?:شروع یک )?خرید تازه$/}).click();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','home');await expect(chat(page)).toHaveCount(0);await layout(page);expect(errors).toEqual([]);expect(f.calls).toHaveLength(1);
 });
 test('chat commands share map progress and completion without more model calls',async({page,request})=>{
@@ -53,7 +60,7 @@ test('failed road service never claims street guidance or blocks reporting arriv
 test.describe('touch-only completion',()=>{
  test.use({isMobile:true,hasTouch:true,viewport:{width:390,height:844}});
  test('the map supports starting, arrival and purchase with touch after scrolling',async({page,request})=>{
-  await fixture(page,request);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).tap();await map(page).getByRole('button',{name:'بزن بریم',exact:true}).tap();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'});await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).tap();await expect(d.locator('.route-total')).toBeVisible();await d.getByRole('button',{name:'بستن',exact:true}).tap();await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).tap();await expect(map(page)).toHaveAttribute('data-purchase-stage','arrived');await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).tap();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await map(page).getByRole('button',{name:/^(?:شروع یک )?خرید تازه$/}).tap();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','home');
+  await fixture(page,request);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).tap();await expandMapDrawer(page);await map(page).getByRole('button',{name:'بزن بریم',exact:true}).tap();const d=page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'});await d.getByRole('button',{name:'دریافت مسیر خیابانی',exact:true}).tap();await expect(d.locator('.route-total')).toBeVisible();await d.getByRole('button',{name:'بستن',exact:true}).tap();await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).tap();await expect(map(page)).toHaveAttribute('data-purchase-stage','arrived');await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).tap();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await map(page).getByRole('button',{name:/^(?:شروع یک )?خرید تازه$/}).tap();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','home');
  });
 });
 
@@ -68,7 +75,7 @@ test('starting a scheduled visit rechecks the actual current departure before le
 });
 
 test('selecting a shop on the map continues through purchase without returning to chat',async({page,request})=>{
- await page.setViewportSize({width:390,height:844});const f=await fixture(page,request,{prepare:false});await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await page.locator('.map-store-choice').first().click();await page.getByRole('button',{name:'بررسی و شروع خرید از این فروشگاه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','ready');await begin(page,map(page));await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(page.locator('[data-map-panel]')).toBeVisible();expect(f.calls).toHaveLength(1);
+ await page.setViewportSize({width:390,height:844});const f=await fixture(page,request,{prepare:false});await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expandMapDrawer(page);await page.locator('.map-store-choice').first().click();await page.getByRole('button',{name:'بررسی و شروع خرید از این فروشگاه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','ready');await begin(page,map(page));await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(page.locator('[data-map-panel]')).toBeVisible();expect(f.calls).toHaveLength(1);
 });
 
 for(const width of [1024,1440])test(`desktop shows one journey card and leaves the map destination unobscured at ${width}px`,async({page,request})=>{

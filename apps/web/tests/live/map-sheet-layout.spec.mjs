@@ -3,6 +3,7 @@ import {mockAssistant,send} from './helpers.mjs';
 
 async function assertSeparated(page){
  const sheet=page.locator('[data-mobile-store-sheet]'),body=sheet.locator('.map-sheet-content'),nav=sheet.locator('.mobile-view-switch');
+ if(await sheet.getAttribute('data-sheet-stop')==='collapsed')await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();
  await expect(body.locator('.map-store-choice.selected')).toBeVisible();await expect(body.locator('.purchase-journey')).toHaveCount(0);
  await expect.poll(async()=>{const [view,footer]=await Promise.all([body.boundingBox(),nav.boundingBox()]);return view.y+view.height<=footer.y+1;}).toBe(true);
  for(const button of await nav.locator('button').all()){const box=await button.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);expect(box.y+box.height).toBeLessThanOrEqual((await page.viewportSize()).height+1);}
@@ -29,12 +30,12 @@ for(const size of [{width:320,height:568},{width:390,height:844},{width:412,heig
   const other=sheet.locator('.map-store-choice:not(.selected)').first();if(await other.count()){const id=await other.getAttribute('data-map-choice');await other.click();await expect(sheet.locator('.map-store-choice.selected')).toHaveAttribute('data-map-choice',id);}
   const selected=await page.locator('.map-store-choice.selected').getAttribute('data-map-choice');
   await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');await expect(handle).toHaveAttribute('aria-expanded','false');
-  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?78:44);await expect(sheet.locator('.map-sheet-content')).toBeHidden();await expect(journey).toBeHidden();
-  await expect.poll(async()=>{const [j,s]=await Promise.all([journey.boundingBox(),sheet.boundingBox()]);return !j&&s.height<=80;}).toBe(true);
+  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?126:92);await expect(sheet.locator('.map-sheet-content')).toBeHidden();await expect(journey).toBeHidden();
+  await expect.poll(async()=>{const [j,s]=await Promise.all([journey.boundingBox(),sheet.boundingBox()]);return !j&&s.height<=130;}).toBe(true);
   await page.getByRole('button',{name:'بازگشت به گفت‌وگو',exact:true}).click();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');
   await handle.focus();await page.keyboard.press('ArrowUp');await expect(sheet).toHaveAttribute('data-sheet-stop','peek');await expect(page.locator('.map-store-choice.selected')).toHaveAttribute('data-map-choice',selected);await assertSeparated(page);
   await handle.focus();await page.keyboard.press('End');await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');await expect(handle).toBeFocused();
-  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?78:44);const box=await handle.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y-150,{steps:8});await page.mouse.up();await expect(sheet).not.toHaveAttribute('data-sheet-stop','collapsed');
-  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBeGreaterThan(size.safe?78:44);await page.waitForTimeout(280);const raised=await handle.boundingBox();await page.mouse.move(raised.x+raised.width/2,raised.y+raised.height/2);await page.mouse.down();await page.mouse.move(raised.x+raised.width/2,size.height-15,{steps:10});await page.mouse.up();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');
+  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?126:92);const box=await handle.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y-150,{steps:8});await page.mouse.up();await expect(sheet).not.toHaveAttribute('data-sheet-stop','collapsed');
+  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBeGreaterThan(size.safe?126:92);await page.waitForTimeout(280);const raised=await handle.boundingBox();await page.mouse.move(raised.x+raised.width/2,raised.y+raised.height/2);await page.mouse.down();await page.mouse.move(raised.x+raised.width/2,size.height-15,{steps:10});await page.mouse.up();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');
   await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});await page.screenshot({path:`../../.local/live-qa/map-sheet-collapsed-${size.width}x${size.height}${size.dark?'-dark':''}.png`});
 });

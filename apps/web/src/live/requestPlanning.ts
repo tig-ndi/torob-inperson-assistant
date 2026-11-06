@@ -9,8 +9,10 @@ export function selectedProductIndex(text:string,count:number):number|null{
   return index<count?index:null;
 }
 export function purchaseTopics(text:string):string[]{
-  const clauses=normalized(text).split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
+  const positive=normalized(text).replace(/(?:به\s*جای|بجای)\s+.+?(?=\s+(?:یک|یه)\s+)/g,'').replace(/(?:به\s*جای|بجای)\s+\S+\s+/g,'');
+  const clauses=positive.split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
   let rest=clauses.map(clause=>{
+    if(/^\s*نه\s+(?:خود\s+)?(?:گوشی|موبایل|شارژر|کابل|هدفون|پاوربانک|کفش|لپ\s*تاپ)(?:\s|$)/.test(clause))return '';
     const refused=/نمی\s*(?:خواهم|خوام)/.exec(clause);
     if(!refused)return clause;
     const before=clause.slice(0,refused.index);
@@ -37,6 +39,18 @@ export function purchaseTopics(text:string):string[]{
     if(!seen.has(family)){seen.add(family);const topic=name.replace(' برای ',' ');found.push(topic==='شارژر گوشی'?'شارژر موبایل':topic==='موبایل'?'گوشی':topic);}
   }
   return found;
+}
+
+export function accessoryDeviceReply(text:string,topic:string|null):boolean{
+  return /^(?:شارژر|کابل|قاب|کاور|کیف|محافظ|باتری)/.test(normalized(topic??''))&&
+    /^(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|دستگاه|مدل|سامسونگ|ردمی|آیفون|لپ\s*تاپ)/.test(normalized(text))&&
+    !/خود\s+(?:گوشی|لپ\s*تاپ).*می\s*خوا|به\s*جای|عوض/.test(normalized(text));
+}
+
+export function shortPurchaseTopic(text:string):string|null{
+  const value=normalized(text);
+  if(value&&value.length<=120&&value.split(/\s+/).length<=12&&!/[؛;،!?؟]|می\s*خوا|انتخاب|موقعیت/.test(value))return value;
+  return purchaseTopics(value)[0]??null;
 }
 
 export function exclusivePurchase(text:string){return /(?:^|[؛،\s])فقط\s+(?:یه\s+|یک\s+)?(?:شارژر|کابل|قاب|کاور|کیف|گوشی|موبایل|کفش|کتانی|هدفون|لپ\s*تاپ)(?:\s|$)/.test(normalized(text))&&purchaseTopics(text).length===1;}

@@ -11,13 +11,13 @@ export function MobileViewSwitch({view,onChat,onMap,mapLabel='نقشه و فرو
 type Props={choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;busy:boolean;hasMore:boolean;
   productNames?:Record<string,string>;comparedIds?:ReadonlySet<string>;onNavigate:()=>void;onSelect:(o:Offer)=>void;onInspect:(o:Offer)=>void;onMore:()=>void;onChat:()=>void;onPick:()=>void;onHeight:(height:number)=>void};
 export default function MobileMapSheet(p:Props){
-  const [snap,setSnap]=useState<'collapsed'|'peek'|'half'|'full'>('peek'),[dragHeight,setDragHeight]=useState<number|null>(null);
+  const [snap,setSnap]=useState<'collapsed'|'peek'|'half'|'full'>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
   const [selectedPeek,setSelectedPeek]=useState(304),[safeInset,setSafeInset]=useState(0);
   const sheet=useRef<HTMLElement>(null),cleanup=useRef<(()=>void)|null>(null),body=useRef<HTMLDivElement>(null);
   const collapsed=snap==='collapsed';
   const pool=p.selected&&!p.offers.some(o=>o.offer_id===p.selected?.offer_id)?[p.selected,...p.offers]:p.offers;
   const full=Math.max(190,p.viewportHeight-(p.viewportHeight<=500?104:220)),peek=Math.min(p.selected?selectedPeek:p.choosingProduct?260:196,full),half=Math.max(peek,Math.min(full,p.viewportHeight*.48));
-  const stops={collapsed:44+safeInset,peek,half,full};
+  const stops={collapsed:92+safeInset,peek,half,full};
   const height=stops[snap];
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
@@ -62,6 +62,6 @@ export default function MobileMapSheet(p:Props){
       {p.hasMore&&<button className="map-sheet-more" disabled={p.busy} onClick={p.onMore}>پیشنهادهای بیشتر</button>}
     </div>
     {!collapsed&&!p.journeyActive&&p.selected&&<div className="map-selected-actions" data-map-selected-actions><div className="map-selected-buttons"><TouchAction className="primary-action" action={()=>p.onInspect(p.selected!)} aria-label="بررسی و شروع خرید از این فروشگاه"><Navigation size={15}/>بررسی و شروع خرید</TouchAction><TouchAction className="secondary-action" aria-label="ادامه با این فروشگاه در گفت‌وگو" action={p.onNavigate}><ArrowRight size={15}/>مسیریاب</TouchAction></div></div>}
-    {!collapsed&&<MobileViewSwitch view="map" onChat={p.onChat} onMap={()=>setSnap('peek')}/>}
+    <MobileViewSwitch view="map" onChat={p.onChat} onMap={()=>setSnap(v=>v==='collapsed'?'peek':v)}/>
   </section>;
 }
