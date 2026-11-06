@@ -1242,6 +1242,29 @@ class EnvelopeTests(unittest.TestCase):
             self.assertEqual(settings.attempt_limit, 3)
             self.assertNotIn('synthetic-test-key', repr(settings))
 
+    def test_configured_attempt_limit_has_no_fixed_upper_cap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for limit in (1000, 10000, 1000000):
+                with self.subTest(limit=limit):
+                    (root / '.env').write_text(
+                        f'BOXAPI_API_KEY=synthetic-test-key\nTOROB_ASSISTANT_ENABLED=1\n'
+                        f'TOROB_ASSISTANT_MODEL=gpt-6.1-sol\nTOROB_ASSISTANT_ATTEMPT_LIMIT={limit}\n',
+                        encoding='utf-8')
+                    with patch.dict('os.environ', {}, clear=True):
+                        service = AssistantService.from_root(Catalogue(root / 'unused.sqlite3'), root)
+                    status = service.status()
+                    self.assertEqual(status['reason'], 'ready')
+                    self.assertEqual(status['attempt_limit'], limit)
+                    self.assertEqual(status['remaining_calls'], limit)
+            for value in ('0', '-1', '1.5', 'invalid'):
+                with self.subTest(invalid=value), patch.dict(
+                        'os.environ', {'TOROB_ASSISTANT_ATTEMPT_LIMIT': value}, clear=True):
+                    with self.assertRaises(ValueError):
+                        AgentSettings.load(root)
+            with patch.dict('os.environ', {'TOROB_ASSISTANT_ATTEMPT_LIMIT': '2000000'}, clear=True):
+                self.assertEqual(AgentSettings.load(root).attempt_limit, 2000000)
+
     def test_settings_are_allowlisted_redacted_and_environment_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
