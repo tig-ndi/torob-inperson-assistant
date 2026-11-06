@@ -5,7 +5,7 @@ import type {SellerReply} from './upgrades';
 
 export type FollowupEvent={id:string;offer_id:string;outcome:Report['outcome'];source:Report['source'];createdAt:number};
 type Input={offer:Offer|null;reply:SellerReply|null;event:FollowupEvent|null;filters:Filters;position:Position|null;
-  visitTime:string|null;onOffers:(offers:Offer[])=>void;onMessage:(role:'assistant',text:string,kind:'action')=>void};
+  visitTime:string|null;visitDate?:string|null;onOffers:(offers:Offer[])=>void;onMessage:(role:'assistant',text:string,kind:'action')=>void};
 
 // Seller-panel replies and user reports share one request and one visible list.
 export function useFollowupAlternatives(input:Input){
@@ -16,13 +16,13 @@ export function useFollowupAlternatives(input:Input){
   const fromEvent=!!event&&(!reply||event.createdAt>=Date.parse(reply.responded_at));
   const outcome=fromEvent?event!.outcome:reply?.outcome,source=fromEvent?event!.source:'simulated';
   const stamp=(input.offer?.offer_id??'')+':'+(fromEvent?event!.id:reply?.responded_at??'');
-  const key=JSON.stringify([stamp,outcome,source,input.filters,input.position,input.visitTime,refresh]);
+  const key=JSON.stringify([stamp,outcome,source,input.filters,input.position,input.visitTime,input.visitDate,refresh]);
   useEffect(()=>{
     setState({active:false,busy:false,items:[],error:null});
     if(!input.offer||!outcome||!['closed','out_of_stock','no_answer'].includes(outcome))return;
     const c=new AbortController();setState({active:true,busy:true,items:[],error:null});
     if(announced.current!==stamp){announced.current=stamp;input.onMessage('assistant',`${source==='simulated'?'شبیه‌سازی':'گزارش تو'}: این فروشگاه برای مراجعه مناسب نیست؛ جایگزین‌های باز با همان شرایط را بررسی می‌کنم.`,'action');}
-    api.alternatives(input.offer,{...input.filters,open:true},input.position,outcome as 'closed'|'out_of_stock'|'no_answer',source,c.signal,0,input.visitTime).then(result=>{
+    api.alternatives(input.offer,{...input.filters,open:true},input.position,outcome as 'closed'|'out_of_stock'|'no_answer',source,c.signal,0,input.visitTime,input.visitDate??null).then(result=>{
       if(c.signal.aborted)return;const items=result.alternatives.items.slice(0,3);input.onOffers(items);setState({active:true,busy:false,items,error:null});
     }).catch(error=>{if(!c.signal.aborted)setState({active:true,busy:false,items:[],error:error instanceof Error?error.message:'جایگزین‌ها دریافت نشدند.'});});
     return()=>c.abort();

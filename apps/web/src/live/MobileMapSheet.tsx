@@ -3,6 +3,7 @@ import {ArrowRight,Check,ChevronUp,ChevronDown,Map,MessageCircle,Navigation,Stor
 import TouchAction from './TouchAction';
 import {Price} from '../prototype/ui';
 import {distance,fa,openLabel,type Offer} from './data';
+import DestinationAddress from './DestinationAddress';
 
 export function MobileViewSwitch({view,onChat,onMap,mapLabel='نقشه و فروشگاه‌ها',mapHint}:{view:'chat'|'map';onChat:()=>void;onMap:()=>void;mapLabel?:string;mapHint?:string}){
   return <nav className="mobile-view-switch" aria-label="نمای خرید"><button aria-label="رفتن به گفت‌وگو" aria-pressed={view==='chat'} onClick={onChat} type="button"><MessageCircle size={17}/>گفت‌وگو</button><button aria-label="رفتن به نقشه" aria-description={mapHint} title={mapHint} data-map-context-action aria-pressed={view==='map'} onClick={onMap} type="button"><Map size={17}/><span>{mapLabel}</span></button></nav>;
@@ -13,11 +14,13 @@ type Props={choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocatio
 export default function MobileMapSheet(p:Props){
   const [snap,setSnap]=useState<'collapsed'|'peek'|'half'|'full'>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
   const [selectedPeek,setSelectedPeek]=useState(304),[safeInset,setSafeInset]=useState(0);
+  const [addressHeight,setAddressHeight]=useState(0),address=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{const node=address.current;if(!node){setAddressHeight(0);return;}const measure=()=>setAddressHeight(Math.ceil(node.getBoundingClientRect().height));measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();},[p.selected?.offer_id,p.selected?.shop.address]);
   const sheet=useRef<HTMLElement>(null),cleanup=useRef<(()=>void)|null>(null),body=useRef<HTMLDivElement>(null);
   const collapsed=snap==='collapsed';
   const pool=p.selected&&!p.offers.some(o=>o.offer_id===p.selected?.offer_id)?[p.selected,...p.offers]:p.offers;
   const full=Math.max(190,p.viewportHeight-(p.viewportHeight<=500?104:220)),peek=Math.min(p.selected?selectedPeek:p.choosingProduct?260:196,full),half=Math.max(peek,Math.min(full,p.viewportHeight*.48));
-  const stops={collapsed:92+safeInset,peek,half,full};
+  const stops={collapsed:92+safeInset+addressHeight,peek:Math.max(peek,92+safeInset+addressHeight),half:Math.max(half,92+safeInset+addressHeight),full:Math.max(full,92+safeInset+addressHeight)};
   const height=stops[snap];
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
@@ -53,6 +56,7 @@ export default function MobileMapSheet(p:Props){
   return <section ref={sheet} className="mobile-map-sheet" data-mobile-store-sheet data-sheet-stop={snap} data-journey-list={p.journeyActive?'true':undefined} style={{height:dragHeight??height,transition:dragHeight===null?'height 240ms ease':'none'}} aria-label="فروشگاه‌های روی نقشه">
     <button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={!collapsed} aria-controls="mobile-map-offers" onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap('peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{collapsed&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
     {!collapsed&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
+    {p.selected&&<div ref={address} className="map-sheet-address"><DestinationAddress key={p.selected.offer_id} address={p.selected.shop.address}/></div>}
     {p.journey&&<div hidden={collapsed} className="map-sheet-journey">{p.journey}</div>}
     {p.notice&&!collapsed&&<p className="map-result-notice" role="status">{p.notice}</p>}
     <div hidden={collapsed} ref={body} id="mobile-map-offers" className="map-sheet-content">

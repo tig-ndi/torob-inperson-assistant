@@ -44,7 +44,7 @@ export function purchaseTopics(text:string):string[]{
 export function accessoryDeviceReply(text:string,topic:string|null):boolean{
   return /^(?:شارژر|کابل|قاب|کاور|کیف|محافظ|باتری)/.test(normalized(topic??''))&&
     /^(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|دستگاه|مدل|سامسونگ|ردمی|آیفون|لپ\s*تاپ)/.test(normalized(text))&&
-    !/خود\s+(?:گوشی|لپ\s*تاپ).*می\s*خوا|به\s*جای|عوض/.test(normalized(text));
+    !/خود\s+(?:گوشی|لپ\s*تاپ).*(?<![\wن])می\s*خوا|به\s*جای|عوض/.test(normalized(text));
 }
 
 export function shortPurchaseTopic(text:string):string|null{

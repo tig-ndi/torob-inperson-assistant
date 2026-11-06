@@ -3,7 +3,20 @@ import {sellerPreferences as visitPreferences} from './sellerPreferences.ts';
 import {purchaseTopics} from './requestPlanning.ts';
 export {sellerPreferences as visitPreferences} from './sellerPreferences.ts';
 export type ChatEntry = {id:string;role:'user'|'assistant';text:string;kind?:'message'|'action'};
-export type VisitIntent = {topic:string;nearbyKm:number;localTime:string|null;reuseProduct?:boolean};
+export type VisitIntent = {topic:string;nearbyKm:number;localTime:string|null;visitDate?:string|null;reuseProduct?:boolean};
+export function visitDate(text:string,now=new Date()):string|null|undefined{
+  const input=text.replace(/\u200c/g,' ').replace(/ي/g,'ی').replace(/ك/g,'ک');
+  if(/الان|همین حالا|ساعت فعلی/.test(input))return null;
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const part=(type:string)=>Number(parts.find(p=>p.type===type)!.value);
+  const date=new Date(Date.UTC(part('year'),part('month')-1,part('day')));
+  const relative=/پس\s*فردا/.test(input)?2:/فردا/.test(input)?1:/امروز/.test(input)?0:null;
+  const days:Record<string,number>={'یکشنبه':0,'دوشنبه':1,'سه شنبه':2,'چهارشنبه':3,'پنجشنبه':4,'جمعه':5,'شنبه':6};
+  const day=Object.keys(days).find(day=>new RegExp(`(?:^|\\s)${day}(?=$|\\s|[،.!؟])`).test(input));
+  if(relative===null&&!day)return undefined;
+  date.setUTCDate(date.getUTCDate()+(relative??((days[day!]!-date.getUTCDay()+7)%7)));
+  return date.toISOString().slice(0,10);
+}
 export function visitClock(text:string):string|null {
   const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');
   let localTime:string|null=null;
@@ -32,11 +45,11 @@ export function visitIntent(text:string,context:string|null):VisitIntent|null {
   const words:Record<string,number>={'یک':1,'دو':2,'سه':3,'چهار':4,'پنج':5,'شش':6,'هفت':7,'هشت':8,'نه':9,'ده':10};
   const word=Object.keys(words).find(w=>input.includes(w+'کیلومتر'));
   const nearbyKm=radius?Math.max(0.1,Math.min(50,Number(radius[1]))):word?words[word]!:2;
-  return {topic,nearbyKm,localTime,reuseProduct:!explicit&&!!context};
+  return {topic,nearbyKm,localTime,visitDate:visitDate(text),reuseProduct:!explicit&&!!context};
 }
 
 export function visitGuidance(v:VisitInsights,_label:string){
-  const n=v.nearby,time=new Intl.DateTimeFormat('fa-IR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tehran'}).format(new Date(v.evaluated_at));
+  const n=v.nearby,time=new Intl.DateTimeFormat('fa-IR',{weekday:'long',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tehran'}).format(new Date(v.evaluated_at));
   const near=n.declared_open?`${fa(n.declared_open)} فروشگاه در شعاع ${fa(v.nearby_km)} کیلومتری، طبق برنامه بازند.`:n.shops&&n.declared_closed===n.shops&&!n.truncated?'تمام فروشگاه‌های ثبت‌شدهٔ نزدیک، طبق برنامه بسته‌اند.':`در محدودهٔ نزدیک، فروشگاهِ باز طبق برنامه پیدا نشد؛ ساعت ${fa(n.unknown)} فروشگاه هم نامشخص است.`;
   const open=v.open_offers.items[0];
 
