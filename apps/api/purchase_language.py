@@ -11,6 +11,8 @@ def affirmative_purchase_text(text: str) -> str:
     clauses = re.split(r'[؛;،,!؟\n]|\b(?:اما|ولی)\b', cleaned)
     output = []
     for clause in clauses:
+        if re.match(r'^\s*نه\s+(?:enc|میکروفون)(?:\s|$)', clause, re.I):
+            continue  # A rejected microphone feature is not another purchase.
         if re.match(r'^\s*نه\s+(?:خود\s+)?(?:گوشی|موبایل|شارژر|کابل|هدفون|پاوربانک|کفش|لپ\s*تاپ)(?:\s|$)', clause):
             continue
         refusal = re.search(r'(?<!\w)نمی\s*(?:خواهم|خوام)(?!\w)', clause)

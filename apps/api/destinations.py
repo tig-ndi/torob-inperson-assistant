@@ -13,6 +13,7 @@ from apps.api.credit import evaluate_credit
 from apps.api.battery import assess_capacity
 from apps.api.routing import cached_route
 from apps.api.shopping_intent import matches_product_kind
+from apps.api.visit_time import selected_instant
 from tools.prepare_data import normalize_text
 
 
@@ -20,6 +21,8 @@ from apps.api.source_filters import SourceFilters, matches_source_filters
 
 
 class DestinationRequest(VisitRequest):
+    require_anc:bool=False
+    minimum_capacity_kg:int|None=Field(default=None,strict=True,gt=0,le=1000)
     source_filters: SourceFilters = Field(default_factory=SourceFilters)
     reference_product_id:str|None=Field(default=None,min_length=1,max_length=120)
     exclude_shop_ids:list[Annotated[str,Field(min_length=1,max_length=120)]]=Field(default_factory=list,max_length=20)
@@ -37,9 +40,7 @@ def destinations_router(catalogue:Catalogue):
     def destinations(body:DestinationRequest):
         try:expression=retrieval_expression(body.query)
         except InvalidQuery as exc:raise HTTPException(422,'عبارت خرید معتبر نیست.') from exc
-        when=datetime.now(TEHRAN)
-        if body.local_time:
-            h,m=map(int,body.local_time.split(':'));when=when.replace(hour=h,minute=m,second=0,microsecond=0)
+        when=selected_instant(datetime.now(TEHRAN),body.local_time,body.visit_date)
         category=None if body.category_cleared else body.category_name or detect_category_intent(body.query)
         @lru_cache(maxsize=1024)
         def hours(raw):return evaluate_hours(raw,when).status
@@ -62,14 +63,16 @@ def destinations_router(catalogue:Catalogue):
             return 1
         with catalogue.connect() as db:
             db.create_function('source_filter',1,lambda raw: matches_source_filters(raw,body.source_filters.model_dump()),deterministic=True)
-            db.create_function('product_kind',4,matches_product_kind,deterministic=True)
+            from apps.api.purchase_preferences import recorded_requirements_match
+            db.create_function('purchase_requirements',2,lambda cat,raw:recorded_requirements_match(cat,raw,body.require_anc,body.minimum_capacity_kg),deterministic=True)
+            db.create_function('product_kind',6,matches_product_kind,deterministic=True)
             db.create_function('visit_status',1,hours,deterministic=True)
             db.create_function('arrival_rank',3,arrival_rank,deterministic=True)
             db.create_function('payment_matches',3,payment,deterministic=True)
             db.create_function('capacity_mah',2,lambda cat,raw:assess_capacity(cat,decode_list(raw)).capacity_mah,deterministic=True)
             base=(' FROM product_search JOIN products p ON p.product_id=product_search.product_id '
                   'JOIN offers o ON o.product_id=p.product_id JOIN shops s ON s.shop_id=o.shop_id '
-                  'WHERE source_filter(p.specs)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs)=1 '
+                  'WHERE source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 '
                   'AND (? IS NULL OR p.category_name=?) AND haversine_m(?,?,s.lat,s.lon)<=? '
                   'AND (? IS NULL OR o.price_toman>=?) AND (? IS NULL OR o.price_toman<=?) ')
             low=int(body.min_price_toman) if body.min_price_toman is not None else None

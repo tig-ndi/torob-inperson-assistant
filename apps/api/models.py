@@ -7,6 +7,7 @@ from apps.api.hours import HoursReason, HoursStatus
 from apps.api.credit import CreditReason, CreditStatus, OptionReason
 from apps.api.battery import MAX_CAPACITY_MAH
 from apps.api.source_filters import SourceFilters
+from apps.api.visit_time import CalendarDate
 
 
 class Model(BaseModel):
@@ -74,6 +75,9 @@ class PendingRequirement(Model):
 
 
 class AssistantNeedState(Model):
+    minimum_capacity_kg: int | None = Field(default=None, strict=True, gt=0, le=1000)
+    comparison_queries: list[str] = Field(default_factory=list, max_length=3)
+    preferences: list[Literal['coding', 'lightweight', 'walking', 'anc', 'energy', 'family']] = Field(default_factory=list, max_length=6)
     source_filters: SourceFilters = Field(default_factory=SourceFilters)
     reference_product_id: str | None = Field(default=None,min_length=1,max_length=120)
     version: int = Field(default=1, ge=1, le=1)
@@ -90,6 +94,13 @@ class AssistantNeedState(Model):
     @model_validator(mode='after')
     def bounded_consistent(self):
         from tools.prepare_data import normalize_text
+        from apps.api.catalogue import search_expression
+        if len(self.preferences)!=len(set(self.preferences)) or len(self.comparison_queries)!=len(set(self.comparison_queries)):
+            raise ValueError('preferences and comparison queries must be unique')
+        for query in self.comparison_queries:
+            if not 1 <= len(query) <= 120:
+                raise ValueError('comparison query exceeds supported length')
+            search_expression(query)
         keys = [normalize_text(item.key) for item in self.pending_requirements]
         if any(not key for key in keys) or len(keys) != len(set(keys)):
             raise ValueError('pending requirement keys must be nonempty and unique')
@@ -297,10 +308,12 @@ class FollowupSelection(Model):
 
 
 class FollowupPrepareRequest(FollowupSelection):
+    visit_date: CalendarDate | None = None
     visit_time: str | None = Field(default=None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$')
 
 
 class FollowupAlternativesRequest(FollowupSelection):
+    visit_date: CalendarDate | None = None
     visit_time: str | None = Field(default=None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$')
     outcome: Literal['no_answer', 'closed', 'out_of_stock']
     outcome_source: Literal['simulated', 'user_report']

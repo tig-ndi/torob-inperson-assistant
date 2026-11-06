@@ -55,6 +55,11 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
         return True
     if purchase_question(text):
         return True
+    from apps.api.purchase_preferences import PATTERNS
+    if (any(re.search(pattern,text) for pattern in PATTERNS.values())
+            and re.search(r'مهم نیست|حذف کن|بردار|اولویت|مهم است|مهمه',text)
+            and not re.search(r'گوشی|موبایل|لپ\s*تاپ|کفش|کتانی|هدفون|شارژر|کابل|یخچال|لباسشویی',text)):
+        return True
     from apps.api.category import detect_category_intent
     current = category or detect_category_intent(topic)
     # A tool command about this purchase must not become a new literal product
@@ -68,9 +73,9 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
         return True
     # A target device after "for" describes the existing accessory. A request
     # explicitly naming a new accessory/device continues through normal routing.
-    if (current or normalize_text(topic)).startswith(('شارژر', 'کیف', 'محافظ', 'باتری')):
+    if normalize_text(topic).startswith(('شارژر', 'کابل', 'کیف', 'قاب', 'کاور', 'محافظ', 'باتری')):
         return bool(re.match(r'^(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|دستگاه|مدل|سامسونگ|ردمی|آیفون|لپ\s*تاپ)', text)
-                    and not re.search(r'خود\s+(?:گوشی|لپ\s*تاپ).*می\s*خوا|به\s*جای|عوض', text))
+                    and not re.search(r'خود\s+(?:گوشی|لپ\s*تاپ).*(?<![\wن])می\s*خوا|به\s*جای|عوض', text))
     if current == 'گوشی موبایل':
         explicit_part = re.search(r'(?:خود|حالا|فعلا|یک|یه)\s+(?:باتری|دوربین)\b.*می\s*خوا|^(?:باتری|دوربین)\s+(?:گوشی|ردمی|سامسونگ|شیائومی)\b.*می\s*خوا', text)
         preference = re.search(r'دوام|شارژدهی|سبک|اندروید|دوربین\s+(?:خوب|مناسب|قوی)|باتری\s+(?:خوب|قوی)|(?:برای\s+)?عکس\s*گرفتن|(?:باتری|دوربین).*(?:مهم|اولویت)', text)

@@ -36,9 +36,10 @@ def requested_filters(text):
     size = re.search(r'سایز(?:ش)?(?:\s+(?:را|رو|به))?\s*(\d{1,2}(?:\.5)?)(?![\d.])', text)
     if size and not re.match(r'\s*(?:تا|-|یا|و)\s*\d', text[size.end():]) and not re.search(r'نباش|نمی\s*خوا|نمیخوام', text):
         values['size'] = size[1]
-    port = connector(text)
-    if port and not re.search(r'نباش|نمی\s*خوا|نمیخوام', text):
-        values['connector'] = port
+    for clause in re.split(r'[؛;،,]|\b(?:اما|ولی)\b',text):
+        port = connector(clause)
+        if port and not re.search(r'نباش|نمی\s*خوا|نمیخوام', clause):
+            values['connector'] = port
     return values
 
 

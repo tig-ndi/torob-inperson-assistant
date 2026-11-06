@@ -8,9 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.catalogue import Catalogue
 from apps.api.hours import TEHRAN
+from apps.api.visit_time import CalendarDate, selected_instant
 
 
 class VisitRequest(BaseModel):
+    visit_date: CalendarDate | None = None
     model_config = ConfigDict(extra='forbid')
     product_id: str = Field(min_length=1, max_length=200)
     lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
@@ -41,10 +43,7 @@ def visit_router(catalogue: Catalogue):
 
     @router.post('/visit-insights')
     def insights(body: VisitRequest):
-        now = datetime.now(TEHRAN)
-        if body.local_time:
-            hour, minute = map(int, body.local_time.split(':'))
-            now = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        now = selected_instant(datetime.now(TEHRAN), body.local_time, body.visit_date)
         with catalogue.connect() as db:
             product = db.execute('SELECT category_name FROM products WHERE product_id=?', (body.product_id,)).fetchone()
             if product is None:
@@ -90,7 +89,7 @@ def visit_router(catalogue: Catalogue):
                                              inventory_status='unknown',opening_status='unknown',
                                              evidence='recorded_shop_address',shop_id=row['shop_id'])
                     markets[name]['category_shops'] += 1
-        return dict(evaluated_at=now.isoformat(),time_source='selected_time' if body.local_time else 'server_clock',
+        return dict(evaluated_at=now.isoformat(),time_source='selected_time' if body.local_time or body.visit_date else 'server_clock',
                     nearby_km=body.nearby_km,search_km=body.search_km,
                     nearby=dict(shops=len(status_by_shop),**counts,truncated=truncated),
                     open_offers=opened,markets=list(markets.values())[:3],

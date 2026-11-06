@@ -10,9 +10,11 @@ from apps.api.catalogue import Catalogue, FollowupSelectionError
 from apps.api.hours import TEHRAN, evaluate_hours
 from apps.api.models import FollowupSelection
 from apps.api.routing import cached_route
+from apps.api.visit_time import CalendarDate, selected_instant
 
 
 class ArrivalRequest(BaseModel):
+    visit_date: CalendarDate | None = None
     model_config = ConfigDict(extra='forbid')
     selections: list[FollowupSelection] = Field(min_length=1, max_length=30)
     lat: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
@@ -37,10 +39,7 @@ def journey_router(catalogue: Catalogue):
 
     @router.post('/arrival-checks')
     def arrival_checks(body: ArrivalRequest):
-        departure = datetime.now(TEHRAN)
-        if body.local_time:
-            hour, minute = map(int, body.local_time.split(':'))
-            departure = departure.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        departure = selected_instant(datetime.now(TEHRAN), body.local_time, body.visit_date)
         items = []
         for selected in body.selections:
             try:

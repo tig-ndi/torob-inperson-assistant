@@ -1487,7 +1487,11 @@ class SnapshotAssistantApiTests(unittest.TestCase):
         self.assertEqual(result['query'], 'گوشی سامسونگ')
         self.assertEqual(result['category_name'], 'گوشی موبایل')
         self.assertEqual(result['max_price_toman'], '12000000')
-        self.assertEqual(len(result['products']['items']), 12)
+        self.assertGreater(len(result['products']['items']), 0)
+        self.assertLessEqual(len(result['products']['items']), 12)
+        # Brand-labelled snapshot rows with another literal brand or an imitation
+        # in their title must not pad the result to a fixed page cardinality.
+        self.assertTrue(all(not re.search(r'طرح|یونیوا|سویس',p['persian_title']) for p in result['products']['items']))
         self.assertEqual({item['category_name'] for item in result['products']['items']}, {'گوشی موبایل'})
         self.assertEqual(result['products']['category_name'], 'گوشی موبایل')
         self.assertEqual(result['need_state']['topic_query'], 'گوشی سامسونگ')

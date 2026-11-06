@@ -28,9 +28,9 @@ def model_edition_matches(query, title):
         tokens = re.findall(r'[^\W_]+', segment)
         if any(word == anchor and suffix(tokens, index) == wanted for index,word in enumerate(tokens)):
             return True
-    # An absent numeric token is already rejected by literal FTS; this guard
-    # only distinguishes editions where the named model anchor is present.
-    return not any(word == anchor for word in re.findall(r'[^\W_]+', normalize_text(title or '')))
+    # FTS also indexes compatibility/specification prose; absence from the
+    # recorded identity must fail even if those other fields mention the model.
+    return False
 
 
 def operating_system(text):
@@ -89,6 +89,9 @@ def keypad_request(text):
 
 def retrieval_query(query):
     text=normalize_text(query)
+    if text.startswith('کابل') and re.search(r'گوشی|موبایل',text):
+        text=re.sub(r'گوشی|موبایل',' ',text)
+        text=' '.join(text.split())
     if operating_system(text):
         text = re.sub(r'(?<!\w)(?:اندروید(?:ی)?|android|ios|آی\s*او\s*اس)(?!\w)|سیستم\s*عامل', ' ', text)
         text = ' '.join(text.split()) or 'گوشی'
@@ -100,9 +103,42 @@ def retrieval_query(query):
     return text
 
 
-def matches_product_kind(query,category,title,specs):
+def matches_product_kind(query,category,title,specs,brand=None,model=None):
     query=normalize_text(query);category=normalize_text(category or '')
-    if category in {'گوشی موبایل','باتری گوشی موبایل','تاچ و ال سی دی گوشی و تبلت','کیف و کاور گوشی','محافظ صفحه نمایش گوشی'} and not model_edition_matches(query,title):
+    # A matching compatibility/specification row is not the identity being bought.
+    name = normalize_text(' '.join(filter(None,(title,brand,model))))
+    for aliases in MODEL_WORDS:
+        if any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', query) for word in aliases):
+            if not any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', name) for word in aliases):
+                return 0
+            if category == 'گوشی موبایل':
+                title_name=normalize_text(title or '').split('|')[0]
+                if re.search(r'طرح|مشابه',title_name) and not re.search(r'طرح|مشابه',query):
+                    return 0
+                if not any(re.search(r'(?<!\w)'+re.escape(word)+r'(?!\w)',title_name) for word in aliases):
+                    # The snapshot can mislabel a Univa/Swiss title as Samsung.
+                    # Accept a brand-only identity only with a generic/model title,
+                    # never override a different literal name in the title.
+                    remainder=re.sub(r'(?<!\w)(?:گوشی|موبایل|هوشمند|تلفن|همراه|مدل)(?!\w)',' ',title_name).strip()
+                    first=remainder.split()[0] if remainder else ''
+                    if first and not any(c.isdigit() for c in first) and not re.fullmatch(r'[a-z]',first):
+                        return 0
+    if re.search(r'ماشین\s+لباسشویی|یخچال',query) and not re.search(r'قطعه|قطعات|لوازم|یدکی|فن|پروانه|شلنگ|چپقی|برد|فیلتر|درب|دستگیره',query):
+        if re.search(r'ماشین\s+لباسشویی',query) and not re.match(r'^ماشین لباسشویی(?:\s|$)',category):
+            return 0
+        if 'یخچال' in query and not re.match(r'^(?:یخچال|فریزر)(?:\s|$)',category):
+            return 0
+        if 'یخچال' in query and not re.search(r'یخچال|فریزر',normalize_text(title or '')):
+            return 0  # An icebox filed under travel fridges is not a refrigerator.
+        if re.search(r'قطعه|قطعات|لوازم|یدکی|فن|پروانه|شلنگ|چپقی|برد|فیلتر|دستگیره',category):
+            return 0
+    if re.match(r'^کابل(?:\s|$)',query) and not re.search(r'کابل|سیم',category):
+        return 0
+    if query.startswith('کابل') and re.search(r'گوشی|موبایل',query):
+        from apps.api.source_filters import recorded_values
+        if not recorded_values(specs,'connector'):
+            return 0
+    if category in {'گوشی موبایل','باتری گوشی موبایل','تاچ و ال سی دی گوشی و تبلت','کیف و کاور گوشی','محافظ صفحه نمایش گوشی'} and not model_edition_matches(query,name):
         return 0
     platform = operating_system(query)
     if platform and (category != 'گوشی موبایل' or recorded_operating_system(json.loads(specs or '[]')) != platform):

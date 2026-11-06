@@ -12,6 +12,9 @@ export type BatteryRequirement = {
 };
 export type SourceFilters = {colour:string|null;size:string|null;connector:'usb-c'|'micro-usb'|'lightning'|null};
 export type NeedState = {
+  minimum_capacity_kg?: number|null;
+  comparison_queries?: string[];
+  preferences?: ('coding'|'lightweight'|'walking'|'anc'|'energy'|'family')[];
   source_filters?: SourceFilters;
   reference_product_id?: string|null;
   version: 1;

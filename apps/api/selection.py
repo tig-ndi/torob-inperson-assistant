@@ -20,6 +20,18 @@ def selection_context(request: AssistantRequest) -> str:
     # Old requests in a different category must not become current preferences.
     messages = [m.content for m in request.messages if m.role == 'user']
     context = normalize_text(' ؛ '.join(messages))
+    if request.context_need_state:
+        from apps.api.purchase_preferences import update_preferences, preferences_context, PATTERNS
+        from apps.api.category import detect_category_intent
+        current = detect_category_intent(request.messages[-1].content)
+        changed = bool(current and request.context_category and current != request.context_category)
+        preferences = update_preferences(request.context_need_state.preferences, request.messages[-1].content, changed)
+        if changed:
+            context = normalize_text(request.messages[-1].content)
+        for key, pattern in PATTERNS.items():
+            if key not in preferences:
+                context = re.sub(pattern, ' ', context)
+        context += ' ؛ ' + preferences_context(preferences)
     # Carry only typed review preferences already represented by the API state.
     # Other old needs cannot be recovered if the client did not send them.
     from apps.api.explanations import requested_review_topics, KEYWORDS

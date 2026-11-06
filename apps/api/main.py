@@ -26,6 +26,7 @@ from apps.api.agent_usage import AgentError
 from apps.api.intent import AssistantRequest
 from apps.api.battery import MAX_CAPACITY_MAH
 from apps.api.hours import tehran_time
+from apps.api.visit_time import CalendarDate, selected_instant
 from apps.api.voice import voice_router
 from apps.api.deployment import readiness
 from apps.api.guidance import Guidance, guidance
@@ -55,12 +56,9 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     agent = assistant if assistant is not None else AssistantService.from_root(catalogue, ROOT)
     web = (web_dist if web_dist is not None else Path(
         os.environ.get('TOROB_WEB_DIST', str(ROOT / 'apps/web/dist')))).resolve()
-    def visit_instant(visit_time: str | None = None) -> datetime:
+    def visit_instant(visit_time: str | None = None, visit_date: str | None = None) -> datetime:
         instant = clock() if clock is not None else datetime.now(timezone.utc)
-        if visit_time is not None:
-            hour, minute = map(int, visit_time.split(':'))
-            instant = tehran_time(instant).replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return instant
+        return selected_instant(instant, visit_time, visit_date)
 
     application.state.readiness_check = lambda: readiness(catalogue, agent.ledger, web)
 
@@ -191,6 +189,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
         fast_delivery_only: bool = False,
         sort_by: Literal['price', 'nearest'] = 'price',
         visit_time: str | None = Query(None, pattern=r'^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'),
+        visit_date: CalendarDate | None = None,
     ):
         # Hours depend on request time. A refresh must not reuse a cached page.
         response.headers["Cache-Control"] = "no-store"
@@ -210,7 +209,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             user_lon,
             max_distance_km,
             open_now_only=open_now_only,
-            evaluated_at=visit_instant(visit_time),
+            evaluated_at=visit_instant(visit_time, visit_date),
             in_person_credit_only=in_person_credit_only,
             sort_by=sort_by,
             min_price=minimum, payment_provider=payment_provider, fast_delivery_only=fast_delivery_only,
@@ -222,7 +221,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     @application.post('/api/followups/prepare', response_model=FollowupPrepareResponse)
     def followup_prepare(body: FollowupPrepareRequest, response: Response):
         response.headers['Cache-Control'] = 'no-store'
-        instant = visit_instant(body.visit_time)
+        instant = visit_instant(body.visit_time, body.visit_date)
         selection = catalogue.followup_selection(
             body.product_id, body.offer_id, body.shop_id,
             body.user_lat, body.user_lon, instant)
@@ -232,7 +231,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             'selected_offer': selection['offer'],
             'draft': {
                 'delivery_status': 'draft_not_sent',
-                'text': draft_text(selection['product'], selection['offer'], body.visit_time),
+                'text': (f'تاریخ مراجعه: {body.visit_date}. ' if body.visit_date else '') + draft_text(selection['product'], selection['offer'], body.visit_time),
                 'contact_channel_available': False,
                 'external_contact_attempted': False,
             },
@@ -244,7 +243,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
     @application.post('/api/followups/alternatives', response_model=FollowupAlternativesResponse)
     def followup_alternatives(body: FollowupAlternativesRequest, response: Response):
         response.headers['Cache-Control'] = 'no-store'
-        instant = visit_instant(body.visit_time)
+        instant = visit_instant(body.visit_time, body.visit_date)
         selection = catalogue.followup_selection(
             body.product_id, body.offer_id, body.shop_id,
             body.user_lat, body.user_lon, instant)

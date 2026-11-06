@@ -47,6 +47,8 @@ CHARGER_DEVICE_QUESTION = 'شارژر را برای چه دستگاهی می‌�
 def question_prompt(code: str, contact: bool = False, topic: str | None = None) -> str:
     normalized = normalize_text(topic or '')
     message = CHARGER_DEVICE_QUESTION if code == 'product_kind' and normalized.startswith('شارژر') and not re.search(r'گوشی|موبایل|تبلت|لپ', normalized) else QUESTIONS[code]
+    if code=='connector' and normalized.startswith('کابل'):
+        message='کابل برای گوشی را نگه داشتم. درگاه گوشی تایپ سی، میکرو USB یا لایتنینگ است؟ کابل را برای شارژ، انتقال داده یا صدا می‌خواهی؟ سازگاری نهایی باید از مشخصات و فروشنده بررسی شود.'
     return f'{CONTACT_LIMITATION} {message}' if contact else message
 
 
@@ -599,9 +601,11 @@ def product_span(text: str, category_names, identity_words) -> str | None:
             span = []
             grounded = False
             for relative, token in enumerate(tokens[start:]):
+                if token == 'مدل' and relative + start + 1 < len(tokens):
+                    continue  # Keep the identifier after the label, including unknown models.
                 if span and token in QUERY_STOPWORDS:
                     break
-                if span and re.match(r'(?:کم\s*مصرف|سبک|دارای|با قابلیت|ضد آب|حذف نویز|نویز کنسلینگ)(?:\s|$)', ' '.join(tokens[start + relative:])):
+                if span and re.match(r'(?:کم\s*مصرف|سبک|دارای|با قابلیت|ضد آب|حذف نویز|نویز کنسلینگ|فقط|حداقل)(?:\s|$)', ' '.join(tokens[start + relative:])):
                     # Retain the original request for evidence-based ranking;
                     # qualitative properties are not literal brand/model tokens.
                     break

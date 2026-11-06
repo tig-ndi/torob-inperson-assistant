@@ -111,7 +111,7 @@ def normalize_product_text(text: str) -> str:
     text = normalize_text(text)
     aliases = {'gooshi': 'گوشی', 'gushi': 'گوشی', 'mobile': 'موبایل',
                'laptop': 'لپ تاپ', 'headphone': 'هدفون', 'headphones': 'هدفون',
-               'charger': 'شارژر', 'mikham': 'میخواهم', 'mikhaham': 'میخواهم',
+               'charger': 'شارژر', 'کتونی': 'کفش', 'mikham': 'میخواهم', 'mikhaham': 'میخواهم',
                'nemikham': 'نمیخواهم', 'nemikhaham': 'نمیخواهم'}
     return re.sub(r'\b(?:' + '|'.join(aliases) + r')\b', lambda match: aliases[match[0]], text)
 
@@ -159,7 +159,9 @@ def detect_category_intent(text: str) -> str | None:
         if re.search(DEVICE_PHONE_REGEX, dev):
             if re.search(r"^(?:کیف|کاور|قاب|گارد|پوسته)$", acc):
                 return CAT_PHONE_CASE
-            if re.search(r"^(?:شارژر|آداپتور|کلگی|کابل(?:\s+شارژ)?|سیم)$", acc):
+            if re.search(r"^(?:کابل(?:\s+شارژ)?|سیم)$", acc):
+                return None  # A cable is not a bundled charger; retain its own head.
+            if re.search(r"^(?:شارژر|آداپتور|کلگی)$", acc):
                 return CAT_PHONE_CHARGER
             if re.search(r"^(?:باتری|باطری)$", acc):
                 return CAT_PHONE_BATTERY

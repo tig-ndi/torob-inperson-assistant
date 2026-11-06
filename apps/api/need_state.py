@@ -13,6 +13,7 @@ from apps.api.models import PendingRequirement, AssistantNeedState, BatteryRequi
 from apps.api.category import detect_category_intent
 from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import operating_system, negated_operating_system
+from apps.api.purchase_preferences import update_preferences, minimum_capacity
 from tools.prepare_data import normalize_text
 
 if TYPE_CHECKING:
@@ -154,7 +155,7 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     from apps.api.explanations import requested_review_topics
     from apps.api.intent import clear_product_topic
     old_topic = request.context_query
-    from apps.api.purchase_context import retained_identity
+    from apps.api.purchase_context import retained_identity, refines_purchase
     query = retained_identity(request.messages[-1].content, old_topic, query)
     changed = False
     if query and old_topic and normalize_text(query) != normalize_text(old_topic):
@@ -205,7 +206,17 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     reference = request.reference_product_id or (request.context_need_state.reference_product_id if request.context_need_state else None)
     if changed or query and old_topic and query != old_topic and not is_constraint_followup(latest):
         reference = request.reference_product_id
+    previous_state = request.context_need_state
+    keep_comparison = bool(previous_state and not changed and (
+        is_constraint_followup(latest) or is_need_control(latest)
+        or refines_purchase(latest, old_topic, request.context_category)
+        or query == old_topic and re.search(r'بودجه|قیمت|تومان|میلیون', latest)))
+    capacity = minimum_capacity(latest, previous_state.minimum_capacity_kg if previous_state and not changed else None) if 'ماشین لباسشویی' in (topic or '') else None
     resolved = AssistantNeedState(
+        minimum_capacity_kg=capacity,
+        comparison_queries=previous_state.comparison_queries if keep_comparison else [],
+        preferences=update_preferences(
+            request.context_need_state.preferences if request.context_need_state else [], latest, changed),
         reference_product_id=reference,
         source_filters=source_filters, topic_query=topic, category_name=semantic_category,
         category_cleared=request.category_cleared if category is None else False,

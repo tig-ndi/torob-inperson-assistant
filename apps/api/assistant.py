@@ -30,6 +30,7 @@ from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import platform_topic
 from apps.api.purchase_context import refines_purchase, retained_identity
 from apps.api.models import BatteryRequirement
+from apps.api.model_comparison import comparison_queries, comparison_summary
 
 
 ENDPOINT = "https://ai.boxapi.ir/ai/v1/chat/completions"
@@ -251,6 +252,13 @@ class AssistantService:
             latest_category = None if refinement else detect_category_intent(affirmative_purchase_text(latest_msg))
             category_names = await asyncio.to_thread(self.catalogue.category_names)
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
+            comparisons = comparison_queries(latest_msg)
+            comparison_category = detect_category_intent(latest_msg)
+            if comparisons and comparison_category is None:
+                for candidate in ('گوشی موبایل', 'لپ تاپ و نوت بوک', 'هدفون، هدست و هندزفری'):
+                    if any([await asyncio.to_thread(self.catalogue.matches_identity, query, candidate) for query in comparisons]):
+                        comparison_category = candidate
+                        break
             latest_span = None if refinement else product_span(latest_msg, category_names, identity_words)
             field_message = re.sub(r'^(?:(?:لطفا|لطفاً|فقط|هم|و)\s+)+', '', normalize_text(latest_msg))
             if (request.context_query and latest_category is None and is_constraint_followup(latest_msg)
@@ -269,6 +277,11 @@ class AssistantService:
             if context_control:
                 latest_span, latest_category = None, None
             coordinated = not refinement and multiple_topic_heads(affirmative_purchase_text(latest_msg), category_names, identity_words)
+            if comparisons and comparison_category:
+                coordinated = False
+                latest_category = comparison_category
+                latest_span = 'گوشی' if comparison_category == 'گوشی موبایل' else 'لپ تاپ' if comparison_category == 'لپ تاپ و نوت بوک' else 'هدفون'
+                plan = IntentPlan(action='search', query=latest_span, budget_text=plan.budget_text, question=None)
             if refinement:
                 plan = IntentPlan(action='search', query=normalize_text(request.context_query), budget_text=plan.budget_text, question=None)
             contact_requested = is_contact_request(latest_msg, category_names)
@@ -416,7 +429,7 @@ class AssistantService:
             # including a premature model budget question. An uncertain explicit amount
             # keeps its budget clarification; never call the model a second time.
             routing_message = plan.query if plan.query and (refinement or context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
-            if refinement and (request.context_query or '').startswith(('شارژر', 'کیف', 'محافظ', 'باتری')) and re.match(r'^(?:برای|واسه|مخصوص)\s+', normalize_text(latest_msg)):
+            if refinement and (request.context_query or '').startswith(('شارژر', 'کابل', 'کیف', 'قاب', 'کاور', 'محافظ', 'باتری')) and re.match(r'^(?:برای|واسه|مخصوص)\s+', normalize_text(latest_msg)):
                 routing_message = f'{request.context_query} {latest_msg}'
             if not budget_uncertain and (
                 is_ambiguous_product_intent(
@@ -483,6 +496,10 @@ class AssistantService:
                 plan = plan.model_copy(update={'query': platform_topic(
                     plan.query, latest_msg, request.context_query,
                     effective_category or detect_category_intent(plan.query or '') or latest_category or request.context_category)})
+                if plan.query.startswith('کابل') and (
+                        re.search(r'کابل.*(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل)',normalize_text(latest_msg))
+                        or (request.context_query or '').startswith('کابل گوشی')):
+                    plan=plan.model_copy(update={'query':'کابل گوشی'})
                 if requirement.status == 'awaiting_minimum':
                     plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
                 elif not battery_phone and latest_has_capacity_unit:
@@ -573,9 +590,9 @@ class AssistantService:
                         effective_category = (None if needs.state.category_cleared
                                               else needs.state.category_name)
             from apps.api.purchase_context import accessory_target
-            if (not budget_uncertain and (needs.state.category_name or '').startswith('شارژر')
+            if (not budget_uncertain and ((needs.state.category_name or '').startswith('شارژر') or (needs.state.topic_query or '').startswith('کابل گوشی'))
                     and needs.state.source_filters.connector is None
-                    and accessory_target(' '.join(m.content for m in request.messages if m.role=='user'))
+                    and (accessory_target(' '.join(m.content for m in request.messages if m.role=='user')) or (needs.state.topic_query or '').startswith('کابل گوشی'))
                     and not needs.state.pending_requirements):
                 plan = IntentPlan(action='clarify', query=needs.state.topic_query, budget_text=None, question='connector')
             if plan.action == 'clarify' and plan.question == 'budget':
@@ -616,23 +633,45 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=None, budget_text=None,
                                   question=plan.question or 'product_kind')
                 effective_category = None
+            if comparisons and comparison_category:
+                needs = replace(needs, state=needs.state.model_copy(update={'comparison_queries': comparisons}))
+            comparison_pages = []
             if plan.action == 'search':
-                page = await asyncio.to_thread(
-                    self.catalogue.search,
-                    plan.query,
-                    12,
-                    0,
-                    int(budget) if budget is not None else None,
-                    category_name=effective_category,
-                    source_filters=needs.state.source_filters.model_dump(),
-                    reference_product_id=needs.state.reference_product_id,
-                    ranking_context=selection_context(request),
-                    min_battery_capacity_mah=requirement.minimum_mah,
-                    **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
-                       if offer_sort == 'nearest' else {}),
-                )
+                queries = needs.state.comparison_queries or [plan.query]
+                for search_query in queries:
+                    found = await asyncio.to_thread(
+                        self.catalogue.search,
+                        search_query,
+                        max(1, 12 // len(queries)),
+                        0,
+                        int(budget) if budget is not None else None,
+                        category_name=effective_category,
+                        source_filters=needs.state.source_filters.model_dump(),
+                        require_anc='anc' in needs.state.preferences,
+                        minimum_capacity_kg=needs.state.minimum_capacity_kg,
+                        reference_product_id=needs.state.reference_product_id,
+                        ranking_context=selection_context(request),
+                        min_battery_capacity_mah=requirement.minimum_mah,
+                        **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
+                           if offer_sort == 'nearest' else {}),
+                    )
+                    comparison_pages.append((search_query, found))
+                page = dict(comparison_pages[0][1])
+                page['items'] = list({p['product_id']:p for _,found in comparison_pages for p in found['items']}.values())
+                page['has_more'] = False if needs.state.comparison_queries else any(found['has_more'] for _,found in comparison_pages)
+                page['limit'] = 12
             explanation = await asyncio.to_thread(
                 explain_search, self.catalogue, page, plan.query, budget, request) if page is not None else None
+            if explanation is not None and needs.state.comparison_queries:
+                explanation['summary'] = comparison_summary(comparison_pages)
+                explanation['recommended_product_id'] = None
+            if explanation is not None and needs.state.minimum_capacity_kg is not None:
+                capacity_note = f'حداقل ظرفیت ثبت‌شدهٔ لباسشویی {needs.state.minimum_capacity_kg} کیلوگرم است؛ ظرفیت نامعلوم یا ناسازگار کنار گذاشته شده است.'
+                explanation['limitations'].append(capacity_note)
+                if not page['items'] and not needs.state.comparison_queries:
+                    explanation['summary'] = capacity_note + ' با این ظرفیت و بودجه، دستگاه کاملِ دارای شاهد کافی پیدا نشد؛ قطعهٔ یدکی جایگزین نمی‌شود.'
+            if explanation is not None and 'anc' in needs.state.preferences:
+                explanation['limitations'].append('فقط شاهد ثبت‌شدهٔ حذف نویز فعال ANC پذیرفته شد؛ ENC میکروفون یا مشخصات نامعلوم کافی نیست و کیفیت واقعی تأیید نشده است.')
             if explanation is not None and page is not None and not page['items'] and any(needs.state.source_filters.model_dump().values()):
                 explanation['summary']='با رنگ، سایز یا درگاه انتخاب‌شده، تطابق ثبت‌شده‌ای برای این مدل پیدا نشد؛ می‌توانی همان شرط یا مدل را تغییر بدهی. موجودی لحظه‌ای از این نتیجه معلوم نمی‌شود.'
             if explanation is not None and contact_requested:
@@ -644,7 +683,7 @@ class AssistantService:
                 'query': plan.query,
                 'category_name': effective_category,
                 'max_price_toman': budget,
-                'question': ('کدام شرط را حذف کنیم؟ از پاسخ‌های آماده، رنگ، سایز یا درگاه موردنظر را انتخاب کن؛ بقیهٔ شرایط حفظ می‌شوند.' if plan.question=='requirement_choice' and not needs.state.pending_requirements else question_prompt(plan.question, contact_requested, latest_span or plan.query or latest_msg)) if plan.question else None,
+                'question': ('کدام شرط را حذف کنیم؟ از پاسخ‌های آماده، رنگ، سایز یا درگاه موردنظر را انتخاب کن؛ بقیهٔ شرایط حفظ می‌شوند.' if plan.question=='requirement_choice' and not needs.state.pending_requirements else question_prompt(plan.question, contact_requested, needs.state.topic_query if plan.question=='connector' else latest_span or plan.query or latest_msg)) if plan.question else None,
                 'products': page,
                 'model': self.settings.model,
                 'battery_requirement': requirement.model_dump(),
