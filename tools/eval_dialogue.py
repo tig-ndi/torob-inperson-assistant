@@ -73,11 +73,11 @@ CASES = (
 )
 
 
-def check_result(result: dict, case: Case, connection: sqlite3.Connection) -> int:
+def check_result(result: dict, case: Case, connection: sqlite3.Connection, expected_model: str = 'gpt-5.6-luna') -> int:
     """Independent semantic/SQL checks; no production intent/retrieval helper as oracle."""
     from apps.api.intent import QUESTIONS
 
-    assert result['model'] == 'gpt-5.6-luna', 'wrong model'
+    assert result['model'] == expected_model, 'wrong model'
     assert result['status'] == case.status, 'wrong semantic status'
     assert result['max_price_toman'] == case.budget, 'wrong exact budget'
     assert result['category_name'] == case.category, 'wrong category or stale topic'
@@ -178,7 +178,6 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
     selected = [next(c for c in CASES if c.id == identity) for identity in ids]
     database = ROOT / '.local/catalogue.sqlite3'
     service = AssistantService.from_root(Catalogue(database), ROOT)
-    assert service.settings.model == 'gpt-5.6-luna', 'Configure Luna explicitly before evaluating.'
     start = json.loads(allowance.read_text(encoding='utf-8'))
     approved = start['approved_max_new_calls']
     assert type(approved) is int and 1 <= approved <= 100
@@ -189,9 +188,10 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
     with closing(sqlite3.connect(service.ledger.path.as_uri() + '?mode=ro', uri=True)) as ledger:
         actual_baseline = ledger.execute('SELECT COUNT(*) FROM attempts').fetchone()[0]
     assert start['baseline_attempts'] <= actual_baseline < start['attempt_limit'], f'Ledger is outside the approved window ({actual_baseline}); do not spend.'
-    target = ROOT / f'.local/qa/luna-{label}.json'
+    target = ROOT / f'.local/qa/{service.settings.model}-{label}.json'
     assert not target.exists(), 'Use a fresh label; never overwrite an earlier run.'
-    report = {'model': service.settings.model, 'reasoning_effort': 'low', 'evidence': 'in-process public HTTP API + real provider + source SQLite; no UI/deployment',
+    effort = 'medium' if service.settings.model == 'gpt-6.1-sol' else 'low' if service.settings.model in {'gpt-5-mini', 'gpt-5.6-luna', 'gpt-6-luna'} else 'none'
+    report = {'model': service.settings.model, 'reasoning_effort': effort, 'evidence': 'in-process public HTTP API + real provider + source SQLite; no UI/deployment',
               'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'source_hashes': {name: sha256(ROOT / name) for name in ['apps/api/assistant.py', 'apps/api/intent.py', 'apps/api/models.py', 'apps/api/explanations.py', 'apps/api/battery.py', 'apps/api/battery_intent.py', 'apps/api/catalogue.py', 'tools/eval_dialogue.py', 'tools/smoke_battery.py']},
               'snapshot_before': sha256(database), 'cases_hash': hashlib.sha256(json.dumps([asdict(c) for c in CASES], ensure_ascii=False, sort_keys=True).encode()).hexdigest(), 'turns': []}
@@ -216,7 +216,7 @@ def run(ids: list[str], label: str, allowance: Path = ROOT / '.local/qa/luna-run
             record.update(http_status=response.status_code, latency_seconds=round(time.monotonic() - began, 3), result=result)
             try:
                 assert response.status_code == 200, 'API/provider failure'
-                record['source_products_checked'] = check_result(result, case, source)
+                record['source_products_checked'] = check_result(result, case, source, service.settings.model)
                 record['passed'] = True
                 successes[case.id] = result
             except AssertionError as exc:

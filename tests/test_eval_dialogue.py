@@ -9,6 +9,17 @@ from tools.eval_dialogue import CASES, check_result, request_body
 
 
 class DialogueOracleTests(unittest.TestCase):
+    def test_oracle_accepts_only_the_explicitly_expected_configured_model(self):
+        from apps.api.intent import QUESTIONS
+        case = next(c for c in CASES if c.id == 'kind_unknown')
+        result = {'model': 'gpt-6.1-sol', 'status': 'needs_input', 'query': None,
+                  'max_price_toman': None, 'category_name': None,
+                  'question': QUESTIONS['product_kind'], 'products': None}
+        with closing(sqlite3.connect(':memory:')) as connection:
+            self.assertEqual(check_result(result, case, connection, 'gpt-6.1-sol'), 0)
+            with self.assertRaisesRegex(AssertionError, 'wrong model'):
+                check_result(result, case, connection, 'gpt-5.6-luna')
+
     def test_followup_uses_previous_result_but_has_an_independent_budget_expectation(self):
         case = next(c for c in CASES if c.id == 'budget_followup')
         previous = {'query': 'گوشی', 'category_name': 'گوشی موبایل', 'max_price_toman': '12000000'}
