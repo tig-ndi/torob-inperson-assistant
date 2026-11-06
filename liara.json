@@ -1,0 +1,15 @@
+{
+  "team-id": "6a86ca2b081b0fc8ffd407f4",
+  "port": 8000,
+  "build": {
+    "dockerfile": "./Dockerfile",
+    "location": "germany"
+  },
+  "args": ["python", "-m", "tools.serve"],
+  "disks": [
+    {
+      "name": "data",
+      "mountTo": "/data"
+    }
+  ]
+}
