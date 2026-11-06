@@ -29,8 +29,8 @@ for(const size of [{width:320,height:568},{width:390,height:844},{width:412,heig
   const other=sheet.locator('.map-store-choice:not(.selected)').first();if(await other.count()){const id=await other.getAttribute('data-map-choice');await other.click();await expect(sheet.locator('.map-store-choice.selected')).toHaveAttribute('data-map-choice',id);}
   const selected=await page.locator('.map-store-choice.selected').getAttribute('data-map-choice');
   await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');await expect(handle).toHaveAttribute('aria-expanded','false');
-  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?78:44);await expect(sheet.locator('.map-sheet-content')).toBeHidden();await expect(journey.getByRole('list',{name:'مراحل مراجعه'}).locator('li')).toHaveCount(4);
-  await expect.poll(async()=>{const [j,s]=await Promise.all([journey.boundingBox(),sheet.boundingBox()]);return j.y+j.height<s.y;}).toBe(true);
+  await expect.poll(async()=>Math.round((await sheet.boundingBox()).height)).toBe(size.safe?78:44);await expect(sheet.locator('.map-sheet-content')).toBeHidden();await expect(journey).toBeHidden();
+  await expect.poll(async()=>{const [j,s]=await Promise.all([journey.boundingBox(),sheet.boundingBox()]);return !j&&s.height<=80;}).toBe(true);
   await page.getByRole('button',{name:'بازگشت به گفت‌وگو',exact:true}).click();await expect(page.getByRole('textbox',{name:'پیام به دستیار خرید'})).toHaveValue(draft);await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');
   await handle.focus();await page.keyboard.press('ArrowUp');await expect(sheet).toHaveAttribute('data-sheet-stop','peek');await expect(page.locator('.map-store-choice.selected')).toHaveAttribute('data-map-choice',selected);await assertSeparated(page);
   await handle.focus();await page.keyboard.press('End');await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');await expect(handle).toBeFocused();

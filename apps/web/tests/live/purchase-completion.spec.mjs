@@ -25,14 +25,13 @@ for(const [width,height] of [[320,568],[390,844],[844,390],[1440,900]])test(`map
  await expect(chat(page)).toContainText('موجودی هنوز تأیید نشده');await expect(page.locator('.quick-replies')).toHaveCount(0);
  await chat(page).getByRole('button',{name:'نتیجهٔ تماس یا بررسی خودم',exact:true}).click();await chat(page).getByRole('button',{name:'بله، موجود بود',exact:true}).click();await expect(chat(page)).toContainText('طبق گزارش تو، کالا موجود است');
  if(width<1000)await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
- if(width<1000&&height<500)await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();
  const startPanel=width<1000?map(page):chat(page);await begin(page,startPanel);
- await expect(map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true})).toBeVisible();await expect(page.locator('.map-topbar')).toContainText('۱۰ دقیقه');const detail=await mapDetails(page);await expect(detail).toContainText('موقعیت زنده دنبال نمی‌شود');if(width<1000)await detail.getByRole('button',{name:'بستن',exact:true}).click();
- await page.reload();if(width<1000&&height<500)await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');
+ await expect(map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true})).toBeVisible();await expect(width<1000?map(page):page.locator('.map-topbar')).toContainText('۱۰ دقیقه');const detail=await mapDetails(page);await expect(detail).toContainText('موقعیت زنده دنبال نمی‌شود');if(width<1000)await detail.getByRole('button',{name:'بستن',exact:true}).click();
+ await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','en_route');
  await map(page).getByRole('button',{name:'رسیدم به فروشگاه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','arrived');
  await page.screenshot({path:`../../.local/purchase-arrived-${width}.png`});
  await map(page).getByRole('button',{name:'خریدم؛ خرید انجام شد',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(map(page)).toContainText('این خرید تمام است');await expect(map(page).getByRole('button',{name:'بزن بریم',exact:true})).toHaveCount(0);
- await page.reload();if(width<1000&&height<500)await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(map(page)).toContainText('خریدت انجام شد');await page.screenshot({path:`../../.local/purchase-done-${width}.png`});
+ await page.reload();await expect(map(page)).toHaveAttribute('data-purchase-stage','done');await expect(map(page)).toContainText('خریدت انجام شد');await page.screenshot({path:`../../.local/purchase-done-${width}.png`});
  await map(page).getByRole('button',{name:/^(?:شروع یک )?خرید تازه$/}).click();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','home');await expect(chat(page)).toHaveCount(0);await layout(page);expect(errors).toEqual([]);expect(f.calls).toHaveLength(1);
 });
 test('chat commands share map progress and completion without more model calls',async({page,request})=>{

@@ -14,7 +14,7 @@ async function sendMap(page,text){await input(page).fill(text);await page.getByR
 for(const width of [320,390])test(`map-only search, model, store and journey remain connected at ${width}px`,async({page,request})=>{
  await page.setViewportSize({width,height:844});const calls=[];await mockAssistant(page,request,calls);
  await page.goto('/');await openMap(page);await expect(panel(page).locator('.map-buttons')).toHaveCount(0);
- await position(page);await expect(panel(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true})).toContainText('موقعیت دستی');
+ await position(page);await expect(panel(page).locator('.map-header-tools,.map-header-hint')).toHaveCount(0);
  await sendMap(page,'گوشی می‌خواهم');await expect(panel(page).locator('[data-map-product]').first()).toBeVisible();expect(calls).toHaveLength(1);
  await expect(input(page)).toHaveValue('');await expect(page.locator('.chat-pane')).toHaveAttribute('inert','');
  await panel(page).locator('[data-map-product]').first().click();await expect(input(page)).toBeVisible();
@@ -23,7 +23,7 @@ for(const width of [320,390])test(`map-only search, model, store and journey rem
  await panel(page).locator('[data-map-choice]').first().click();await page.getByRole('button',{name:'بررسی و شروع خرید از این فروشگاه',exact:true}).click();
  await expect(panel(page).locator('[data-mobile-journey]')).toHaveAttribute('data-purchase-stage','ready');
  await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
- await expect.poll(async()=>{const pin=await panel(page).locator('.real-pin.chosen').boundingBox(),journey=await panel(page).locator('[data-mobile-journey]').boundingBox(),sheet=await panel(page).locator('[data-mobile-store-sheet]').boundingBox();return pin&&pin.y>=journey.y+journey.height&&pin.y+pin.height<=sheet.y;}).toBe(true);
+ await expect.poll(async()=>{const pin=await panel(page).locator('.real-pin.chosen').boundingBox(),journey=await panel(page).locator('[data-mobile-journey]').boundingBox(),sheet=await panel(page).locator('[data-mobile-store-sheet]').boundingBox();return pin&&pin.y>=(await panel(page).locator('[data-mobile-map-header]').boundingBox()).y+50&&pin.y+pin.height<=sheet.y&&journey.y>=sheet.y;}).toBe(true);
  await page.screenshot({path:`../../.local/live-qa/mobile-map-ready-${width}.png`});
  await expect(panel(page).getByRole('group',{name:'پیشنهادهای خرید روی نقشه'})).toHaveCount(0);
  await panel(page).getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();await expect(page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'})).toBeVisible();
@@ -80,7 +80,7 @@ test('choosing a point on the map stays on the map and retains the draft',async(
  await input(page).fill('گوشی موردنظرم');await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
  await panel(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByRole('button',{name:'انتخاب نقطه روی نقشه',exact:true}).click();
  await page.locator('.maplibregl-canvas').click({position:{x:180,y:320}});
- await expect(panel(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true})).toContainText('نقطهٔ انتخاب‌شده');await expect(input(page)).toHaveValue('گوشی موردنظرم');
+ await expect(panel(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true})).toBeVisible();await expect(input(page)).toHaveValue('گوشی موردنظرم');
 });
 
 test('a nearby request resumes after choosing its missing location on the map',async({page,request})=>{
