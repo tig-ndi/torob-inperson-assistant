@@ -164,10 +164,11 @@ class NeedStateTests(unittest.TestCase):
         self.assertEqual(result['query'], 'کفش')
         self.assertEqual(result['need_state']['pending_requirements'], [])
 
-    def test_purchase_preference_survives_switch_but_product_attributes_do_not(self):
+    def test_supported_credit_does_not_remain_an_unsupported_product_attribute(self):
         result = self.result('حالا کفش کتانی میخواهم', state('رنگ', 'قسطی'), query='کفش کتانی')
-        self.assertEqual(result['question_code'], 'unsupported_filter')
-        self.assertEqual([r['key'] for r in result['need_state']['pending_requirements']], ['قسطی'])
+        self.assertIsNone(result['question_code'])
+        self.assertEqual(result['need_state']['pending_requirements'], [])
+        self.assertEqual(result['query'], 'کفش کتانی')
 
     def test_category_filter_clear_does_not_clear_pending_requirements(self):
         result = self.result('بودجه را هشت میلیون کن', state('رنگ'), category_cleared=True)

@@ -129,6 +129,7 @@ class IntentPlan(StrictModel):
 
 
 ONES = dict(zip("صفر یک دو سه چهار پنج شش هفت هشت نه ده یازده دوازده سیزده چهارده پانزده شانزده هفده هجده نوزده".split(), range(20)))
+ONES['پونزده'] = 15
 TENS = dict(zip("بیست سی چهل پنجاه شصت هفتاد هشتاد نود".split(), range(20, 100, 10)))
 HUNDREDS = dict(zip("صد دویست سیصد چهارصد پانصد ششصد هفتصد هشتصد نهصد".split(), range(100, 1000, 100)))
 SCALES = {"هزار": 1000, "میلیون": 10**6, "میلیارد": 10**9}
@@ -240,7 +241,10 @@ def is_contact_request(text: str, category_names=None) -> bool:
     """
     if not text or not isinstance(text, str):
         return False
-    tokens = re.findall(r'[^\W_]+', normalize_text(text), flags=re.UNICODE)
+    cleaned = normalize_text(text)
+    if re.search(r'(?<!\w)(?:زنگ\s*بزن|تماس\s*بگیر)(?!\w)', cleaned):
+        return True
+    tokens = re.findall(r'[^\W_]+', cleaned, flags=re.UNICODE)
     sequences = _category_sequences(category_names)
     for index, token in enumerate(tokens):
         if token not in CONTACT_HEADS:
@@ -381,6 +385,9 @@ def explicit_budget(message: str) -> str | None:
     scaled = rf'(?:زیر\s+|حداکثر\s+|تا\s+)(?P<amount>{AMOUNT})(?=\s*(?:می\s*خوا|باش|بخر|است|هست|که|برای|با|و|$|[.،؛؟!]))'
     amounts = []
     matches = list(re.finditer(pattern, text))
+    correction = rf'(?:نه\s+)?منظورم\s+(?P<amount>{AMOUNT})(?:\s+(?:تومان|تومن))?\s*(?:بود|بوده|هست|است)(?!\w)'
+    matches += [m for m in re.finditer(correction, text) if re.search(r'هزار|میلیون|میلیارد', m['amount'])
+                and not any(m.start() < other.end() and other.start() < m.end() for other in matches)]
     matches += [m for m in re.finditer(scaled, text) if re.search(r'هزار|میلیون|میلیارد', m['amount'])
                 and not any(m.start() < other.end() and other.start() < m.end() for other in matches)]
     matches += [m for m in re.finditer(unitless, text)
@@ -425,6 +432,10 @@ def query_choices(request: AssistantRequest) -> list[str]:
     The model selects among them; the repository determines whether evidence exists.
     """
     latest = request.messages[-1].content
+    from apps.api.purchase_context import released_brand_topic
+    released = released_brand_topic(latest, request.context_query)
+    if released:
+        return [released]
     if request.context_query and is_need_control(latest, include_ack=bool(request.context_need_state and (
             request.context_need_state.pending_requirements or request.context_need_state.budget_needs_input))):
         return [normalize_text(request.context_query)]

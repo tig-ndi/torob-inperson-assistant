@@ -3,6 +3,23 @@ import re
 from tools.prepare_data import normalize_text
 
 
+def credit_preference(text: str) -> bool:
+    return bool(re.search(r'قسطی|اقساط|اعتباری|ترب\s*پی|torob\s*pay', normalize_text(text)))
+
+
+def released_brand_topic(text: str, topic: str | None) -> str | None:
+    if not topic:
+        return None
+    text, topic = normalize_text(text), normalize_text(topic)
+    match = re.search(r'(\S+)(?:\s+(?:برام|برای من))?\s+مهم\s+نیست', text)
+    if not match or match[1] in {'قیمت', 'بودجه', 'رنگ', 'سایز', 'باتری', 'ظرفیت', 'فاصله'}:
+        return None
+    brand = match[1]
+    if brand not in topic.split() or brand in {'گوشی', 'موبایل', 'شارژر', 'کابل', 'کفش', 'هدفون'}:
+        return None
+    return ' '.join(word for word in topic.split() if word != brand) or None
+
+
 def purchase_question(text: str) -> bool:
     """Questions about an existing choice do not request another product."""
     text = normalize_text(text)
@@ -18,6 +35,9 @@ def retained_identity(latest: str, previous: str | None, proposed: str | None) -
     if not previous or not proposed:
         return proposed
     text = normalize_text(latest)
+    released = released_brand_topic(latest, previous)
+    if released:
+        return released
     if (re.search(r'بودجه|قیمت|میلیون|تومان|رنگ|سایز|درگاه', text)
             and not re.search(r'به جای|نوع.*عوض|مدل.*(?:دیگه|دیگر)|فرقی ن(?:داره|دارد)', text)
             and set(normalize_text(proposed).split()) < set(normalize_text(previous).split())):
@@ -29,6 +49,10 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
     if not topic:
         return False
     text = normalize_text(text)
+    if released_brand_topic(text, topic):
+        return True
+    if credit_preference(text) and not re.search(r'گوشی|موبایل|شارژر|کابل|کفش|هدفون|پاوربانک|لپ\s*تاپ', text):
+        return True
     if purchase_question(text):
         return True
     from apps.api.category import detect_category_intent
@@ -44,7 +68,7 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
         return True
     # A target device after "for" describes the existing accessory. A request
     # explicitly naming a new accessory/device continues through normal routing.
-    if (current or '').startswith(('شارژر', 'کیف', 'محافظ', 'باتری')):
+    if (current or normalize_text(topic)).startswith(('شارژر', 'کیف', 'محافظ', 'باتری')):
         return bool(re.match(r'^(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|دستگاه|مدل|سامسونگ|ردمی|آیفون|لپ\s*تاپ)', text)
                     and not re.search(r'خود\s+(?:گوشی|لپ\s*تاپ).*می\s*خوا|به\s*جای|عوض', text))
     if current == 'گوشی موبایل':

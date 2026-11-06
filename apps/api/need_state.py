@@ -195,7 +195,9 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     source_filters = edited_filters(previous, latest, lambda field: field in supported, has_pending=bool(pending))
     accepted_fields = tuple(FIELD_NAMES[field] for field in supported if getattr(source_filters, field) is not None)
     supported_platform = semantic_category == 'گوشی موبایل' and operating_system(latest) and operating_system(topic or '') and not negated_operating_system(latest)
-    update = update_pending(pending, latest, supported_fields=accepted_fields + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
+    # Seller credit conditions are supported by the offers API; approval of
+    # financing is never inferred from this preference.
+    update = update_pending(pending, latest, supported_fields=accepted_fields + ('قسطی',) + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
     if topic and negated_operating_system(latest):
         by_key = {item.key:item for item in update.items}
         by_key['سیستم عامل'] = PendingRequirement(key='سیستم عامل',source_text=latest)

@@ -94,6 +94,7 @@ def edited_filters(previous, text, available, *, has_pending=False):
 def product_text(text):
     """Separate explicit source conditions from the lexical product identity."""
     cleaned=normalize_text(text)
+    cleaned=re.sub(r'(?:خرید\s+)?(?:قسطی|اقساطی|اعتباری)|ترب\s*پی|torob\s*pay', ' ', cleaned)
     if not re.search(r'کفش|کتانی|گوشی|موبایل|شارژر|لپ\s*تاپ|هدفون',cleaned):
         return cleaned
     for field,value in requested_filters(cleaned).items():

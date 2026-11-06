@@ -47,7 +47,13 @@ not its battery, case or screen. The host checks the category against source rec
 Keep an explicit Android/iOS requirement; the host verifies it from recorded OS
 specifications. Do not drop an operating system to search generic cheap phones.
 A command to choose the nearest seller, plan a trip or start walking refers to context_query when no new product is named. Keep that topic and every active constraint; the host alone executes selections and routes. Never turn 'destination', 'route' or 'visit' into a product query.
-Keep this topic for a budget-only follow-up. A newly named product replaces the old topic.
+Keep this topic for a budget-only follow-up. A newly requested product replaces the old topic.
+A device named in answer to a charger question describes the charger's target device;
+do not replace the charger with that device. Preserve its budget and other constraints.
+Replacement ('به جای هدفون پاوربانک') and negation ('نه خود گوشی') are not product lists.
+An explicitly waived brand must be removed while retaining product type and budget.
+Installment/credit and TorobPay requests are seller preferences with recorded in-person
+terms, not unsupported product specifications or proof of financing approval.
 Also keep the product type/brand/model for follow-ups that add a colour, size,
 material or seller/location preference; these words are not a new product name.
 Recorded operating system, colour, shoe size and connector can also be validated by the host. Never claim availability of a variant or device/protocol compatibility from a connector alone.
@@ -111,7 +117,7 @@ class AgentSettings:
             return os.environ.get(key, values.get(key, default))
         model = get('TOROB_ASSISTANT_MODEL', 'gpt-5.6-luna')
         limit = int(get('TOROB_ASSISTANT_ATTEMPT_LIMIT', '3'))
-        if model not in {'gpt-6-luna', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 500:
+        if model not in {'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or not 1 <= limit <= 500:
             raise ValueError("unsupported model or attempt limit")
         key = get('BOXAPI_API_KEY', '')
         if key and (not key.isascii() or len(key) > 1024 or any(c.isspace() for c in key)):
@@ -153,10 +159,10 @@ class BoxProvider:
                                                      "battery_requirement": request.context_battery_requirement.model_dump() if request.context_battery_requirement else None,
                                                      "query_choices": choices}, ensure_ascii=False)}],
             "response_format": {"type": "json_schema", "json_schema": {"name": "shopping_intent", "strict": True, "schema": schema}},
-            "max_completion_tokens": self.settings.max_completion_tokens,
-            "reasoning_effort": "low" if self.settings.model in {'gpt-5-mini', 'gpt-5.6-luna', 'gpt-6-luna'} else "none", "store": False}
+            "max_completion_tokens": max(4096, self.settings.max_completion_tokens) if self.settings.model == 'gpt-6.1-sol' else self.settings.max_completion_tokens,
+            "reasoning_effort": "medium" if self.settings.model == 'gpt-6.1-sol' else "low" if self.settings.model in {'gpt-5-mini', 'gpt-5.6-luna', 'gpt-6-luna'} else "none", "store": False}
         try:
-            async with httpx.AsyncClient(transport=self.transport, timeout=httpx.Timeout(25, connect=5),
+            async with httpx.AsyncClient(transport=self.transport, timeout=httpx.Timeout(50 if self.settings.model == 'gpt-6.1-sol' else 25, connect=5),
                                          follow_redirects=False, trust_env=False) as client:
                 async with client.stream('POST', ENDPOINT, headers={"Authorization": f"Bearer {self.settings.api_key}"}, json=payload) as response:
                     if response.status_code != 200:
@@ -207,7 +213,7 @@ class AssistantService:
         self.ledger.reserve(request.request_id, self.settings.model, self.settings.attempt_limit)
         usage, cost, reported_model = {}, None, None
         try:
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(60 if self.settings.model == 'gpt-6.1-sol' else 30):
                 raw = await self.provider.complete(request)
             usage = raw.get('usage') if isinstance(raw.get('usage'), dict) else {}
             cost = reported_cost(raw.get('cost'))
@@ -404,6 +410,8 @@ class AssistantService:
             # including a premature model budget question. An uncertain explicit amount
             # keeps its budget clarification; never call the model a second time.
             routing_message = plan.query if plan.query and (refinement or context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
+            if refinement and (request.context_query or '').startswith(('شارژر', 'کیف', 'محافظ', 'باتری')) and re.match(r'^(?:برای|واسه|مخصوص)\s+', normalize_text(latest_msg)):
+                routing_message = f'{request.context_query} {latest_msg}'
             if not budget_uncertain and (
                 is_ambiguous_product_intent(
                     routing_message,
@@ -512,6 +520,12 @@ class AssistantService:
             needs = await resolve_need_state(self.catalogue, request, plan.query, effective_category,
                                              budget, requirement, offer_sort, fallback,
                                              budget_needs_input=budget_uncertain)
+            if (plan.action == 'clarify' and plan.question == 'product_kind'
+                    and latest_span and latest_span.startswith('شارژر') and not coordinated):
+                # The target device is unknown, not the requested accessory.
+                # Keep that identity in state while withholding search results.
+                needs = replace(needs, state=needs.state.model_copy(update={
+                    'topic_query': latest_span, 'category_name': None}))
             if needs.state.pending_requirements and field_only_topic(
                     needs.state.topic_query, category_names):
                 # The span detector can start at a category head that is also a
@@ -617,6 +631,7 @@ class AssistantService:
                 explanation['summary']='با رنگ، سایز یا درگاه انتخاب‌شده، تطابق ثبت‌شده‌ای برای این مدل پیدا نشد؛ می‌توانی همان شرط یا مدل را تغییر بدهی. موجودی لحظه‌ای از این نتیجه معلوم نمی‌شود.'
             if explanation is not None and contact_requested:
                 explanation['limitations'].append(CONTACT_RESULT_LIMITATION)
+                explanation['summary'] = CONTACT_RESULT_LIMITATION + ' ' + explanation['summary']
             result = {
                 'request_id': request.request_id,
                 'status': 'needs_input' if plan.action == 'clarify' else 'results' if page['items'] else 'no_evidence',
