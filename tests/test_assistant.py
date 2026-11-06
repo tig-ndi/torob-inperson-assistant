@@ -1265,6 +1265,18 @@ class EnvelopeTests(unittest.TestCase):
             with patch.dict('os.environ', {'TOROB_ASSISTANT_ATTEMPT_LIMIT': '2000000'}, clear=True):
                 self.assertEqual(AgentSettings.load(root).attempt_limit, 2000000)
 
+    def test_environment_credentials_accept_matching_outer_quotes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for key in ('synthetic-key', '"synthetic-key"', "'synthetic-key'"):
+                with self.subTest(quoted=key != 'synthetic-key'), patch.dict(
+                        'os.environ', {'BOXAPI_API_KEY': key, 'TOROB_ASSISTANT_ENABLED': '1',
+                                       'TOROB_ASSISTANT_MODEL': 'gpt-6.1-sol',
+                                       'TOROB_ASSISTANT_ATTEMPT_LIMIT': '2000'}, clear=True):
+                    settings = AgentSettings.load(Path(tmp))
+                    self.assertEqual(settings.api_key, 'synthetic-key')
+                    self.assertEqual(settings.attempt_limit, 2000)
+                    self.assertNotIn('synthetic-key', repr(settings))
+
     def test_settings_are_allowlisted_redacted_and_environment_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

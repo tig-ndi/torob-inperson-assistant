@@ -120,6 +120,8 @@ class AgentSettings:
         if model not in {'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or limit < 1:
             raise ValueError("unsupported model or attempt limit")
         key = get('BOXAPI_API_KEY', '')
+        if len(key) >= 2 and key[0] == key[-1] and key[0] in {'"', "'"}:
+            key = key[1:-1]
         if key and (not key.isascii() or len(key) > 1024 or any(c.isspace() for c in key)):
             raise ValueError('invalid credential format')
         return cls(get('TOROB_ASSISTANT_ENABLED', '0') == '1', key, model, limit)
