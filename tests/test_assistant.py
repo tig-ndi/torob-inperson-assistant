@@ -28,10 +28,19 @@ CONTACT_DATA = re.compile(
 
 
 def contact_response_text(result):
-    # The caller's UUID can contain phone-like digit runs. Scan every other
-    # field, including nested content, without changing the contact detector.
-    return json.dumps({key: value for key, value in result.items() if key != 'request_id'},
-                      ensure_ascii=False)
+    # UUIDs and the catalogue's SHA-256 snapshot can contain phone-like digits.
+    # Exclude only these protocol fields; keep all other nested content checked.
+    content = {key: value for key, value in result.items() if key != 'request_id'}
+    for section in ('products', 'explanation'):
+        value = content.get(section)
+        if not isinstance(value, dict):
+            continue
+        provenance = value.get('provenance')
+        snapshot = provenance.get('snapshot_id') if isinstance(provenance, dict) else None
+        if isinstance(snapshot, str) and re.fullmatch(r'[0-9a-fA-F]{64}', snapshot):
+            content[section] = {**value, 'provenance': {
+                key: item for key, item in provenance.items() if key != 'snapshot_id'}}
+    return json.dumps(content, ensure_ascii=False)
 
 
 class ContactResponseTests(unittest.TestCase):
@@ -40,6 +49,40 @@ class ContactResponseTests(unittest.TestCase):
                   'question': 'چه کالایی می‌خواهید؟'}
         self.assertIsNotNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
         self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
+
+    def test_phone_like_snapshot_hash_does_not_count_as_contact_content(self):
+        snapshot = 'a' * 20 + '9135595695' + 'b' * 34
+        result = {section: {'provenance': {'snapshot_id': snapshot, 'currency': 'toman'}}
+                  for section in ('products', 'explanation')}
+        before = json.dumps(result, ensure_ascii=False)
+        self.assertIsNotNone(CONTACT_DATA.search(before))
+        self.assertIsNone(CONTACT_DATA.search(contact_response_text(result)))
+        self.assertEqual(json.dumps(result, ensure_ascii=False), before)
+        self.assertIn('toman', contact_response_text(result))
+
+    def test_contact_scan_keeps_malformed_snapshot_values_and_other_provenance_fields(self):
+        for section in ('products', 'explanation'):
+            for snapshot in ['09135595695', 'tel:09135595695',
+                             'a' * 20 + '9135595695' + 'b' * 33]:
+                with self.subTest(section=section, snapshot=snapshot):
+                    result = {section: {'provenance': {'snapshot_id': snapshot}}}
+                    self.assertIsNotNone(CONTACT_DATA.search(contact_response_text(result)))
+            with self.subTest(section=section, field='contact'):
+                result = {section: {'provenance': {'snapshot_id': 'a' * 64,
+                                                  'contact': 'tel:09135595695'}}}
+                self.assertIsNotNone(CONTACT_DATA.search(contact_response_text(result)))
+
+    def test_contact_scan_does_not_exempt_snapshot_ids_outside_catalogue_provenance(self):
+        snapshot = 'a' * 20 + '9135595695' + 'b' * 34
+        for result in [
+            {'snapshot_id': snapshot},
+            {'need_state': {'snapshot_id': snapshot}},
+            {'products': {'items': [{'snapshot_id': snapshot}]}},
+            {'products': {'items': [{'persian_title': snapshot}],
+                          'provenance': {'snapshot_id': snapshot}}},
+        ]:
+            with self.subTest(result=result):
+                self.assertIsNotNone(CONTACT_DATA.search(contact_response_text(result)))
 
     def test_contact_scan_still_checks_top_level_and_nested_response_content(self):
         cases = [
@@ -946,12 +989,19 @@ class AssistantApiTests(unittest.TestCase):
             ('شماره تماس ها را بده', {'action': 'clarify', 'query': None, 'budget_text': None,
                                      'question': 'product_kind'}, state, 'results'),
         ]
+        original_provenance = self.service.catalogue.provenance
+        snapshot = 'a' * 20 + '9135595695' + 'b' * 34
+
+        def phone_like_snapshot(connection):
+            return {**original_provenance(connection), 'snapshot_id': snapshot}
+
         for text, recorded_plan, context_state, status in cases:
             with self.subTest(text=text):
                 self.response = completion(recorded_plan)
                 request = body(text, context_need_state=context_state)
                 request.pop('max_price_toman')
-                result = self.post(request).json()
+                with patch.object(self.service.catalogue, 'provenance', side_effect=phone_like_snapshot):
+                    result = self.post(request).json()
                 self.assertEqual(result['status'], status)
                 if status == 'needs_input':
                     self.assertEqual(result['question_code'], 'product_kind')
@@ -959,6 +1009,8 @@ class AssistantApiTests(unittest.TestCase):
                     self.assertIsNone(result['query'])
                     self.assertIsNone(result['need_state']['topic_query'])
                 else:
+                    self.assertEqual(result['products']['provenance']['snapshot_id'], snapshot)
+                    self.assertIsNotNone(CONTACT_DATA.search(json.dumps(result, ensure_ascii=False)))
                     self.assertEqual(result['query'], 'گوشی سامسونگ')
                     self.assertEqual(result['category_name'], 'گوشی موبایل')
                     self.assertEqual(result['max_price_toman'], '15000000')
