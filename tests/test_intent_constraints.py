@@ -14,6 +14,37 @@ import test_assistant
 
 
 class ConstraintParserTests(unittest.TestCase):
+    def test_product_after_long_background_preserves_exact_model_and_real_lists(self):
+        from apps.api.intent import product_span, multiple_topic_heads
+        names = ['لپ تاپ و نوت بوک', 'گوشی موبایل', 'شارژر گوشی', 'خانه بازی', 'کار واش']
+        text = 'برای انجام کارهای شخصی در خانه و محل کار و دانشگاه یک لپ تاپ ایسوس X515 میخواهم'
+        span = product_span(text, names, {'ایسوس', 'x515'})
+        self.assertEqual(span, 'لپ تاپ ایسوس x515')
+        self.assertFalse(multiple_topic_heads(text, names, {'ایسوس', 'x515'}))
+        self.assertTrue(multiple_topic_heads('یک گوشی و شارژر گوشی میخواهم', names, set()))
+        request = AssistantRequest.model_validate(test_assistant.body(text))
+        self.assertTrue(any('لپ تاپ' in choice for choice in query_choices(request)))
+
+    def test_finglish_aliases_preserve_refusal_and_do_not_rewrite_partial_words(self):
+        from apps.api.category import normalize_product_text
+        from apps.api.intent import product_span
+        self.assertEqual(normalize_product_text('laptop mikham'), 'لپ تاپ میخواهم')
+        self.assertEqual(normalize_product_text('mylaptopmodel'), 'mylaptopmodel')
+        self.assertIsNone(product_span('gooshi nemikham', ['گوشی موبایل'], set()))
+
+    def test_capacity_removal_keeps_the_product_available_to_the_model(self):
+        request = AssistantRequest.model_validate(test_assistant.body('فیلتر ظرفیت باتری را حذف کن', context_query='گوشی', context_category='گوشی موبایل'))
+        self.assertEqual(query_choices(request), ['گوشی'])
+
+    def test_qualitative_features_are_not_literal_product_names(self):
+        from apps.api.intent import product_span
+        for text, category, expected in [
+            ('ماشین لباسشویی کم مصرف برای خانواده', 'ماشین لباسشویی', 'ماشین لباسشویی'),
+            ('هدفون حذف نویز فعال میخواهم', 'هدفون، هدست و هندزفری', 'هدفون'),
+        ]:
+            with self.subTest(text=text):
+                self.assertEqual(product_span(text, [category], set()), expected)
+
     def test_be001_negated_removal_and_other_features_preserve_minimum(self):
         current = BatteryRequirement(status='minimum', minimum_mah=5000)
         for text in ['فیلتر ظرفیت باتری را حذف نکن، فقط بودجه را هشت میلیون کن',
@@ -99,6 +130,15 @@ class ConstraintApiTests(unittest.TestCase):
         response = self.agent_client.post('/api/assistant/turn', json=body)
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
+
+    def test_unrelated_request_is_not_overridden_by_a_spurious_catalogue_head(self):
+        self.response = test_assistant.completion(test_assistant.proposal(action='clarify', query=None, question='product_kind'))
+        with patch('apps.api.assistant.product_span', return_value='آب'):
+            response = self.agent_client.post('/api/assistant/turn', json=test_assistant.body('لطفا آب و هوای فردا را پیش بینی کن'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'needs_input')
+        self.assertEqual(response.json()['question_code'], 'product_kind')
+        self.assertIsNone(response.json()['products'])
 
     def assert_filtered(self, result, budget, minimum=5000):
         self.assertEqual(result['status'], 'results', result)

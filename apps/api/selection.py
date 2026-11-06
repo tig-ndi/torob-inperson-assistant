@@ -6,7 +6,7 @@ from apps.api.category import CAT_MOBILE_PHONE
 from apps.api.intent import AssistantRequest
 from apps.api.models import Product, ProductPage
 from tools.prepare_data import normalize_text
-from apps.api.recorded_preferences import recorded_preference_score
+from apps.api.recorded_preferences import recorded_preference_score, recorded_need_evidence
 
 
 @dataclass
@@ -19,7 +19,25 @@ class Selection:
 def selection_context(request: AssistantRequest) -> str:
     # Old requests in a different category must not become current preferences.
     messages = [m.content for m in request.messages if m.role == 'user']
-    return normalize_text(' '.join(messages[-3:]))
+    context = normalize_text(' ؛ '.join(messages))
+    # Carry only typed review preferences already represented by the API state.
+    # Other old needs cannot be recovered if the client did not send them.
+    from apps.api.explanations import requested_review_topics, KEYWORDS
+    topics = requested_review_topics(request)
+    if request.category_cleared:
+        topics = []
+    from apps.api.category import detect_category_intent
+    category = detect_category_intent(request.messages[-1].content)
+    if category is not None and category != CAT_MOBILE_PHONE:
+        topics = []
+    for topic, pattern in KEYWORDS.items():
+        if topic not in topics:
+            context = re.sub(pattern, ' ', context)
+    if 'camera' in topics and not re.search(r'دوربین|عکاسی|سلفی', context):
+        context += ' دوربین'
+    if 'battery' in topics and not re.search(r'باتری|باطری', context):
+        context += ' باتری'
+    return context
 
 
 def facts_for(product: Product, context: str) -> tuple[int, list[str]]:
@@ -54,6 +72,10 @@ def facts_for(product: Product, context: str) -> tuple[int, list[str]]:
         if weight:
             score += weight
             facts.append(f'طبق مشخصات منبع، {spec.key}: {spec.value}')
+    for weight, row in recorded_need_evidence(product.category_name, [s.model_dump() for s in product.specs], context):
+        if product.category_name != CAT_MOBILE_PHONE:
+            score += weight
+            facts.append(f'طبق مشخصات منبع، {row["key"]}: {row["value"]}')
     return score, list(dict.fromkeys(facts))[:3]
 
 

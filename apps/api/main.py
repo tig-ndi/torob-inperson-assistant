@@ -232,7 +232,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             'selected_offer': selection['offer'],
             'draft': {
                 'delivery_status': 'draft_not_sent',
-                'text': draft_text(selection['product'], selection['offer']),
+                'text': draft_text(selection['product'], selection['offer'], body.visit_time),
                 'contact_channel_available': False,
                 'external_contact_attempted': False,
             },

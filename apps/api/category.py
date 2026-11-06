@@ -106,6 +106,16 @@ TARGET_DEVICE_REGEX = (
 )
 
 
+def normalize_product_text(text: str) -> str:
+    """Conservative whole-word input aliases; never infer a brand or model."""
+    text = normalize_text(text)
+    aliases = {'gooshi': 'گوشی', 'gushi': 'گوشی', 'mobile': 'موبایل',
+               'laptop': 'لپ تاپ', 'headphone': 'هدفون', 'headphones': 'هدفون',
+               'charger': 'شارژر', 'mikham': 'میخواهم', 'mikhaham': 'میخواهم',
+               'nemikham': 'نمیخواهم', 'nemikhaham': 'نمیخواهم'}
+    return re.sub(r'\b(?:' + '|'.join(aliases) + r')\b', lambda match: aliases[match[0]], text)
+
+
 def detect_category_intent(text: str) -> str | None:
     """Detect intended product category from text, respecting head-noun grammar.
 
@@ -115,7 +125,7 @@ def detect_category_intent(text: str) -> str | None:
     if not text or not isinstance(text, str):
         return None
 
-    cleaned = normalize_text(text).strip()
+    cleaned = normalize_product_text(text).strip()
     if not cleaned:
         return None
 

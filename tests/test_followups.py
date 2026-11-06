@@ -54,6 +54,7 @@ class FollowupApiTests(unittest.TestCase):
         self.assertFalse(body['draft']['external_contact_attempted'])
         self.assertIn('گوشي مدل ۱۲', body['draft']['text'])
         self.assertIn('120000', body['draft']['text'])
+        self.assertIn('2020-12-03T00:00:00+00:00', body['draft']['text'])
         self.assertTrue(any('ارسال نشده' in item for item in body['limitations']))
         self.assertTrue(any('ساختگی' in item for item in body['limitations']))
         self.assert_no_contact_fields(body)
@@ -76,6 +77,18 @@ class FollowupApiTests(unittest.TestCase):
         for value in (body, body['selected_offer']):
             self.assertNotIn('user_lat', value)
             self.assertNotIn('user_lon', value)
+
+    def test_followup_asks_to_confirm_planned_visit_and_preserves_unknown_hours(self):
+        from apps.api.followup import draft_text
+        text = draft_text({'persian_title': 'کالای منبع'}, {'price_toman': None,
+                          'last_price_changed_at': None, 'opening_hours': {'status': 'unknown'}}, '18:00')
+        self.assertIn('18:00', text)
+        self.assertIn('نامشخص', text)
+        self.assertIn('قیمت ثبت‌شده‌ای ندارد', text)
+        self.assertIn('تأیید می‌کنید', text)
+        closed = draft_text({}, {'opening_hours': {'status': 'declared_closed'}})
+        self.assertIn('بسته است', closed)
+        self.assertIn('باید تأیید شود', closed)
 
     def test_invalid_missing_and_mismatched_selection_are_distinct(self):
         missing_product = self.prepare(product_id='missing')

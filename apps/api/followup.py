@@ -8,16 +8,21 @@ def _clean(value: str | None, fallback: str) -> str:
     return text[:200] or fallback
 
 
-def draft_text(product: dict, offer: dict) -> str:
+def draft_text(product: dict, offer: dict, visit_time: str | None = None) -> str:
     title = _clean(product.get('persian_title'), 'این کالا')
     shop_name = _clean(offer.get('shop', {}).get('name'), 'فروشگاه انتخابی')
     price = offer.get('price_toman')
     price_text = f'{price} تومان' if price is not None else 'قیمت ثبت‌شده‌ای ندارد'
+    changed_at = _clean(offer.get('last_price_changed_at'), 'نامشخص')
+    visit = f' قصد مراجعه در ساعت {visit_time} را دارم؛ امکان مراجعه در همین ساعت را هم تأیید می‌کنید؟' if visit_time else ''
+    status = offer.get('opening_hours', {}).get('status')
+    hours_note = (' طبق برنامهٔ ثبت‌شده، در زمان بررسی بسته است؛ بازبودن هنگام مراجعه باید تأیید شود.' if status == 'declared_closed' else
+                  ' ساعت کاری ثبت‌شده نامشخص است؛ پیش از حرکت زمان پذیرش را تأیید کنید.' if status == 'unknown' else '')
     return (
         f'سلام، دربارهٔ «{title}» در {shop_name} پیگیری می‌کنم. '
         'آیا این کالا در حال حاضر موجود است؟ قیمت روز آن چقدر است و برای مراجعه '
-        f'چه ساعتی یا شرایطی دارد؟ (قیمت تاریخی ثبت‌شده: {price_text}؛ '
-        'این عدد موجودی یا قیمت روز را تأیید نمی‌کند.)'
+        f'چه ساعتی یا شرایطی دارد؟ (قیمت تاریخی ثبت‌شده: {price_text}؛ زمان آخرین تغییر ثبت‌شدهٔ قیمت: {changed_at}؛ '
+        f'این عدد موجودی یا قیمت روز را تأیید نمی‌کند.){visit}{hours_note}'
     )
 
 

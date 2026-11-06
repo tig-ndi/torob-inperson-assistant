@@ -157,6 +157,11 @@ def product_clauses(text: str, prioritize: bool = True) -> list[str]:
     for a watch (e.g. 'یک ساعت هوشمند می‌خواهم') must remain a product.
     """
     cleaned = affirmative_purchase_text(text)
+    preamble = re.match(r'^برای\s+(.+?)\s+(?:یک|یه)\s+(.+?می\s*خوا(?:هم|م).*)$', cleaned)
+    if preamble and detect_category_intent(preamble[1]) is None:
+        # Usage/background before an indefinite purchase is not a shopping list.
+        # A named target device is retained ("برای گوشی یک شارژر ...").
+        cleaned = preamble[2]
     cleaned = re.sub(rf'ساعت\s+(?:[0-9]{{1,2}}[:٫.][0-9]{{2}}|{AMOUNT}(?:\s+و\s+(?:نیم|ربع))?)\s*(?:صبح|ظهر|عصر|شب|امشب)(?:\s+(?:است|هست))?', ' ', cleaned)
     cleaned = re.sub(rf'(?:{AMOUNT}|نیم)\s+(?:ساعت|دقیقه)\s+(?:وقت|فرصت)\s*دارم', ' ', cleaned)
     cleaned = re.sub(rf'(?:هر\s+روز\s+|روزانه\s+)?{AMOUNT}\s+(?:ساعت|دقیقه)\s+(?:پیاده\s*روی|راه\s*رفتن|دویدن|می\s*دوم|کار\s*می\s*کنم|مطالعه\s*می\s*کنم)', ' ', cleaned)
@@ -462,7 +467,8 @@ def query_choices(request: AssistantRequest) -> list[str]:
     for message in reversed(request.messages):
         if message.role != 'user':
             continue
-        text = ' ، '.join(product_clauses(message.content, prioritize=False))
+        from apps.api.category import normalize_product_text
+        text = ' ، '.join(product_clauses(normalize_product_text(message.content), prioritize=False))
         text = re.sub(r'(?:بقیه|سایر)\s+(?:ی\s+)?شرایط(?:\s+(?:همان|همون|قبلی|باشد|باشه|بماند|بمونه|حفظ|کن|را|رو|نگه|دار))*', ' ', text)
         text = re.sub(r'برای\s+(?:پیاده\s*روی|دویدن|راه\s*رفتن)(?:\s+روزانه)?',' ',text)
         if detect_category_intent(message.content) == CAT_MOBILE_PHONE or (
@@ -485,13 +491,18 @@ def query_choices(request: AssistantRequest) -> list[str]:
             break
         if request.context_query is not None:
             return [normalize_text(request.context_query)]
-    tokens = tokens[:8]
-    candidates = []
+    # Short requests retain their stable choices. Long requests keep literal
+    # product spans anywhere in the bounded message, including after a preamble.
+    extended = len(tokens) > 8
+    candidate_limit = 32 if extended else 6
+    category = detect_category_intent(latest)
+    span = product_span(latest, [category], set()) if extended and category else None
+    candidates = [span] if span else []
     # Preserve neighbouring brands/model numbers; always leave room for unigrams.
     for width in [min(3, len(tokens)), 2, 1]:
         if width <= 0:
             continue
-        for start in range(min(len(tokens) - width + 1, 2 if width > 1 else 4)):
+        for start in range(len(tokens) - width + 1 if extended else min(len(tokens) - width + 1, 2 if width > 1 else 4)):
             query = ' '.join(tokens[start:start + width])
             if query and len(query) <= 120 and query not in candidates:
                 candidates.append(query)
@@ -499,8 +510,8 @@ def query_choices(request: AssistantRequest) -> list[str]:
     # validated prior identity available even when lexical windows start there.
     if request.context_query and re.search(r'بودجه|قیمت|میلیون|تومان|رنگ|سایز|درگاه', normalize_text(latest)):
         context = normalize_text(request.context_query)
-        return [context, *[q for q in candidates if q != context]][:6]
-    return candidates[:6]
+        return [context, *[q for q in candidates if q != context]][:candidate_limit]
+    return candidates[:candidate_limit]
 
 
 def releases_unsupported(request: AssistantRequest) -> bool:
@@ -553,7 +564,8 @@ def product_span(text: str, category_names, identity_words) -> str | None:
     if not text or not isinstance(text, str):
         return None
     from apps.api.source_filters import product_text
-    cleaned = product_text(affirmative_purchase_text(text))
+    from apps.api.category import normalize_product_text
+    cleaned = product_text(affirmative_purchase_text(normalize_product_text(text)))
     if detect_category_intent(cleaned) == CAT_MOBILE_PHONE:
         if keypad_request(text):
             return 'گوشی دکمه ای'
@@ -567,7 +579,10 @@ def product_span(text: str, category_names, identity_words) -> str | None:
         return None
     for segment in product_clauses(cleaned):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
-        for start in (index for index, token in enumerate(tokens) if token in heads):
+        preferred = ({'گوشی', 'موبایل', 'آیفون', 'iphone'} if semantic_category == CAT_MOBILE_PHONE else
+                     {'لپ', 'لپتاپ', 'نوت', 'نوتبوک', 'مک', 'macbook'} if semantic_category == 'لپ تاپ و نوت بوک' else set())
+        positions = [index for index, token in enumerate(tokens) if token in (preferred or heads)]
+        for start in positions:
             if accessory_head and tokens[start]!=accessory_head:
                 continue
             if tokens[start] == 'شماره' and _category_prefix_length(tokens, start, sequences) < 2:
@@ -583,8 +598,12 @@ def product_span(text: str, category_names, identity_words) -> str | None:
                 start -= 1
             span = []
             grounded = False
-            for token in tokens[start:]:
+            for relative, token in enumerate(tokens[start:]):
                 if span and token in QUERY_STOPWORDS:
+                    break
+                if span and re.match(r'(?:کم\s*مصرف|سبک|دارای|با قابلیت|ضد آب|حذف نویز|نویز کنسلینگ)(?:\s|$)', ' '.join(tokens[start + relative:])):
+                    # Retain the original request for evidence-based ranking;
+                    # qualitative properties are not literal brand/model tokens.
                     break
                 if token == head:
                     span.append(token)

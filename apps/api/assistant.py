@@ -20,6 +20,7 @@ from apps.api.category import (
 )
 from apps.api.intent import AssistantRequest, CONTACT_RESULT_LIMITATION, IntentPlan, QUESTIONS, clear_product_topic, is_contact_request, matches_question, multiple_topic_heads, product_span, product_clauses, proposed_budget, explicit_budget, query_choices, question_prompt, releases_unsupported
 from apps.api.explanations import explain_search
+from apps.api.selection import selection_context
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
 from apps.api.visit_intent import is_constraint_followup, has_unsupported_modifier
@@ -297,7 +298,10 @@ class AssistantService:
                                'battery_scope', 'requirement_choice', 'requirement_limit'}
             if authoritative is not None and (plan.action == 'search' or plan.question in topic_questions):
                 plan = plan.model_copy(update={'query': authoritative})
-            if plan.action == 'clarify' and plan.question == 'product_kind' and latest_span is not None and not coordinated:
+            clear_purchase = (latest_category is not None or bool(re.search(
+                r'(?<![\wن])می\s*خوا(?:هم|م)(?!\w)|دنبال|خرید|بخر|لازم|نیاز.*دارم', normalize_text(latest_msg)))
+                or normalize_text(latest_msg).strip(' .!؟') == latest_span)
+            if plan.action == 'clarify' and plan.question == 'product_kind' and latest_span is not None and not coordinated and clear_purchase:
                 # A greeting around a clear product request must not block the search.
                 plan = IntentPlan(action='search', query=latest_span, budget_text=plan.budget_text, question=None)
             if (plan.action == 'search' and latest_span is None and request.context_query is None
@@ -622,7 +626,7 @@ class AssistantService:
                     category_name=effective_category,
                     source_filters=needs.state.source_filters.model_dump(),
                     reference_product_id=needs.state.reference_product_id,
-                    ranking_context=' '.join(m.content for m in request.messages if m.role=='user'),
+                    ranking_context=selection_context(request),
                     min_battery_capacity_mah=requirement.minimum_mah,
                     **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
                        if offer_sort == 'nearest' else {}),

@@ -61,7 +61,7 @@ def is_need_control(text: str, *, include_ack: bool = False) -> bool:
     text = normalize_text(text)
     return (generic_release(text) or text in ALL_RELEASE or include_ack and text in CONTINUE or
             bool(re.search(r'(?:حذف|بردار|مهم نیست|بی خیال|صرف نظر|فیلتر نکن|اعمال نکن|در نظر نگیر|کنار بگذار)', text)
-                 and (FIELD_PATTERN.search(text) or re.search(r'حداقل\s+(?:ظرفیت\s+)?(?:باتری|باطری)',text) or 'فاصله' in text
+                 and (FIELD_PATTERN.search(text) or re.search(r'(?:حداقل\s+(?:ظرفیت\s+)?|ظرفیت\s+)(?:باتری|باطری)',text) or 'فاصله' in text
                       or re.search(r'سیستم\s*عامل|اندروید|android|ios', text)
                       or 'شرط' in text and ('اجرا نشده' in text or 'حل نشده' in text))))
 
