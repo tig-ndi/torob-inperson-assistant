@@ -1,5 +1,5 @@
 import {useLayoutEffect,useRef} from 'react';
-import {ArrowRight,ArrowUp,MessageSquareMore,Mic,Sparkles,Square} from 'lucide-react';
+import {ArrowRight,ArrowUp,MapPin,MessageSquareMore,Mic,Sparkles,Square} from 'lucide-react';
 import type {Shopping} from './state';
 import {replyContext,runReply} from './QuickReplies';
 import {replyPlan,type ReplyAction,type ReplyPanel} from './replySuggestions';
@@ -21,7 +21,7 @@ export default function MobileMapHeader({a,draft,onDraft,onSubmit,onOpen,journey
  const submit=()=>{if(!draft.trim()||a.busy)return;root.current?.querySelector<HTMLInputElement>('input')?.blur();onSubmit();};
  return <div className="mobile-map-header map-topbar" ref={root} data-mobile-map-header>
   <form className="map-message-form" onSubmit={e=>{e.preventDefault();submit();}}>
-   <Sparkles className="map-prompt-sparkle" size={16} aria-hidden="true"/>
+   {!a.position?<TouchAction className="map-header-location" aria-label="موقعیت جست‌وجو" action={()=>a.setOverlay('location')}><MapPin size={17}/></TouchAction>:<Sparkles className="map-prompt-sparkle" size={16} aria-hidden="true"/>}
    <input aria-label="پیام به دستیار روی نقشه" placeholder={thinking?'در حال فکر کردن…':notice?'پیدا شد؛ جزئیات در گفت‌وگو':'چی می‌خوای بخری؟'} value={draft} onChange={e=>onDraft(e.target.value)} maxLength={1000} enterKeyHint="send" autoComplete="off" onKeyDown={e=>{if(e.key==='Enter'&&e.nativeEvent.isComposing)e.preventDefault();}}/>
    <TouchAction className="icon-button" aria-label="گفتن پیام با صدا روی نقشه" action={()=>a.openVoice(null,'record')}><Mic size={19}/></TouchAction>
    {a.busy?<TouchAction className="map-send" aria-label="توقف بررسی روی نقشه" action={a.stop}><Square size={16} fill="currentColor"/></TouchAction>:<TouchAction className="map-send" aria-label="ارسال پیام روی نقشه" disabled={!draft.trim()} action={submit}><ArrowUp size={20}/></TouchAction>}

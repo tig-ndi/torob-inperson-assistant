@@ -219,3 +219,21 @@
  .agent-app .purchase-steps li span{font-size:11px;line-height:1.5}.agent-app .purchase-steps li[aria-current="step"] span{font-size:12px;font-weight:800}
 }
 @media(max-width:350px){.agent-app .purchase-steps li:not([aria-current="step"]) span{display:none}.agent-app .purchase-steps li[aria-current="step"]{flex:2.5}.agent-app .map-message-form .map-prompt-sparkle{display:none}}
+@media(max-width:999px){
+ .agent-app .chat-header{position:relative;display:flex;height:52px;min-height:52px;padding:4px 12px 4px 60px}
+ .agent-app .mobile-header-menu{position:absolute;left:8px;top:4px;margin:0}
+ .mobile-header-options{top:44px}
+ .header-location{flex-shrink:0;width:36px;min-width:36px;height:40px;color:var(--primary)}
+ .agent-app .context-bar>button:first-child{display:none}
+ .agent-app .context-bar:not(:has(.checks-context-button)){display:none}
+ .agent-app .composer-area{padding-top:2px}
+ .agent-app .message-composer{min-height:46px;padding:2px 5px;border-radius:18px;align-items:center}
+ .agent-app .message-composer textarea{min-height:36px;padding:4px;line-height:1.6}
+ .agent-app .mobile-view-switch{margin-top:2px;padding:1px 0}
+ .agent-app .mobile-map-header{top:max(6px,env(safe-area-inset-top));padding:2px 5px;gap:0;border-radius:20px}
+ .agent-app .mobile-map-header .map-message-form{height:40px;min-height:40px;gap:1px}
+ .agent-app .map-message-form input{padding-block:4px}
+ .map-message-form .map-header-location{display:grid;place-items:center;width:32px;min-width:32px;height:40px;padding:0;border-radius:12px;color:var(--primary);flex-shrink:0}
+ .agent-app .map-prompt-chips{padding:1px 0 2px;gap:4px}
+ .agent-app .map-prompt-chips button{min-height:26px;padding:1px 8px}
+}

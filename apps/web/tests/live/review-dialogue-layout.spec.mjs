@@ -4,7 +4,10 @@ import {mockAssistant,send,layout} from './helpers.mjs';
 for(const width of [320,390,1440])test(`conversation owns the viewport and secondary controls remain reachable at ${width}`,async({page,request})=>{
  await page.setViewportSize({width,height:844});await page.emulateMedia({colorScheme:'dark'});await mockAssistant(page,request);await page.goto('/');
  if(width<1000){
-  expect(await page.locator('.message-composer').evaluate(e=>e.getBoundingClientRect().height)).toBeLessThanOrEqual(68);
+  expect(await page.locator('.message-composer').evaluate(e=>e.getBoundingClientRect().height)).toBeLessThanOrEqual(48);
+  const menu=await page.getByLabel('گزینه‌های بیشتر',{exact:true}).boundingBox();
+  expect(menu.x).toBeLessThanOrEqual(12);expect(menu.y).toBeLessThanOrEqual(8);
+  await expect(page.locator('.chat-header').getByRole('button',{name:'انتخاب موقعیت',exact:true})).toBeVisible();
   expect(await page.locator('.chat-header').evaluate(e=>e.getBoundingClientRect().height)).toBeLessThanOrEqual(60);
   expect(await page.locator('[data-chat-scroll]').evaluate(e=>e.getBoundingClientRect().height)).toBeGreaterThan(580);
   await page.getByLabel('گزینه‌های بیشتر',{exact:true}).click();
@@ -31,6 +34,7 @@ test('delegated phone kind resumes a short product query after location without 
  await page.getByRole('button',{name:'هوشمند',exact:true}).click();await expect(page.locator('.inline-location')).toBeVisible();
  await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();
  await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
+ await expect(page.locator('.header-location')).toHaveCount(0);
  await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
  await expect(page.getByRole('alert')).toHaveCount(0);expect(queries.every(q=>q.split(/\s+/).length<=12)).toBe(true);
  expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:travelMode')??'"walking"'))).toBe('walking');
