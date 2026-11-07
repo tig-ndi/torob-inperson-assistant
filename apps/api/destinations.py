@@ -21,6 +21,7 @@ from apps.api.source_filters import SourceFilters, matches_source_filters
 
 
 class DestinationRequest(VisitRequest):
+    excluded_kinds:list[Literal['portable_fridge']]=Field(default_factory=list,max_length=1)
     require_anc:bool=False
     minimum_capacity_kg:int|None=Field(default=None,strict=True,gt=0,le=1000)
     source_filters: SourceFilters = Field(default_factory=SourceFilters)
@@ -63,8 +64,8 @@ def destinations_router(catalogue:Catalogue):
             return 1
         with catalogue.connect() as db:
             db.create_function('source_filter',1,lambda raw: matches_source_filters(raw,body.source_filters.model_dump()),deterministic=True)
-            from apps.api.purchase_preferences import recorded_requirements_match
-            db.create_function('purchase_requirements',2,lambda cat,raw:recorded_requirements_match(cat,raw,body.require_anc,body.minimum_capacity_kg),deterministic=True)
+            from apps.api.purchase_preferences import recorded_requirements_match, excluded_kind_matches
+            db.create_function('purchase_requirements',3,lambda cat,raw,title:recorded_requirements_match(cat,raw,body.require_anc,body.minimum_capacity_kg) and excluded_kind_matches(cat,title,body.excluded_kinds),deterministic=True)
             db.create_function('product_kind',6,matches_product_kind,deterministic=True)
             db.create_function('visit_status',1,hours,deterministic=True)
             db.create_function('arrival_rank',3,arrival_rank,deterministic=True)
@@ -72,7 +73,7 @@ def destinations_router(catalogue:Catalogue):
             db.create_function('capacity_mah',2,lambda cat,raw:assess_capacity(cat,decode_list(raw)).capacity_mah,deterministic=True)
             base=(' FROM product_search JOIN products p ON p.product_id=product_search.product_id '
                   'JOIN offers o ON o.product_id=p.product_id JOIN shops s ON s.shop_id=o.shop_id '
-                  'WHERE source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 '
+                  'WHERE source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs,p.persian_title)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 '
                   'AND (? IS NULL OR p.category_name=?) AND haversine_m(?,?,s.lat,s.lon)<=? '
                   'AND (? IS NULL OR o.price_toman>=?) AND (? IS NULL OR o.price_toman<=?) ')
             low=int(body.min_price_toman) if body.min_price_toman is not None else None

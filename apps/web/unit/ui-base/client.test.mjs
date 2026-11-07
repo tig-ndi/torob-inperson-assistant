@@ -23,6 +23,10 @@ test('offer and search requests preserve exact zero and apply filters on server 
     assert.equal(query.get('open_now_only'), 'true'); assert.equal(query.get('in_person_credit_only'), 'true');
     await searchCatalogue({ query: 'گوشی', maxPrice: '0', categoryCleared: true, categoryName: 'گوشی موبایل' }, signal());
     assert.equal(new URL(urls[1], 'http://localhost').searchParams.has('category_name'), false);
+    await searchCatalogue({query:'یخچال',maxPrice:null,excludedKinds:['portable_fridge'],requireAnc:true,minimumCapacity:7,offset:12},signal());
+    const continued=new URL(urls[2],'http://localhost').searchParams;
+    assert.equal(continued.get('exclude_portable_fridge'),'true');
+    assert.equal(continued.get('require_anc'),'true');assert.equal(continued.get('minimum_capacity_kg'),'7');assert.equal(continued.get('offset'),'12');
   } finally { globalThis.fetch = original; }
 });
 test('service errors never become a successful empty page and missing location is rejected locally', async () => {

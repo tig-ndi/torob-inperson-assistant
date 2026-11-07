@@ -6,6 +6,10 @@ from apps.api.shopping_intent import MODEL_WORDS
 
 def comparison_queries(text):
     text = normalize_text(text)
+    for alias in ('آیفون', 'ایفون'):
+        text = re.sub(r'(?<!\w)'+alias+r'\s*(?=\d)', 'iphone ', text)
+    for alias, latin in {'پرو':'pro','مکس':'max','پلاس':'plus','مینی':'mini','اولترا':'ultra','لایت':'lite'}.items():
+        text = re.sub(r'(?<!\w)'+alias+r'(?!\w)', latin, text)
     if not re.search(r'مقایسه|فرق|تفاوت|بین', text):
         return []
     subject = re.split(r'برای|تا|بودجه|مقایسه|فرق|تفاوت', text, maxsplit=1)[0]

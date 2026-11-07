@@ -6,7 +6,7 @@ from tools.prepare_data import normalize_text
 # Orthographic equivalents, not inferred product features. Keep FTS operators
 # literal and expand only these bounded brand/model spellings.
 MODEL_WORDS = (('ردمی', 'redmi'), ('نوت', 'note'), ('گلکسی', 'galaxy'),
-               ('پوکو', 'poco'), ('سامسونگ', 'samsung'), ('شیائومی', 'xiaomi'))
+               ('پوکو', 'poco'), ('سامسونگ', 'samsung'), ('شیائومی', 'xiaomi'), ('آیفون', 'ایفون', 'iphone'))
 
 
 def model_edition_matches(query, title):

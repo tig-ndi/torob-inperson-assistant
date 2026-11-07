@@ -51,6 +51,10 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
     text = normalize_text(text)
     if released_brand_topic(text, topic):
         return True
+    if (re.search(r'ظرفیت|کیلو(?:گرم)?|حذف\s+نویز|مسافرتی|سفری|فندکی', text)
+            and re.search(r'قبول|حداقل|مهم نیست|نمی\s*خوا|نباش|بردار', text)
+            and not re.search(r'گوشی|موبایل|لپ\s*تاپ|کفش|هدفون|یخچال|لباسشویی', text)):
+        return True
     if credit_preference(text) and not re.search(r'گوشی|موبایل|شارژر|کابل|کفش|هدفون|پاوربانک|لپ\s*تاپ', text):
         return True
     if purchase_question(text):

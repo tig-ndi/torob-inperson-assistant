@@ -176,7 +176,7 @@ class Catalogue:
                category_name: str | None = None, min_battery_capacity_mah: int | None = None,
                *, user_lat: float | None = None, user_lon: float | None = None,
                sort_by: str = 'relevance', source_filters=None, ranking_context='', reference_product_id=None,
-               require_anc=False, minimum_capacity_kg=None) -> dict:
+               require_anc=False, minimum_capacity_kg=None, excluded_kinds=None) -> dict:
         if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
         expression = retrieval_expression(query)
@@ -184,8 +184,8 @@ class Catalogue:
             provenance = self.provenance(connection)
             from apps.api.source_filters import matches_source_filters
             connection.create_function('source_filter', 1, lambda raw: matches_source_filters(raw, source_filters or {}), deterministic=True)
-            from apps.api.purchase_preferences import recorded_requirements_match
-            connection.create_function('purchase_requirements', 2, lambda cat,raw: recorded_requirements_match(cat,raw,require_anc,minimum_capacity_kg), deterministic=True)
+            from apps.api.purchase_preferences import recorded_requirements_match, excluded_kind_matches
+            connection.create_function('purchase_requirements', 3, lambda cat,raw,title: recorded_requirements_match(cat,raw,require_anc,minimum_capacity_kg) and excluded_kind_matches(cat,title,excluded_kinds), deterministic=True)
             @lru_cache(maxsize=1024)
             def capacity(category, raw):
                 return assess_capacity(category, decode_list(raw))
@@ -212,7 +212,7 @@ class Catalogue:
             rows = connection.execute(
                 "SELECT p.* " + nearest_select + " FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "
-                "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 AND source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs)=1 "
+                "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 AND source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs,p.persian_title)=1 "
                 "AND (? IS NULL OR p.product_id=?) AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
                 "AND o.price_toman<=?)) " + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",

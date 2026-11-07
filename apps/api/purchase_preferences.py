@@ -15,8 +15,9 @@ def update_preferences(previous, text, changed=False):
     result = set() if changed else set(previous)
     for clause in re.split(r'[؛;،,\n]|\b(?:اما|ولی)\b', normalize_text(text)):
         for key, pattern in PATTERNS.items():
-            if re.search(pattern, clause):
-                if re.search(r'مهم نیست|حذف کن|بردار|نیازی ندارم|نمی\s*خوا|لازم نیست', clause) or re.search(r'بدون\s+(?:'+pattern+r')',clause):
+            removal = bool(re.search(r'مهم نیست|حذف کن|بردار|نیازی ندارم|نمی\s*خوا|لازم نیست', clause))
+            if re.search(pattern, clause) or (key == 'anc' and removal and re.search(r'حذف\s+نویز', clause)):
+                if removal or re.search(r'بدون\s+(?:'+pattern+r')',clause):
                     result.discard(key)
                 else:
                     result.add(key)
@@ -32,7 +33,9 @@ def minimum_capacity(text, previous=None):
     text = normalize_text(text)
     if re.search(r'ظرفیت.*(?:مهم نیست|حذف کن|بردار)|بدون حداقل ظرفیت', text):
         return None
-    match = re.search(r'حداقل\s+(?:ظرفیت\s+)?('+AMOUNT+r')\s*(?:کیلو(?:گرم)?|kg)(?!\w)', text)
+    match = re.search(r'حداقل\s+(?:ظرفیت\s+)?(?:(?:را|رو)\s+)?('+AMOUNT+r')\s*(?:کیلو(?:گرم)?|kg)(?!\w)', text)
+    if match is None and previous is not None:
+        match = re.search(r'('+AMOUNT+r')\s*(?:کیلو(?:گرم)?|kg)\s+(?:هم\s+)?(?:قبول است|قبوله|کافی است|کافیه)', text)
     if match:
         try:
             value = parse_toman(match[1])
@@ -40,6 +43,24 @@ def minimum_capacity(text, previous=None):
         except ValueError:
             return previous
     return previous
+
+
+def update_excluded_kinds(previous, text, changed=False):
+    """Persist explicit source-identifiable exclusions, never infer suitability."""
+    result = set() if changed else set(previous)
+    for clause in re.split(r'[؛;،,\n]|\b(?:اما|ولی)\b', normalize_text(text)):
+        if re.search(r'مسافرتی|سفری|فندکی', clause):
+            if re.search(r'نمی\s*خوا|نباش|بدون|حذف کن|نشان نده|قبول نیست', clause):
+                result.add('portable_fridge')
+            elif re.search(r'هم\s+(?:قبول|باشه)|مهم نیست|فرقی ن(?:دارد|داره)', clause):
+                result.discard('portable_fridge')
+    return sorted(result)
+
+
+def excluded_kind_matches(category, title, excluded):
+    source = normalize_text((category or '')+' '+(title or ''))
+    return int(not ('portable_fridge' in (excluded or []) and re.search(r'یخچال|فریزر', source)
+                   and re.search(r'مسافرت|سفری|فندکی|خودرو|کمپ|portable|camping', source)))
 
 
 def recorded_requirements_match(category, specs, require_anc=False, minimum_kg=None):

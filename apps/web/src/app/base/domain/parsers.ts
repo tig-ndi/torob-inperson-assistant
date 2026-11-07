@@ -35,8 +35,9 @@ export function parseNeedState(value: unknown): NeedState {
   const preferences=s.preferences===undefined?undefined:list(s.preferences,x=>oneOf(x,['coding','lightweight','walking','anc','energy','family'] as const),6);
   const comparison_queries=s.comparison_queries===undefined?undefined:list(s.comparison_queries,x=>text(x,120),3);
   const minimum_capacity_kg=s.minimum_capacity_kg===undefined?undefined:s.minimum_capacity_kg===null?null:integer(s.minimum_capacity_kg,1,1000);
+  const excluded_kinds=s.excluded_kinds===undefined?undefined:list(s.excluded_kinds,x=>oneOf(x,['portable_fridge'] as const),1);
   if(preferences&&new Set(preferences).size!==preferences.length)throw new ContractError();
-  return { version: 1, topic_query, category_name, pending_requirements, review_topics, ...(minimum_capacity_kg===undefined?{}:{minimum_capacity_kg}), ...(comparison_queries?{comparison_queries}:{}), ...(preferences?{preferences}:{}), ...(source_filters?{source_filters}:{}),...(s.reference_product_id===undefined?{}:{reference_product_id:s.reference_product_id===null?null:identifier(s.reference_product_id)}),
+  return { version: 1, topic_query, category_name, pending_requirements, review_topics, ...(excluded_kinds===undefined?{}:{excluded_kinds}), ...(minimum_capacity_kg===undefined?{}:{minimum_capacity_kg}), ...(comparison_queries?{comparison_queries}:{}), ...(preferences?{preferences}:{}), ...(source_filters?{source_filters}:{}),...(s.reference_product_id===undefined?{}:{reference_product_id:s.reference_product_id===null?null:identifier(s.reference_product_id)}),
     category_cleared: bool(s.category_cleared), max_price_toman: money(s.max_price_toman),
     budget_needs_input: bool(s.budget_needs_input), offer_sort: oneOf(s.offer_sort, sorts),
     battery_requirement: parseBattery(s.battery_requirement) };

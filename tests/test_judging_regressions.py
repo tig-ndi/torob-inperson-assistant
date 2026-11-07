@@ -13,6 +13,7 @@ from apps.api.journey import ArrivalRequest
 from apps.api.models import FollowupPrepareRequest
 from pydantic import ValidationError
 from apps.api.model_comparison import comparison_queries
+from apps.api.purchase_preferences import update_preferences, update_excluded_kinds, excluded_kind_matches
 
 
 class JudgingRegressions(unittest.TestCase):
@@ -107,6 +108,85 @@ class JudgingRegressions(unittest.TestCase):
         for specs in ([],[{'key':'ظرفیت دیگ','value':'8 کیلوگرم'}],[{'key':'ظرفیت دیگ','value':'9 کیلوگرم'},{'key':'ظرفیت دیگ','value':'7 کیلوگرم'}]):
             self.assertEqual(recorded_requirements_match('ماشین لباسشویی',specs,minimum_kg=9),0)
         self.assertEqual(recorded_requirements_match('هدفون، هدست و هندزفری',[{'key':'حذف نویز','value':'ENC'}],require_anc=True),0)
+
+    def test_persian_iphone_comparison_retrieves_both_literal_editions(self):
+        self.assertEqual(comparison_queries('بین آیفون ۱۳ و آیفون ۱۴ تا دویست میلیون تومان برای عکاسی مقایسه کن'),['iphone 13','iphone 14'])
+        self.assertEqual(comparison_queries('بین آیفون ۱۳ پرو و آیفون ۱۴ پرو مقایسه کن'),['iphone 13 pro','iphone 14 pro'])
+        self.assertEqual(comparison_queries('گوشی تا سیزده میلیون برای عکاسی میخوام'),[])
+        for model in ('13','14','14 pro'):
+            self.add_product('iphone_'+model.replace(' ','_'),'گوشی Apple iPhone '+model,'گوشی موبایل',model='iPhone '+model)
+        result=self.turn('بین آیفون ۱۳ و آیفون ۱۴ تا دویست میلیون تومان برای عکاسی مقایسه کن',None,question='product_kind')
+        self.assertEqual(result['need_state']['comparison_queries'],['iphone 13','iphone 14'],result)
+        self.assertEqual({p['product_id'] for p in result['products']['items']},{'iphone_13','iphone_14'},result)
+
+    def test_explicit_refusal_survives_budget_edits_and_precedes_pagination(self):
+        self.add_product('home_fridge','یخچال خانگی','یخچال')
+        self.add_product('travel_fridge','یخچال مسافرتی 60 لیتری','یخچال مسافرتی')
+        result=self.turn('یخچال برای آشپزخانه خانواده چهار نفره تا سی میلیون تومان میخواهم؛ مسافرتی نمیخواهم','یخچال')
+        self.assertEqual(result['need_state']['excluded_kinds'],['portable_fridge'],result)
+        self.assertNotIn('travel_fridge',[p['product_id'] for p in result['products']['items']],result)
+        self.assertIsNone(result['explanation']['recommended_product_id'])
+        self.assertIn('ظرفیت',result['explanation']['summary'])
+        again=self.turn('بودجه را چهل میلیون کن','یخچال',result['need_state'])
+        self.assertEqual(again['need_state']['excluded_kinds'],['portable_fridge'])
+        self.assertNotIn('travel_fridge',[p['product_id'] for p in again['products']['items']])
+        released=self.turn('مسافرتی هم قبول است','یخچال',again['need_state'])
+        self.assertEqual(released['need_state']['excluded_kinds'],[],released)
+        switched=self.turn('گوشی میخوام','گوشی',again['need_state'])
+        self.assertEqual(switched['need_state']['excluded_kinds'],[])
+
+    def test_requirement_corrections_update_typed_state_and_search(self):
+        for kg in (7,9):
+            self.add_product('washer_'+str(kg),'ماشین لباسشویی '+str(kg),'ماشین لباسشویی',[{'key':'ظرفیت دیگ','value':str(kg)+' کیلوگرم'}])
+        first=self.turn('ماشین لباسشویی حداقل نه کیلو تا چهل میلیون تومان','ماشین لباسشویی')
+        for text in ('هفت کیلو هم قبول است؛ بودجه همان باشد','حداقل ظرفیت را هفت کیلو کن','حداقل ظرفیت رو ۷ کیلو کن'):
+            result=self.turn(text,'ماشین لباسشویی',first['need_state'])
+            self.assertEqual(result['need_state']['minimum_capacity_kg'],7,result)
+            self.assertEqual(result['max_price_toman'],'40000000')
+            self.assertIn('washer_7',[p['product_id'] for p in result['products']['items']],result)
+        self.assertEqual(minimum_capacity('بودجه را هفت میلیون کن',9),9)
+        self.assertEqual(update_preferences(['anc','lightweight'],'حذف نویز مهم نیست؛ هدفون معمولی هم قبول است'),['lightweight'])
+        self.add_product('plain_headphone','هدفون معمولی','هدفون، هدست و هندزفری')
+        first=self.turn('هدفون حذف نویز فعال ANC تا دو میلیون تومان','هدفون')
+        removed=self.turn('حذف نویز مهم نیست؛ هدفون معمولی تا یک میلیون تومان هم قبول است','هدفون',first['need_state'])
+        self.assertNotIn('anc',removed['need_state']['preferences'],removed)
+        self.assertEqual(removed['max_price_toman'],'1000000')
+        self.assertIn('plain_headphone',[p['product_id'] for p in removed['products']['items']],removed)
+
+    def test_refusals_are_bounded_to_source_identifiable_kind(self):
+        self.assertEqual(excluded_kind_matches('یخچال مسافرتی','یخچال 60 لیتر',['portable_fridge']),0)
+        self.assertEqual(excluded_kind_matches('یخچال','یخچال فندکی',['portable_fridge']),0)
+        self.assertEqual(excluded_kind_matches('هدفون','هدفون مسافرتی',['portable_fridge']),1)
+        self.assertEqual(update_excluded_kinds([], 'یخچال مسافرتی میخوام'),[])
+        self.assertEqual(update_excluded_kinds(['portable_fridge'], 'مسافرتی هم قبول نیست'),['portable_fridge'])
+
+    def test_destination_search_obeys_the_same_refusal_before_counting(self):
+        self.add_product('home_fridge','یخچال خانگی','یخچال')
+        self.add_product('travel_fridge','یخچال مسافرتی 60 لیتری','یخچال مسافرتی')
+        body={'query':'یخچال','lat':35.7,'lon':51.4,'search_km':40}
+        before=self.agent_client.post('/api/local/destinations',json=body)
+        self.assertEqual(before.status_code,200,before.text)
+        after=self.agent_client.post('/api/local/destinations',json={**body,'excluded_kinds':['portable_fridge']})
+        self.assertEqual(after.status_code,200,after.text)
+        self.assertEqual(before.json()['matched_models'],2)
+        self.assertEqual(after.json()['matched_models'],1)
+        self.assertNotIn('travel_fridge',after.json()['product_ids'])
+        direct=self.agent_client.get('/api/products',params={'q':'یخچال','exclude_portable_fridge':True,'limit':1,'offset':0})
+        self.assertEqual(direct.status_code,200,direct.text)
+        self.assertEqual([p['product_id'] for p in direct.json()['items']],['home_fridge'])
+        self.assertFalse(direct.json()['has_more'])
+
+    def test_continuation_search_retains_capacity_and_anc_requirements(self):
+        self.add_product('washer_7','ماشین لباسشویی هفت کیلو','ماشین لباسشویی',[{'key':'ظرفیت دیگ','value':'7 کیلوگرم'}])
+        self.add_product('washer_9','ماشین لباسشویی نه کیلو','ماشین لباسشویی',[{'key':'ظرفیت دیگ','value':'9 کیلوگرم'}])
+        response=self.agent_client.get('/api/products',params={'q':'ماشین لباسشویی','minimum_capacity_kg':9})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual([p['product_id'] for p in response.json()['items']],['washer_9'])
+        self.add_product('anc','هدفون فعال','هدفون، هدست و هندزفری',[{'key':'حذف نویز','value':'ANC فعال'}])
+        self.add_product('enc','هدفون میکروفون','هدفون، هدست و هندزفری',[{'key':'حذف نویز','value':'ENC'}])
+        response=self.agent_client.get('/api/products',params={'q':'هدفون','require_anc':True})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual([p['product_id'] for p in response.json()['items']],['anc'])
 
 
 class VisitCalendarTests(unittest.TestCase):

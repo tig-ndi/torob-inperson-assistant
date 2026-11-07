@@ -142,6 +142,9 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                category_cleared: Annotated[bool, Query()] = False,
                min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None,
                reference_product_id: str | None = Query(None,min_length=1,max_length=120),
+               require_anc: bool = False,
+               minimum_capacity_kg: int | None = Query(None,gt=0,le=1000),
+               exclude_portable_fridge: bool = False,
                colour: str | None = Query(None, min_length=1, max_length=32),
                size: str | None = Query(None, pattern=r'^\d{1,2}(?:\.5)?$'),
                connector: str | None = Query(None, pattern=r'^(usb-c|micro-usb|lightning)$'),
@@ -160,7 +163,9 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
             return catalogue.search(q, limit, offset, parse_budget(max_price_toman),
                                     category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah,
                                     user_lat=user_lat, user_lon=user_lon, sort_by=sort_by,
-                                    source_filters={'colour': colour, 'size': size, 'connector': connector},reference_product_id=reference_product_id)
+                                    source_filters={'colour': colour, 'size': size, 'connector': connector},reference_product_id=reference_product_id,
+                                    require_anc=require_anc,minimum_capacity_kg=minimum_capacity_kg,
+                                    excluded_kinds=['portable_fridge'] if exclude_portable_fridge else [])
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc
 

@@ -98,6 +98,8 @@ def recommend_selection(page: ProductPage, request: AssistantRequest) -> Selecti
     walking = bool(re.search(r'پیاده|دویدن|ورزش', context))
     footwear = any(re.search(r'کفش|کتانی|کتونی', p.category_name or '') for p in page.items)
     evidence = {p.product_id: facts_for(p, context)[1] for p in page.items}
+    if re.search(r'خانواده|پرجمعیت', context) and any(re.search(r'یخچال|فریزر', p.category_name or '') for p in page.items):
+        return Selection(None, 'یخچال‌های منطبق با شرایط ثبت‌شده را آوردم. برای خانواده، ارزان‌ترین مدل الزاماً مناسب نیست؛ چه ظرفیت یا ابعادی برای آشپزخانه نیاز داری؟ تا روشن شدن ظرفیت، مناسب بودن هیچ‌کدام را تأیید نمی‌کنم؛ مشخصات و موجودی را هم باید بررسی کنیم.', evidence)
     if walking and footwear and not re.search(r'مردانه|زنانه|بچگانه|کودک|دخترانه|پسرانه', context):
         return Selection(None, 'کفش‌های ثبت‌شده در این بودجه پیدا شدند. برای انتخاب مدل پیاده‌روی، کفش مردانه، زنانه یا کودک می‌خواهی؟ بعد سایز و کاربرد ثبت‌شده را بررسی می‌کنیم؛ قیمت کمتر به‌تنهایی راحتی یا تناسب را ثابت نمی‌کند.', evidence)
     first = min(page.items, key=lambda p: (-recorded_preference_score(p.category_name,[s.model_dump() for s in p.specs],context), -facts_for(p, context)[0],

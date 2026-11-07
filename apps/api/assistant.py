@@ -648,6 +648,7 @@ class AssistantService:
                         category_name=effective_category,
                         source_filters=needs.state.source_filters.model_dump(),
                         require_anc='anc' in needs.state.preferences,
+                        excluded_kinds=needs.state.excluded_kinds,
                         minimum_capacity_kg=needs.state.minimum_capacity_kg,
                         reference_product_id=needs.state.reference_product_id,
                         ranking_context=selection_context(request),

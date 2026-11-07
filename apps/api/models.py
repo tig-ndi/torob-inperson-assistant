@@ -76,6 +76,7 @@ class PendingRequirement(Model):
 
 class AssistantNeedState(Model):
     minimum_capacity_kg: int | None = Field(default=None, strict=True, gt=0, le=1000)
+    excluded_kinds: list[Literal['portable_fridge']] = Field(default_factory=list, max_length=1)
     comparison_queries: list[str] = Field(default_factory=list, max_length=3)
     preferences: list[Literal['coding', 'lightweight', 'walking', 'anc', 'energy', 'family']] = Field(default_factory=list, max_length=6)
     source_filters: SourceFilters = Field(default_factory=SourceFilters)

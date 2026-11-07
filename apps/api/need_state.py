@@ -13,7 +13,7 @@ from apps.api.models import PendingRequirement, AssistantNeedState, BatteryRequi
 from apps.api.category import detect_category_intent
 from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import operating_system, negated_operating_system
-from apps.api.purchase_preferences import update_preferences, minimum_capacity
+from apps.api.purchase_preferences import update_preferences, minimum_capacity, update_excluded_kinds
 from tools.prepare_data import normalize_text
 
 if TYPE_CHECKING:
@@ -214,6 +214,7 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     capacity = minimum_capacity(latest, previous_state.minimum_capacity_kg if previous_state and not changed else None) if 'ماشین لباسشویی' in (topic or '') else None
     resolved = AssistantNeedState(
         minimum_capacity_kg=capacity,
+        excluded_kinds=update_excluded_kinds(previous_state.excluded_kinds if previous_state else [], latest, changed),
         comparison_queries=previous_state.comparison_queries if keep_comparison else [],
         preferences=update_preferences(
             request.context_need_state.preferences if request.context_need_state else [], latest, changed),
