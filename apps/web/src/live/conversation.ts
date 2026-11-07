@@ -18,13 +18,23 @@ export function visitDate(text:string,now=new Date()):string|null|undefined{
   return date.toISOString().slice(0,10);
 }
 export function visitClock(text:string):string|null {
-  const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');
-  let localTime:string|null=null;
-  const clock=input.match(/(?:ساعت)?(\d{1,2})[:٫.](\d{2})/);
+  const input=text.replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/\u200c/g,' ').replace(/ي/g,'ی').replace(/ك/g,'ک');
   const hourWords:Record<string,number>={'دوازده':12,'یازده':11,'ده':10,'نه':9,'هشت':8,'هفت':7,'شش':6,'پنج':5,'چهار':4,'سه':3,'دو':2,'یک':1};
-  const natural=input.replace(/\u200c/g,'').match(/(?:ساعت)?(دوازده|یازده|ده|نه|هشت|هفت|شش|پنج|چهار|سه|دو|یک|\d{1,2})(ونیم|وربع|وسی(?:دقیقه)?|وپانزده(?:دقیقه)?)(?:شب|عصر|صبح)?/);
-  if(clock||natural){let hour=clock?Number(clock[1]):Number.isNaN(Number(natural![1]))?hourWords[natural![1]!]!:Number(natural![1]);const minute=clock?Number(clock[2]):/ربع|پانزده/.test(natural![2]!)?15:30;if(/شب/.test(input)&&hour===12)hour=0;else if(/شب|عصر/.test(input)&&hour<12)hour+=12;if(hour<24&&minute<60)localTime=`${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;}
-  return localTime;
+  const hour='(?:دوازده|یازده|ده|نه|هشت|هفت|شش|پنج|چهار|سه|دو|یک|\\d{1,2})';
+  const period='(?:بعد\\s*از\\s*ظهر|بعدازظهر|ظهر|شب|عصر|صبح)';
+  const boundary='(?=$|[\\s،؛,.!؟])';
+  const clock=input.match(new RegExp('(?:^|[\\s،؛])(?:ساعت\\s*)?(\\d{1,2})[:٫.](\\d{2})\\s*('+period+')?'+boundary));
+  const natural=input.match(new RegExp('(?:^|\\s)(?:ساعت\\s*)?('+hour+')\\s*و\\s*(نیم|ربع|سی(?:\\s*دقیقه)?|پانزده(?:\\s*دقیقه)?)\\s*('+period+')?'+boundary));
+  const plain=input.match(new RegExp('(?:^|\\s)ساعت\\s*('+hour+')\\s*('+period+')?'+boundary));
+  const match=clock??natural??plain;
+  if(!match)return null;
+  let h=hourWords[match[1]!]??Number(match[1]);
+  const m=clock?Number(match[2]):natural?(/ربع|پانزده/.test(match[2]!)?15:30):0;
+  const p=(clock||natural)?match[3]:match[2];
+  if(h>23||m>59||p&&h>12)return null;
+  if(/شب|صبح/.test(p??'')&&h===12)h=0;
+  else if(/شب|عصر|ظهر/.test(p??'')&&h<12)h+=12;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 export function visitIntent(text:string,context:string|null):VisitIntent|null {
   const input=digits(text).replace(/\u200c/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک');

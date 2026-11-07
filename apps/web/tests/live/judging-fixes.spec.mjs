@@ -31,10 +31,16 @@ test('mobile composer keeps a usable draft width with ready replies',async({page
 test('tomorrow and its clock reach insights, offers and arrival requests together',async({page,request})=>{
  await page.setViewportSize({width:390,height:844});await mockAssistant(page,request,[],'هدفون');const requests=[];
  page.on('request',r=>{if(r.method()==='POST'&&/visit-insights|arrival-checks/.test(r.url()))requests.push(r.postDataJSON());});
- await page.goto('/');await chooseLocation(page);await send(page,'هدفون میخوام فردا ساعت ۱۰:۰۰ صبح');
+ await page.goto('/');await chooseLocation(page);await send(page,'هدفون میخوام فردا ساعت ده صبح');
  await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();
  await expect.poll(()=>requests.some(r=>r.visit_date&&r.local_time==='10:00')).toBe(true);
  const expected=await page.evaluate(()=>{const f=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),p=t=>+f.find(x=>x.type===t).value,d=new Date(Date.UTC(p('year'),p('month')-1,p('day')+1));return d.toISOString().slice(0,10);});
  expect(requests.filter(r=>r.visit_date).every(r=>r.visit_date===expected)).toBe(true);
  await expect.poll(()=>requests.some(r=>Array.isArray(r.selections)&&r.visit_date===expected&&r.local_time==='10:00')).toBe(true);
+ requests.length=0;
+ await page.reload();
+ await expect.poll(()=>requests.some(r=>r.visit_date===expected&&r.local_time==='10:00')).toBe(true);
+ const restored=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:visit')));
+ expect(restored.visitDate).toBe(expected);expect(restored.localTime).toBe('10:00');
+ expect(requests.every(r=>r.visit_date===expected&&r.local_time==='10:00')).toBe(true);
 });

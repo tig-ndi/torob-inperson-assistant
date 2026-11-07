@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {parseProduct,parseOfferPage} from '../api';
 import {parseCataloguePage,parseCatalogueProduct,parseNeedState} from '../app/base/domain/parsers';
 import {record,text,list,bool,oneOf,integer,pairedCoordinates,money} from '../app/base/domain/validation';
+import {parseVisitSession} from './visitSession';
 
 const prefix='inperson-journey:v2:';
 const nullable=<T,>(parse:(v:unknown)=>T)=>(v:unknown)=>v===null?null:parse(v);
@@ -9,7 +10,7 @@ const number=(v:unknown)=>{if(typeof v!=='number'||!Number.isFinite(v))throw new
 const point=(v:unknown)=>{const p=record(v);const c=pairedCoordinates(p.lat,p.lon);if(!c)throw new Error('point');return {...c,label:text(p.label,200)};};
 const position=(v:unknown)=>{const p=record(v);return {...point(v),source:oneOf(p.source,['gps','manual']),accuracyMeters:p.accuracyMeters===null?null:number(p.accuracyMeters)};};
 const filters=(v:unknown)=>{const f=record(v);return {min:money(f.min||null)??'',max:money(f.max||null)??'',radius:integer(f.radius,1,1000),withinRadius:bool(f.withinRadius),open:bool(f.open),credit:bool(f.credit),pay:bool(f.pay),kala:bool(f.kala),fast:bool(f.fast),sort:oneOf(f.sort,['price','nearest'])};};
-const visit=(v:unknown)=>{const i=record(v),clock=i.localTime;if(clock!==null&&(typeof clock!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(clock)))throw new Error('clock');const km=number(i.nearbyKm);if(km<=0||km>50)throw new Error('radius');return {topic:text(i.topic,120),nearbyKm:km,localTime:clock as string|null,reuseProduct:i.reuseProduct===true};};
+const visit=parseVisitSession;
 const offers=(v:unknown)=>parseOfferPage({items:list(v,x=>{if(record(x).inventory_status!=='unconfirmed')throw new Error('stock');return x;},500),has_more:false,provenance:{currency:'toman',inventory_status:'unconfirmed'},hours_evaluated_at:new Date().toISOString()}).items;
 const recent=(v:unknown)=>{const r=record(v);return {id:text(r.id,100),query:text(r.query,1000),page:parseCataloguePage(r.page),need:nullable(parseNeedState)(r.need),filters:filters(r.filters),assistant:bool(r.assistant),visit:nullable(visit)(r.visit),createdAt:text(r.createdAt,100)};};
 const parsers={
