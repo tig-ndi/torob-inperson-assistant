@@ -5,6 +5,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { money, distance, openLabel, fa, type Offer, type Position, type Place } from './data';
 import {readSession,writeSession} from './session';
+import {layoutMapPins} from './mapPinLayout';
 maplibregl.setWorkerUrl(workerUrl);
 
 function style(dark:boolean):StyleSpecification {
@@ -34,11 +35,34 @@ function visiblePadding(m:maplibregl.Map,p:Props){
 }
 export default function RealMap(p:Props){
   const el=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|null>(null),latest=useRef(p);latest.current=p;
-  const pins=useRef(new Map<string,{marker:maplibregl.Marker;button:HTMLButtonElement;popup:maplibregl.Popup;rows:Offer[];closeTimer:number|null}>()),activePopup=useRef<maplibregl.Popup|null>(null),clearChoice=useRef<(()=>void)|null>(null);
+  const pins=useRef(new Map<string,{marker:maplibregl.Marker;button:HTMLButtonElement;popup:maplibregl.Popup;rows:Offer[];clusterRows:Offer[];renderPopup:()=>void;closeTimer:number|null}>()),activePopup=useRef<maplibregl.Popup|null>(null),clearChoice=useRef<(()=>void)|null>(null);
   const placePins=useRef<maplibregl.Marker[]>([]);
   const density=useRef<()=>void>(()=>{}),densityFrame=useRef<number|null>(null);
   density.current=()=>{
     const m=map.current;if(!m)return;
+    if(!latest.current.desktop){
+      const points=[...pins.current].map(([id,pin])=>{
+        pin.button.hidden=false;pin.button.classList.remove('pin-compact','pin-cluster');
+        pin.button.textContent=pin.button.dataset.pinLabel??'';pin.button.setAttribute('aria-label',pin.button.dataset.pinAria??'');
+        const point=m.project(pin.marker.getLngLat());
+        return {id,x:point.x,y:point.y,width:Math.max(32,pin.button.offsetWidth),height:Math.max(32,pin.button.offsetHeight),selected:pin.button.classList.contains('chosen')};
+      });
+      for(const group of layoutMapPins(points)){
+        const pin=pins.current.get(group.id)!;
+        pin.clusterRows=group.members.flatMap(id=>pins.current.get(id)!.rows);
+        pin.button.classList.toggle('pin-compact',group.compact);
+        pin.button.classList.toggle('pin-cluster',group.members.length>1);
+        pin.button.dataset.clusterSize=String(group.members.length);
+        if(group.members.length>1){pin.button.textContent=fa(group.members.length);const names=group.members.map(id=>pins.current.get(id)!.rows[0]?.shop.name??'فروشگاه');pin.button.setAttribute('aria-label',`${fa(group.members.length)} فروشگاه نزدیک به هم؛ نمایش گزینه‌ها: ${names.join('، ')}`);}
+        for(const id of group.members.slice(1)){const other=pins.current.get(id)!;other.button.hidden=true;other.popup.remove();}
+        if(pin.popup.isOpen())pin.renderPopup();
+      }
+      return;
+    }
+    for(const pin of pins.current.values()){
+      pin.button.hidden=false;pin.button.classList.remove('pin-cluster');pin.clusterRows=pin.rows;
+      pin.button.textContent=pin.button.dataset.pinLabel??'';pin.button.setAttribute('aria-label',pin.button.dataset.pinAria??'');pin.button.dataset.clusterSize='1';
+    }
     const occupied:{x:number;y:number;w:number;h:number}[]=[];
     const rows=[...pins.current.values(),...placePins.current.map(marker=>({marker,button:marker.getElement()}))].sort((a,b)=>Number(b.button.classList.contains('chosen'))-Number(a.button.classList.contains('chosen'))||Number(b.button.classList.contains('comparing'))-Number(a.button.classList.contains('comparing')));
     for(const pin of rows){
@@ -90,9 +114,11 @@ export default function RealMap(p:Props){
     for(const [id,pin] of pins.current){if(!groups.has(id)){if(pin.closeTimer!==null)clearTimeout(pin.closeTimer);pin.marker.remove();pin.popup.remove();pins.current.delete(id);}}
     const details=(rows:Offer[],keepOpen:()=>void,close:()=>void)=>{
       const panel=document.createElement('section');panel.dir='rtl';panel.className='map-shop-details';panel.setAttribute('aria-label','مشخصات فروشگاه روی نقشه');panel.setAttribute('role','region');panel.onpointerenter=keepOpen;panel.onpointerleave=close;
-      const h=document.createElement('h3');h.textContent=rows[0]?.shop.name??'فروشگاه';panel.append(h);
-      const address=document.createElement('p');address.textContent=rows[0]?.shop.address??'آدرس ثبت نشده';panel.append(address);
-      for(const o of rows){const row=document.createElement('article'),name=document.createElement('b'),facts=document.createElement('p'),note=document.createElement('small');name.textContent=latest.current.productNames?.[o.product_id]??'پیشنهاد ثبت‌شده';facts.textContent=`${money(o.price_toman)} تومان · ${distance(o.direct_distance_meters)} مستقیم`;note.textContent=`${openLabel(o)} · روز بررسی ${fa(o.opening_hours.local_day)} · موجودی تأیید نشده`;row.append(name,facts,note);
+      let previousShop:string|null=null;
+      for(const o of rows){
+        if(o.shop_id!==previousShop){const h=document.createElement('h3');h.textContent=o.shop.name??'فروشگاه';const address=document.createElement('p');address.textContent=o.shop.address??'آدرس ثبت نشده';panel.append(h,address);previousShop=o.shop_id;}
+        const row=document.createElement('article'),name=document.createElement('b'),facts=document.createElement('p'),note=document.createElement('small');name.textContent=latest.current.productNames?.[o.product_id]??'پیشنهاد ثبت‌شده';facts.textContent=`${money(o.price_toman)} تومان · ${distance(o.direct_distance_meters)} مستقیم`;note.textContent=`${openLabel(o)} · روز بررسی ${fa(o.opening_hours.local_day)} · موجودی تأیید نشده`;row.append(name,facts,note);
+        row.dataset.mapOffer=o.offer_id;
         const actions=document.createElement('div');actions.className='inline-actions';
         const select=document.createElement('button');select.className='secondary-action';select.textContent='انتخاب این پیشنهاد';select.onclick=()=>latest.current.onOffer(o);actions.append(select);
         if(latest.current.onCompare){const compare=document.createElement('button');compare.className='secondary-action';compare.textContent=latest.current.offerComparedIds?.has(o.offer_id)?'حذف پیشنهاد از مقایسه':'افزودن پیشنهاد به مقایسه';compare.setAttribute('aria-pressed',String(!!latest.current.offerComparedIds?.has(o.offer_id)));compare.onclick=()=>latest.current.onCompare?.(o);actions.append(compare);}
@@ -105,11 +131,12 @@ export default function RealMap(p:Props){
       let pin=pins.current.get(id);
       if(!pin){
         const button=document.createElement('button'),popup=new maplibregl.Popup({closeButton:true,focusAfterOpen:false,closeOnClick:false,maxWidth:'320px',offset:35,className:'shop-popup'});
-        pin={marker:new maplibregl.Marker({element:button,anchor:'bottom'}),button,popup,rows,closeTimer:null};const entry=pin;
+        pin={marker:new maplibregl.Marker({element:button,anchor:'bottom'}),button,popup,rows,clusterRows:rows,renderPopup:()=>{},closeTimer:null};const entry=pin;
         const keepOpen=()=>{if(entry.closeTimer!==null)clearTimeout(entry.closeTimer);entry.closeTimer=null;};
-        const close=()=>{keepOpen();entry.closeTimer=window.setTimeout(()=>{if(!entry.popup.getElement()?.contains(document.activeElement))entry.popup.remove();},180);};
-        const show=()=>{if(!latest.current.desktop)return;keepOpen();if(activePopup.current!==popup)activePopup.current?.remove();activePopup.current=popup;popup.setLngLat(entry.marker.getLngLat()).setDOMContent(details(entry.rows,keepOpen,close)).addTo(m);const closeButton=popup.getElement()?.querySelector('.maplibregl-popup-close-button');closeButton?.setAttribute('aria-label','بستن مشخصات فروشگاه');closeButton?.setAttribute('title','بستن مشخصات فروشگاه روی نقشه');};
-        button.onpointerenter=show;button.onpointerleave=close;button.onfocus=show;button.onblur=close;button.onclick=e=>{e.stopPropagation();const selected=entry.rows.find(o=>o.offer_id===latest.current.selected)??entry.rows[0];if(selected)latest.current.onOffer(selected);show();};button.ondblclick=e=>e.stopPropagation();
+        const close=()=>{if(!latest.current.desktop)return;keepOpen();entry.closeTimer=window.setTimeout(()=>{if(!entry.popup.getElement()?.contains(document.activeElement))entry.popup.remove();},180);};
+        entry.renderPopup=()=>popup.setDOMContent(details(latest.current.desktop?entry.rows:entry.clusterRows,keepOpen,close));
+        const show=(explicit=false)=>{if(!latest.current.desktop&&!explicit)return;keepOpen();if(activePopup.current!==popup)activePopup.current?.remove();activePopup.current=popup;popup.setLngLat(entry.marker.getLngLat());entry.renderPopup();popup.addTo(m);const closeButton=popup.getElement()?.querySelector('.maplibregl-popup-close-button');closeButton?.setAttribute('aria-label','بستن مشخصات فروشگاه');closeButton?.setAttribute('title','بستن مشخصات فروشگاه روی نقشه');};
+        button.onpointerenter=()=>show();button.onpointerleave=close;button.onfocus=()=>show();button.onblur=close;button.onclick=e=>{e.stopPropagation();if(!latest.current.desktop&&entry.clusterRows.some(o=>o.shop_id!==entry.rows[0]?.shop_id)){show(true);return;}const selected=entry.rows.find(o=>o.offer_id===latest.current.selected)??entry.rows[0];if(selected)latest.current.onOffer(selected);show();};button.ondblclick=e=>e.stopPropagation();
         pins.current.set(id,pin);pin.marker.setLngLat([rows[0]!.shop.lon!,rows[0]!.shop.lat!]).addTo(m);
       }
       pin.rows=rows;
@@ -117,7 +144,8 @@ export default function RealMap(p:Props){
       const reply=p.replyByOffer?.[chosen.offer_id];
       const compared=rows.some(o=>p.comparedIds?.has(o.offer_id));pin.button.classList.add('real-pin');pin.button.classList.toggle('chosen',rows.some(o=>o.offer_id===p.selected));pin.button.classList.toggle('comparing',compared);pin.button.dir='rtl';pin.button.classList.toggle('demo-replied',!!reply);pin.button.textContent=money(reply?.price_toman??chosen.price_toman)+(reply?reply.outcome==='out_of_stock'?' · ناموجود آزمایشی':reply.outcome==='closed'?' · بسته آزمایشی':reply.outcome==='no_answer'?' · بی‌پاسخ آزمایشی':' · پاسخ آزمایشی':'')+(rows.length>1?` · ${fa(rows.length)} پیشنهاد`:'')+(compared?' · مقایسه':'');pin.button.dataset.mapShop=id;pin.button.dataset.compared=String(compared);pin.button.setAttribute('aria-label',`${chosen.shop.name??'فروشگاه'} · ${money(reply?.price_toman??chosen.price_toman)} تومان${reply?' · پاسخ آزمایشی فروشنده':''}`);
       pin.marker.setLngLat([chosen.shop.lon!,chosen.shop.lat!]);
-      if(pin.popup.isOpen()){const entry=pin;const keep=()=>{if(entry.closeTimer!==null)clearTimeout(entry.closeTimer);};const close=()=>{entry.closeTimer=window.setTimeout(()=>entry.popup.remove(),180);};pin.popup.setDOMContent(details(rows,keep,close));}
+      pin.button.dataset.pinLabel=pin.button.textContent??'';pin.button.dataset.pinAria=pin.button.getAttribute('aria-label')??'';
+      if(pin.popup.isOpen())pin.renderPopup();
     }
     if(p.position){const b=document.createElement('div');b.className='user-dot';b.title=p.position.label;markers.push(new maplibregl.Marker({element:b}).setLngLat([p.position.lon,p.position.lat]).addTo(m));}
     for(const place of p.places??[]){const b=document.createElement('div');b.className='real-pin probable-pin';b.textContent='؟ '+place.label;b.title='موجودی و ساعت کاری نامشخص';markers.push(new maplibregl.Marker({element:b}).setLngLat([place.lon,place.lat]).addTo(m));}

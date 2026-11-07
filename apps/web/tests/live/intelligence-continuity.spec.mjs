@@ -2,7 +2,10 @@ import {test,expect} from '@playwright/test';
 import {mockAssistant,send,layout} from './helpers.mjs';
 
 for(const method of ['coordinates','gps','map','neighbourhood'])test(`location resumes the same phone request automatically: ${method}`,async({page,request})=>{
-  await page.setViewportSize({width:390,height:844});const calls=[];await mockAssistant(page,request,calls);
+  await page.setViewportSize({width:390,height:844});const calls=[],searches=[],products=await mockAssistant(page,request,calls);
+  // Exercise the location/resume UI with a controlled catalogue response, not
+  // a distance-sorted database query whose runtime depends on the local machine.
+  await page.route('**/api/products?**',r=>{searches.push(new URL(r.request().url()).searchParams);return r.fulfill({json:products});});
   if(method==='gps')await page.addInitScript(()=>{navigator.geolocation.getCurrentPosition=ok=>ok({coords:{latitude:35.7,longitude:51.4,accuracy:20}});});
   await page.goto('/');await send(page,'من گوشی میخوام نزدیک ترین جا بهم رو بگو');
   await expect(page.getByText('کجا را بررسی کنم؟',{exact:true})).toBeVisible();
@@ -17,6 +20,7 @@ for(const method of ['coordinates','gps','map','neighbourhood'])test(`location r
   await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
   if(method==='map'){await expect(page.locator('[data-map-panel]')).toBeVisible();await page.getByRole('button',{name:'بازگشت به گفت‌وگو',exact:true}).click();}
   await expect(page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first()).toBeVisible();
+  expect(searches.some(p=>p.get('q')==='گوشی'&&p.get('sort_by')==='nearest'&&p.has('user_lat')&&p.has('user_lon'))).toBe(true);
   await expect(page.getByRole('log')).not.toContainText('چه نوع کالایی');expect(calls).toHaveLength(0);
   await page.reload();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
   if(method==='coordinates'){

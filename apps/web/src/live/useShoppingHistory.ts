@@ -71,7 +71,9 @@ export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shoppin
     });
     const pop=(e:PopStateEvent)=>history.current?.pop(e.state);
     const click=(e:Event)=>{const summary=(e.target as Element).closest('summary'),detail=summary?.parentElement;if(detail instanceof HTMLDetailsElement&&!detail.open&&!details.current.includes(detail))details.current.push(detail);};
-    const observer=new MutationObserver(records=>{for(const record of records){const el=record.target;if(record.attributeName==='open'&&el instanceof HTMLDetailsElement&&el.open&&!details.current.includes(el))details.current.push(el);}scan.current();});observer.observe(node,{subtree:true,childList:true,attributes:true,attributeFilter:['open','data-sheet-stop','aria-expanded']});
+    // MapLibre auto-opens attribution on resize. Only a user summary click should
+    // add those controls to Back history; app disclosures may also open by code.
+    const observer=new MutationObserver(records=>{for(const record of records){const el=record.target;if(record.attributeName==='open'&&el instanceof HTMLDetailsElement&&el.open&&!el.closest('.maplibregl-control-container')&&!details.current.includes(el))details.current.push(el);}scan.current();});observer.observe(node,{subtree:true,childList:true,attributes:true,attributeFilter:['open','data-sheet-stop','aria-expanded']});
     node.addEventListener('click',click,true);window.addEventListener('popstate',pop);scan.current();
     return()=>{cancelAnimationFrame(raf);observer.disconnect();node.removeEventListener('click',click,true);window.removeEventListener('popstate',pop);history.current=null;};
   },[root]);

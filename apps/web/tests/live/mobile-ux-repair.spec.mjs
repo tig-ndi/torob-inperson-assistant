@@ -11,13 +11,14 @@ const settle=page=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(
 const stored=page=>page.evaluate(()=>Object.fromEntries(['thread','filters','position','selected','models','visit'].map(key=>[key,sessionStorage.getItem('inperson-journey:v2:'+key)])));
 async function menu(page,label){await page.locator('.mobile-header-menu > summary').click();await page.getByRole('button',{name:label,exact:true}).click();await settle(page);}
 async function picture(page,name){await mkdir(output,{recursive:true});await page.screenshot({path:join(output,`after-${name}-${page.viewportSize().width}.png`)});}
-async function setup(page,request){
+async function setup(page,request,prepareProducts){
   // No paid model, seller writes, saved plans or ledger changes in this suite.
   await page.route('**/api/local/checks**',r=>r.fulfill({json:{items:[]}}));
   await page.route('**/api/local/trips**',r=>r.fulfill({json:{items:[]}}));
   await page.route('**/api/local/catalogue-context',r=>r.fulfill({json:{budget:null,products:{}}}));
   await page.route('**/api/local/followups',r=>r.abort());
   const calls=[],products=await mockAssistant(page,request,calls,'هدفون');
+  if(prepareProducts)await prepareProducts(products);
   await page.goto('/');await chooseLocation(page);await send(page,'هدفون میخوام');
   await expect(page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first()).toBeVisible();await settle(page);
   return {calls,products};
@@ -77,8 +78,7 @@ for(const [width,height] of sizes){
 }
 
 for(const [width,height] of sizes.slice(0,3))test(`map point popup dismisses before the map and preserves location at ${width}`,async({page,request})=>{
- // Known UX-01 failure after two repair attempts: cancelling a second map point
- // popup leaves an extra Back step. Keep the assertion failing rather than hiding it.
+ // Auto-expanded map attribution must not insert an invisible purchase step.
  await page.setViewportSize({width,height});await setup(page,request);
  await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect.poll(async()=>(await stored(page)).selected).not.toBe('null');
  const before=await stored(page);await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
@@ -89,6 +89,43 @@ for(const [width,height] of sizes.slice(0,3))test(`map point popup dismisses bef
  await canvas.click({position:{x:30,y:190}});await expect(page.locator('.location-popup')).toBeVisible();await settle(page);await page.getByRole('button',{name:'انصراف',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>history.state)).toEqual(mapEntry);await settle(page);
  await page.goBack();await expect(page.locator('[data-map-panel]')).toBeHidden();expect(await stored(page)).toEqual(before);
+});
+
+test.describe('dense touch markers',()=>{
+test.use({hasTouch:true});
+for(const [width,height] of sizes)test(`dense map markers have distinct 32px targets and retain every shop at ${width}`,async({page,request})=>{
+ await page.setViewportSize({width,height});let items;
+ const {calls}=await setup(page,request,async products=>{
+  products.items=products.items.slice(0,1);const id=products.items[0].product_id;
+  const source=await(await request.get(`/api/products/${id}/offers?user_lat=35.7&user_lon=51.4`)).json();
+  items=structuredClone(source.items.filter((o,i,all)=>all.findIndex(x=>x.shop_id===o.shop_id)===i).slice(0,3));expect(items).toHaveLength(3);
+  for(const o of items){o.shop.lat=35.7001;o.shop.lon=51.4001;}
+  await page.route(`**/api/products/${id}/offers?*`,r=>r.fulfill({json:{...source,items,has_more:false}}));
+  await page.route('**/api/local/visit-insights',async r=>{const response=await r.fetch(),data=await response.json();data.open_offers={...data.open_offers,items,has_more:false};await r.fulfill({json:data});});
+ });
+ await page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first().click();await expect(page.locator('[data-offer]')).toHaveCount(3);
+ await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
+ const cluster=page.locator('.real-pin.pin-cluster:visible');await expect(cluster).toHaveCount(1);await expect(cluster).toHaveAttribute('data-cluster-size','3');
+ const targets=await page.locator('button.real-pin:visible').evaluateAll(es=>es.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.closest('button.real-pin')===e};}));
+ for(const target of targets){expect(target.w).toBeGreaterThanOrEqual(32);expect(target.h).toBeGreaterThanOrEqual(32);expect(target.hit).toBe(true);}
+ for(let i=0;i<targets.length;i++)for(let j=i+1;j<targets.length;j++){const a=targets[i],b=targets[j];expect(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y).toBe(true);}
+ const previousSelection=JSON.parse((await stored(page)).selected)?.offer_id,target=items.find(o=>o.offer_id!==previousSelection);
+ await cluster.focus();await page.keyboard.press('Enter');const popup=page.getByRole('region',{name:'مشخصات فروشگاه روی نقشه',exact:true});await expect(popup).toBeVisible();
+ for(const o of items){await expect(popup.getByRole('heading',{name:o.shop.name,exact:true})).toBeVisible();await expect(popup).toContainText(o.shop.address);}
+ await picture(page,'dense-popup');
+ await popup.locator(`[data-map-offer="${target.offer_id}"]`).getByRole('button',{name:'افزودن پیشنهاد به مقایسه',exact:true}).click();
+ // Existing comparison behavior also selects that shop, so the new selected
+ // marker becomes the group representative and closes the previous popup.
+ await expect.poll(()=>page.evaluate(id=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:compare')??'[]').some(o=>o.offer_id===id),target.offer_id)).toBe(true);
+ await expect(popup).toHaveCount(0);await cluster.tap();await expect(popup).toBeVisible();
+ await expect(popup.locator(`[data-map-offer="${target.offer_id}"]`).getByRole('button',{name:'حذف پیشنهاد از مقایسه',exact:true})).toHaveAttribute('aria-pressed','true');
+ await settle(page);await page.goBack();await expect(popup).toHaveCount(0);await expect(page.locator('[data-map-panel]')).toBeVisible();
+ const nextChoice=items.find(o=>o.offer_id!==target.offer_id);
+ await cluster.tap();await expect(popup).toBeVisible();await popup.locator(`[data-map-offer="${nextChoice.offer_id}"]`).getByRole('button',{name:'انتخاب این پیشنهاد',exact:true}).tap();
+ await expect.poll(async()=>JSON.parse((await stored(page)).selected)?.offer_id).toBe(nextChoice.offer_id);
+ expect(calls).toHaveLength(1);await picture(page,'dense-map');await writeFile(join(output,`dense-targets-${width}.json`),JSON.stringify(targets,null,2));
+ if(width===360){await page.setViewportSize({width:1440,height:900});await expect(page.locator('button.real-pin:visible')).toHaveCount(3);await expect(page.locator('.real-pin.pin-cluster')).toHaveCount(0);await page.setViewportSize({width,height});await expect(cluster).toHaveCount(1);expect(JSON.parse((await stored(page)).selected).offer_id).toBe(nextChoice.offer_id);}
+});
 });
 
 for(const [width,height] of sizes.slice(0,3))test(`complete mobile journey and nested Back stay usable at ${width}`,async({page,request})=>{
