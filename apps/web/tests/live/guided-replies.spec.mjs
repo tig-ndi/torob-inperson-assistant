@@ -59,7 +59,7 @@ test('charger and battery questions expose complete contextual answers',async({p
   await page.route('**/api/assistant/turn',r=>{inputs.push(r.request().postDataJSON());return clarification(r,need,inputs.length===1?'product_kind':'battery_capacity',inputs.length===1?'شارژر را برای چه دستگاهی می‌خواهی؟':'حداقل ظرفیت باتری چند میلی‌آمپرساعت باشد؟');});
   await page.goto('/');await send(page,'شارژر می‌خواهم');await page.getByRole('group',{name:'پیشنهادهای ادامهٔ گفت‌وگو'}).getByRole('button',{name:'برای گوشی',exact:true}).click();
   await expect.poll(()=>inputs[1]?.messages.at(-1).content).toBe('شارژر برای گوشی می‌خواهم');
-  await page.getByRole('button',{name:'گفت‌وگوی تازه',exact:true}).click();need=state({battery_requirement:{status:'awaiting_minimum',minimum_mah:null}});await send(page,'گوشی با باتری خوب می‌خواهم');
+  await page.getByRole('button',{name:'گفت‌وگوی تازه',exact:true}).click();await page.getByRole('button',{name:'بله، گفت‌وگوی تازه',exact:true}).click();need=state({battery_requirement:{status:'awaiting_minimum',minimum_mah:null}});await send(page,'گوشی با باتری خوب می‌خواهم');
   await page.getByRole('group',{name:'پیشنهادهای ادامهٔ گفت‌وگو'}).getByRole('button',{name:'حداقل ۵۰۰۰ میلی‌آمپرساعت',exact:true}).click();
   await expect.poll(()=>inputs.at(-1)?.messages.at(-1).content).toBe('حداقل ۵۰۰۰ میلی‌آمپرساعت');expect(inputs.at(-1).context_need_state.max_price_toman).toBe('10000000');
 });

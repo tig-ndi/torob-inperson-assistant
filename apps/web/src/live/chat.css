@@ -240,3 +240,15 @@
  .agent-app .map-prompt-chips button{min-height:26px;padding:1px 8px}
 }
 @media(max-width:360px){.agent-app .composer-area .conversation-width{padding-inline:8px}}
+.chat-dialog:has(.filter-sheet){height:min(92%,780px)}
+.chat-dialog>.filter-dialog-content{display:flex;flex:1;min-height:0;padding:0;overflow:hidden}
+.filter-sheet{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0}
+.filter-sheet-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px;scroll-padding-block:16px}
+.filter-sheet-actions{flex-shrink:0;padding:10px 16px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--bg)}
+.filter-sheet-actions>div{display:flex;gap:8px}.filter-sheet-actions button{flex:1;min-height:44px}.filter-sheet-actions [role=alert]{padding-bottom:8px}
+@media(max-width:999px){
+ .agent-app .tool-heading button{min-width:44px;min-height:44px}
+ .agent-app .map-message-form .icon-button,.agent-app .map-message-form .map-send,.agent-app .map-message-form .map-ready-replies,.agent-app .map-message-form .map-return-chat,.agent-app .map-message-form .map-header-location{min-width:44px;width:44px;min-height:44px;height:44px}
+ .agent-app .map-message-form .map-return-chat{display:flex;gap:2px;padding:0}.agent-app .map-message-form .map-return-chat svg{width:16px;height:16px}.agent-app .map-message-form .map-return-chat span{display:block;font-size:10px}
+ .agent-app .mobile-map-sheet[data-sheet-stop=collapsed] .map-sheet-handle{gap:8px}.agent-app .mobile-map-sheet[data-sheet-stop=collapsed] .map-sheet-handle b{display:block;flex:0 1 auto;font-size:10px;color:var(--text-2)}
+}

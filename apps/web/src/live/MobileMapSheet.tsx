@@ -9,10 +9,13 @@ export function MobileViewSwitch({view,onChat,onMap,mapLabel='نقشه و فرو
   return <nav className="mobile-view-switch" aria-label="نمای خرید"><button aria-label="رفتن به گفت‌وگو" aria-pressed={view==='chat'} onClick={onChat} type="button"><MessageCircle size={17}/>گفت‌وگو</button><button aria-label="رفتن به نقشه" aria-description={mapHint} title={mapHint} data-map-context-action aria-pressed={view==='map'} onClick={onMap} type="button"><Map size={17}/><span>{mapLabel}</span></button></nav>;
 }
 
-type Props={choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;busy:boolean;hasMore:boolean;
+export type SheetStop='collapsed'|'peek'|'half'|'full';
+type Props={stop?:SheetStop;onStop?:(stop:SheetStop)=>void;choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;busy:boolean;hasMore:boolean;
   productNames?:Record<string,string>;comparedIds?:ReadonlySet<string>;onNavigate:()=>void;onSelect:(o:Offer)=>void;onInspect:(o:Offer)=>void;onMore:()=>void;onChat:()=>void;onPick:()=>void;onHeight:(height:number)=>void};
 export default function MobileMapSheet(p:Props){
-  const [snap,setSnap]=useState<'collapsed'|'peek'|'half'|'full'>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
+  const [localSnap,setLocalSnap]=useState<SheetStop>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
+  const snap=p.stop??localSnap;
+  const setSnap=(next:SheetStop|((old:SheetStop)=>SheetStop))=>{const value=typeof next==='function'?next(snap):next;setLocalSnap(value);p.onStop?.(value);};
   const [selectedPeek,setSelectedPeek]=useState(304),[safeInset,setSafeInset]=useState(0);
   const [addressHeight,setAddressHeight]=useState(0),address=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{const node=address.current;if(!node){setAddressHeight(0);return;}const measure=()=>setAddressHeight(Math.ceil(node.getBoundingClientRect().height));measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();},[p.selected?.offer_id,p.selected?.shop.address]);

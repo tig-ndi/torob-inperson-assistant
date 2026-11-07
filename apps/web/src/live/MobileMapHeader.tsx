@@ -26,7 +26,7 @@ export default function MobileMapHeader({a,draft,onDraft,onSubmit,onOpen,journey
    <TouchAction className="icon-button" aria-label="گفتن پیام با صدا روی نقشه" action={()=>a.openVoice(null,'record')}><Mic size={19}/></TouchAction>
    {a.busy?<TouchAction className="map-send" aria-label="توقف بررسی روی نقشه" action={a.stop}><Square size={16} fill="currentColor"/></TouchAction>:<TouchAction className="map-send" aria-label="ارسال پیام روی نقشه" disabled={!draft.trim()} action={submit}><ArrowUp size={20}/></TouchAction>}
    <TouchAction className="map-ready-replies" aria-label="پاسخ‌های آماده" aria-haspopup="dialog" disabled={a.busy} action={()=>onOpen('suggestions')}><MessageSquareMore size={18}/></TouchAction>
-   <TouchAction className="map-return-chat" data-map-initial-focus aria-label="بازگشت به گفت‌وگو" action={()=>{a.setPicking(false);a.setMapMode('closed');}}><ArrowRight size={18}/><span>گفت‌وگو</span></TouchAction>
+   <TouchAction className="map-return-chat" data-map-initial-focus aria-label="بازگشت به گفت‌وگو" action={()=>{a.setPicking(false);a.setMapMode('closed');}}><ArrowRight size={18}/><span>چت</span></TouchAction>
    <span className="sr-only" role="status">{thinking?'در حال فکر کردن…':notice}</span>
   </form>
   {!a.picking&&!journey&&<div className="map-prompt-chips" role="group" aria-label="پیشنهادهای خرید روی نقشه">{chips.slice(0,4).map(action=><button type="button" key={action.id} disabled={a.busy} onClick={()=>runReply(a,action,onOpen)}>{action.label}</button>)}{!a.questionCode&&!a.needsLocation&&!!a.thread.length&&<button type="button" onClick={()=>a.setOverlay('filters')}>شرایط خرید</button>}</div>}

@@ -22,7 +22,7 @@ for(const width of [320,390])test(`mobile map drawer preserves conversation and 
   const scroll=await page.locator('[data-chat-scroll]').evaluate(el=>el.scrollTop),messages=await page.locator('[data-message-role]').count();
   await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
   const panel=page.locator('[data-map-panel]'),sheet=page.locator('[data-mobile-store-sheet]');
-  await expect(panel).toBeVisible();await expect(sheet).toHaveAttribute('data-sheet-stop','peek');
+  await expect(panel).toBeVisible();await expect(sheet).toHaveAttribute('data-sheet-stop','collapsed');await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();await expect(sheet).toHaveAttribute('data-sheet-stop','peek');
   await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
   const canvas=await page.locator('.maplibregl-canvas').elementHandle();
   const handle=page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true});

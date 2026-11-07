@@ -6,7 +6,7 @@ const selected=page=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('inpers
 async function start(page,position=true){
  await page.goto('/');await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();
  await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();
- if(position){await map(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
+ if(position){await map(page).locator('[data-mobile-map-header]').getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
  await page.getByRole('textbox',{name:'پیام به دستیار روی نقشه',exact:true}).fill('گوشی می‌خواهم');await page.getByRole('button',{name:'ارسال پیام روی نقشه',exact:true}).click();
 }
 async function offersFixture(page,request,{unknown=false}={}){
@@ -49,7 +49,9 @@ for(const width of [320,390])test(`thin map bar reports thinking, selects the ne
  await expect(journey.getByRole('list',{name:'مراحل مراجعه'}).locator('li')).toHaveCount(4);
  expect(await journey.locator('[aria-current=step] span').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(12);
  await page.getByRole('button',{name:'جمع کردن فهرست برای دیدن کامل نقشه',exact:true}).click();await expect(journey).toBeHidden();
- await expect.poll(async()=>Math.round((await map(page).locator('[data-mobile-store-sheet]').boundingBox()).height)).toBe(92);
+ // The always-visible destination address adds its measured height to the 92px chrome.
+ await expect(map(page).locator('[data-mobile-store-sheet]')).toHaveAttribute('data-sheet-stop','collapsed');
+ await expect.poll(async()=>{const sheet=map(page).locator('[data-mobile-store-sheet]');return sheet.evaluate(el=>Math.round(el.getBoundingClientRect().height)-Math.ceil(el.querySelector('.map-sheet-address')?.getBoundingClientRect().height??0)-Math.round(parseFloat(getComputedStyle(el).paddingBottom)||0));}).toBe(92);
  await page.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();await expect(journey).toBeVisible();
  await journey.getByRole('button',{name:'وسیله و زمان حرکت',exact:true}).click();await expect(page.getByRole('dialog',{name:'وسیله، مسیر و زمان رسیدن'})).toBeVisible();await page.getByRole('button',{name:'بستن',exact:true}).click();
  await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready','true',{timeout:25000});
@@ -67,8 +69,9 @@ test('missing coordinates do not produce a false nearest-store selection',async(
 test('a search without a starting position asks for location instead of inventing nearest',async({page,request})=>{
  await page.setViewportSize({width:390,height:844});const {near,far}=await offersFixture(page,request);await start(page,false);
  await expect(map(page).locator('.map-result-notice')).toContainText('موقعیت جست‌وجو را تعیین کن');expect(await selected(page)).toBeNull();
- await map(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
+ await map(page).locator('[data-mobile-map-header]').getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
  await expect.poll(async()=>(await selected(page))?.offer_id).toBe(near.offer_id);await expect(map(page).locator('.map-result-notice')).toContainText('نزدیک‌ترین');
- await map(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.701');await page.getByLabel('طول جغرافیایی').fill('51.401');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();await expect.poll(async()=>(await selected(page))?.direct_distance_meters).toBeGreaterThan(100);expect((await selected(page)).offer_id).toBe(near.offer_id);
- await map(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.74');await page.getByLabel('طول جغرافیایی').fill('51.46');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();await expect.poll(async()=>(await selected(page))?.offer_id).toBe(far.offer_id);
+ // Once set, the shortcut leaves the thin header; changing location remains in the drawer.
+ await map(page).locator('.map-sheet-heading').getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.701');await page.getByLabel('طول جغرافیایی').fill('51.401');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();await expect.poll(async()=>(await selected(page))?.direct_distance_meters).toBeGreaterThan(100);expect((await selected(page)).offer_id).toBe(near.offer_id);
+ await map(page).locator('.map-sheet-heading').getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.74');await page.getByLabel('طول جغرافیایی').fill('51.46');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();await expect.poll(async()=>(await selected(page))?.offer_id).toBe(far.offer_id);
 });

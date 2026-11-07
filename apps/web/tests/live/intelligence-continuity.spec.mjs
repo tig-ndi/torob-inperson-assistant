@@ -55,7 +55,7 @@ test('sending before status is loaded waits and starting over cancels the pendin
   const calls=[];await mockAssistant(page,request,calls);let statusRoute;
   await page.route('**/api/assistant/status',r=>{statusRoute=r;});await page.goto('/');
   await send(page,'کفش برای پیاده‌روی می‌خواهم');await expect(page.getByRole('button',{name:'توقف بررسی',exact:true})).toBeVisible();expect(calls).toHaveLength(0);
-  await page.getByRole('button',{name:'گفت‌وگوی تازه',exact:true}).click();await statusRoute.fulfill({json:{ready:true,reason:'ready',remaining_calls:20}});
+  await page.getByRole('button',{name:'گفت‌وگوی تازه',exact:true}).click();await page.getByRole('button',{name:'بله، گفت‌وگوی تازه',exact:true}).click();await statusRoute.fulfill({json:{ready:true,reason:'ready',remaining_calls:20}});
   await expect(page.getByRole('heading',{name:/چی لازم داری/})).toBeVisible();await page.waitForTimeout(250);expect(calls).toHaveLength(0);
   await send(page,'گوشی می‌خواهم');await expect.poll(()=>calls.length).toBe(1);
 });
