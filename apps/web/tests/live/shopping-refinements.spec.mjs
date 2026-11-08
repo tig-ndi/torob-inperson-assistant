@@ -4,7 +4,7 @@ import {mockAssistant,send,layout} from './helpers.mjs';
 
 async function manualPosition(page){
   await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();
-  await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');
+  await page.getByText('ورود دقیق مختصات',{exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');
   await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
 }
 test('removing only-open retains local product, location and exact budget',async({page,request})=>{

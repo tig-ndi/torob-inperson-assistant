@@ -138,9 +138,9 @@ export function Slider({ value, min, max, step, onChange, label }: { value: numb
   );
 }
 
-export function Check2({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+export function Check2({ on, onClick, label, disabled=false }: { on: boolean; onClick: () => void; label: string; disabled?:boolean }) {
   return (
-    <button onClick={onClick} role="checkbox" aria-checked={on} className="flex min-h-11 items-center gap-2 text-[13px] text-ink">
+    <button onClick={onClick} disabled={disabled} role="checkbox" aria-checked={on} className="flex min-h-11 items-center gap-2 text-[13px] text-ink disabled:opacity-50">
       <span className={cx("grid size-[22px] place-items-center rounded-md border-2 transition-colors", on ? "border-brand bg-brand text-[var(--on-primary)]" : "border-ink2/60 bg-bg")}>
         {on && <Check size={14} strokeWidth={3} />}
       </span>

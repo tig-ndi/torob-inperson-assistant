@@ -2,7 +2,7 @@ import {Bike,Car,Clock,Footprints,MoreHorizontal,Navigation} from 'lucide-react'
 import TouchAction from './TouchAction';
 import {PurchaseSteps} from './PurchaseJourney';
 import type {Shopping} from './state';
-import {fa} from './data';
+import {fa,money} from './data';
 import {travelLabels} from './upgrades';
 
 export default function MobileMapJourney({a}:{a:Shopping}){
@@ -16,7 +16,8 @@ export default function MobileMapJourney({a}:{a:Shopping}){
  const road=a.roadRoutes.find(r=>r.offer_id===a.selected?.offer_id);
  const Mode={walking:Footprints,driving:Car,cycling:Bike,manual:Clock}[a.travelMode];
  return <section className="mobile-map-journey" aria-label="مراحل خرید روی نقشه" data-mobile-journey data-purchase-stage={p.stage}>
-  <PurchaseSteps a={a}/>
+  <p className="map-destination-summary">مقصد انتخاب‌شده: {a.selected.shop.name} · {money(a.selected.price_toman)} تومان؛ قیمت ثبت‌شده</p>
+  <div className="map-journey-steps"><PurchaseSteps a={a}/></div>
   {p.stage==='done'&&<p role="status">{p.result==='purchased'?'خریدت انجام شد؛ این خرید تمام است':p.result==='later'?'برای مراجعهٔ بعد ذخیره شد':'بدون ثبت خرید؛ این مراجعه تمام شد'}</p>}
    <div className="mobile-journey-actions">
     <TouchAction className="primary-action" disabled={a.busy} action={main.action}>{main.label}</TouchAction>

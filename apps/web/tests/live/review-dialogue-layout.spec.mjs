@@ -33,7 +33,7 @@ test('delegated phone kind resumes a short product query after location without 
  await page.goto('/');await send(page,'گوشی میخوام؛ نزدیک ترین جا رو خودت انتخاب کن تا پیاده برم');
  await page.getByRole('button',{name:'هوشمند',exact:true}).click();await expect(page.locator('.inline-location')).toBeVisible();
  await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();
- await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
+ await page.getByText('ورود دقیق مختصات',{exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();
  await expect(page.locator('.header-location')).toHaveCount(0);
  await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
  await expect(page.getByRole('alert')).toHaveCount(0);expect(queries.every(q=>q.split(/\s+/).length<=12)).toBe(true);

@@ -21,7 +21,7 @@ export function useFollowupAlternatives(input:Input){
     setState({active:false,busy:false,items:[],error:null});
     if(!input.offer||!outcome||!['closed','out_of_stock','no_answer'].includes(outcome))return;
     const c=new AbortController();setState({active:true,busy:true,items:[],error:null});
-    if(announced.current!==stamp){announced.current=stamp;input.onMessage('assistant',`${source==='simulated'?'شبیه‌سازی':'گزارش تو'}: این فروشگاه برای مراجعه مناسب نیست؛ جایگزین‌های باز با همان شرایط را بررسی می‌کنم.`,'action');}
+    if(announced.current!==stamp){announced.current=stamp;input.onMessage('assistant',`${source==='simulated'?'آزمایشی؛ بدون ارتباط واقعی':'نتیجهٔ بررسی من'}: این فروشگاه برای مراجعه مناسب نیست؛ جایگزین‌های باز با همان شرایط را بررسی می‌کنم.`,'action');}
     api.alternatives(input.offer,{...input.filters,open:true},input.position,outcome as 'closed'|'out_of_stock'|'no_answer',source,c.signal,0,input.visitTime,input.visitDate??null).then(result=>{
       if(c.signal.aborted)return;const items=result.alternatives.items.slice(0,3);input.onOffers(items);setState({active:true,busy:false,items,error:null});
     }).catch(error=>{if(!c.signal.aborted)setState({active:true,busy:false,items:[],error:error instanceof Error?error.message:'جایگزین‌ها دریافت نشدند.'});});

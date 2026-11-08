@@ -11,6 +11,16 @@ test('journey children retain their parent and returning does not duplicate entr
  assert.deepEqual(openPanel(stack,'journey'),['journey']);assert.deepEqual(openPanel(stack,null),[]);
  assert.deepEqual(openPanel(['filters'],'history'),['history']);
 });
+
+test('follow-up views preserve the buyer panel and return without reopening hidden siblings',()=>{
+ const root=openPanel([],'followup');
+ for(const child of ['report','draft','demo','checks']){
+  const stack=openPanel(root,child);assert.deepEqual(stack,['followup',child]);
+  assert.deepEqual(openPanel(stack,'followup'),root);assert.deepEqual(openPanel(stack,null),[]);
+ }
+ assert.deepEqual(openPanel(['journey','followup'],'demo'),['journey','followup','demo']);
+ assert.deepEqual(openPanel(['followup','demo'],'report'),['followup','demo','report']);
+});
 test('stage tabs rewind to any reached stage without marking a purchase or losing evidence',()=>{
  const ready={...freshProgress('offer'),evidence:{source:'simulated',outcome:'available'}};
  const moving=advancePurchase(ready,'start','2026-11-08T10:00:00Z'),arrived=advancePurchase(moving,'arrive'),done=advancePurchase(arrived,'purchased');

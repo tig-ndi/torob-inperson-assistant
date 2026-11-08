@@ -14,12 +14,12 @@ export async function acknowledgeVisit(page){
 }
 
 export async function openJourneyTools(page){
- const details=page.locator('.chat-pane .journey-legacy-tools');
- await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();
+ const legacy=page.locator('.chat-pane .journey-legacy-tools');const details=await legacy.count()?legacy:page.locator('.chat-pane .journey-more');
+ await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();const secondary=details.locator('.journey-secondary');if(await secondary.count()&&!await secondary.evaluate(e=>e.open))await secondary.locator(':scope>summary').click();
 }
 export async function openJourneyMore(page){
  const details=page.locator('.chat-pane .purchase-journey .journey-more');
- await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();
+ await expect(details).toHaveCount(1);if(!await details.evaluate(e=>e.open))await details.locator(':scope>summary').click();const secondary=details.locator('.journey-secondary');if(await secondary.count()&&!await secondary.evaluate(e=>e.open))await secondary.locator(':scope>summary').click();
 }
 
 export async function openMobileTools(page){

@@ -155,7 +155,7 @@ export function useShopping() {
         setNeed(old=>old?.topic_query===q?{...old,max_price_toman:effectiveFilters.max||null,offer_sort:'nearest'}:{version:1,topic_query:q,category_name:result.category_name??null,category_cleared:false,max_price_toman:effectiveFilters.max||null,budget_needs_input:false,offer_sort:'nearest',battery_requirement:{status:'unspecified',minimum_mah:null},review_topics:[],pending_requirements:[]});
       }
       if(!more){
-        const answer=result.items.length&&!!delegation?'گزینه‌های مرتبط را پیدا کردم؛ انتخاب مقصد و برنامهٔ رفتن را با شرایطت ادامه می‌دهم.':result.items.length?'این گزینه‌ها در اطلاعات ثبت‌شده پیدا شدند. مدل مناسب را انتخاب کن تا فروشگاه‌ها، ساعت کاری و مسیر رفتن را بررسی کنم.':'با این عبارت و بودجه، محصولی در مجموعه پیدا نکردم. نام کوتاه‌تر یا بودجهٔ دیگری را امتحان کن.';
+        const answer=result.items.length&&!!delegation?'گزینه‌های مرتبط را پیدا کردم؛ انتخاب مقصد و خرید جاری را با شرایطت ادامه می‌دهم.':result.items.length?'این گزینه‌ها در اطلاعات ثبت‌شده پیدا شدند. مدل مناسب را انتخاب کن تا فروشگاه‌ها، ساعت کاری و مسیر رفتن را بررسی کنم.':'با این عبارت و بودجه، محصولی در مجموعه پیدا نکردم. نام کوتاه‌تر یا بودجهٔ دیگری را امتحان کن.';
         say('assistant',answer);
         if(silent)setMessages(old=>old.at(-1)?.role==='user'?[...old.slice(-4),{role:'assistant',content:answer}]:old);
       }
@@ -196,7 +196,7 @@ export function useShopping() {
         else{if(!retrying)say('user',displayText);setDelegation({...task,request:(task.request+'؛ '+q).slice(-1000)});say('assistant','این توضیح را نگه داشتم. فقط نوع گوشی را بگو: هوشمند، دکمه‌ای یا فرقی ندارد؟');return;}
       }else if(!task.phoneKind&&!task.offerId&&!product&&selectedProductIndex(q,products.length)===null&&broadPhone(topic)&&!/[a-z0-9۰-۹]|سامسونگ|شیائومی|نوکیا|هواوی|آنر|موتورولا/i.test(q)){
         task={...task,phoneKind:kind??'ask'};setDelegation(task);
-        if(!kind){if(!retrying)say('user',displayText);setQuery('گوشی');setScreen('decide');setQuestionCode('phone_kind');setNeedsLocation(false);say('assistant','انتخاب و برنامهٔ رفتن با من. فقط گوشی هوشمند می‌خواهی یا دکمه‌ای؟ اگر فرقی ندارد بگو تا خودم انتخاب کنم.');return;}
+        if(!kind){if(!retrying)say('user',displayText);setQuery('گوشی');setScreen('decide');setQuestionCode('phone_kind');setNeedsLocation(false);say('assistant','انتخاب و همراهی خرید با من. فقط گوشی هوشمند می‌خواهی یا دکمه‌ای؟ اگر فرقی ندارد بگو تا خودم انتخاب کنم.');return;}
       }
       if((command==='delegate'||command==='alternative')&&contextBefore&&products.length&&!namedTopics.length&&!/بودجه|تومان|میلیون|رنگ|سایز|درگاه/.test(q)){
         if(!retrying)say('user',displayText);const transport=travelFromText(q);if(transport){setTravelMode(transport);setTravelMinutes('');}
@@ -303,7 +303,7 @@ export function useShopping() {
   const contact=(o:Offer)=>{
     if(purchaseProgress?.stage==='done')setPurchaseProgress(freshProgress(o.offer_id));
     setDelegation(null);setRestoredTrip(null);selectOffer(o);setScreen('contact');setOverlay(null);setPrepared(null);
-    say('assistant',`پیش‌نویس پیگیری برای «${o.shop.name??'فروشگاه انتخاب‌شده'}» را آماده می‌کنم. تماس و واتساپ در این دیتاست به‌صورت شبیه‌سازی‌اند.`,'action');
+    say('assistant',`متن پیشنهادی برای «${o.shop.name??'فروشگاه انتخاب‌شده'}» را آماده می‌کنم. آزمایشی؛ بدون ارتباط واقعی با فروشنده.`,'action');
     void run(async signal=>{if(product?.product_id!==o.product_id){const item=knownProducts[o.product_id]??await api.product(o.product_id,signal);if(signal.aborted)return;setProduct(item);}const p=await api.prepare(o,position,signal,visitIntent?.localTime??null,visitIntent?.visitDate??null);if(!signal.aborted){setPrepared(p);setSelected(p.selected_offer);}});
   };
   const restore=(trip:SavedTrip)=>{setPurchaseProgress(null);setDelegation(null);setFollowupEvent(null);setQuestionCode('');setJourneyId('saved:'+trip.id);setCompletedVisit(null);setVisitIntent(null);setFilters({...DEFAULT_FILTERS,sort:position?'nearest':'price'});void run(async signal=>{
@@ -432,7 +432,7 @@ export function useShopping() {
     const p=winner?(knownProducts[winner.product_id]??candidateVisits.find(v=>v.product.product_id===winner.product_id)?.product):null;
     if(!winner||!p){setSelected(null);setDelegation(old=>old?{...old,status:'blocked',note:candidateError??arrivalError??upgrades.roadError??'بین مقصدهای بررسی‌شده، مسیر و فرصت خرید مطمئن پیدا نشد. ساعت، روش رفتن یا محدوده را تغییر بده.'}:old);return;}
     setProduct(p);selectOffer(winner);retainOffers([winner]);setScreen('trip');setOverlay(null);setMapMode(current=>current==='open'?'open':'auto');setRestoredTrip(null);setDelegation(old=>old?{...old,status:'planned',offerId:winner.offer_id,note:`از بین ${delegationCandidates.length} مقصد نزدیکِ بررسی‌شده، ${delegation.goal==='cheapest'?'کمترین قیمتِ دارای فرصت مراجعه':delegation.goal==='nearest'?'مسیر کوتاه‌ترِ دارای فرصت مراجعه':'مسیر سریع‌ترِ دارای فرصت مراجعه'} انتخاب شد؛ موجودی هنوز تأیید نشده است.`}:old);
-    say('assistant',`«${winner.shop.name}» را انتخاب کردم و برنامهٔ رفتن را آماده کردم. مسیر و جزئیات همین انتخاب روی نقشه هم آماده‌اند. موجودی را پیش از حرکت بررسی کن.`,'action');
+    say('assistant',`«${winner.shop.name}» را انتخاب کردم و مقصد خرید جاری آماده است. مسیر و جزئیات همین انتخاب روی نقشه هم آماده‌اند. موجودی را پیش از حرکت بررسی کن.`,'action');
   },[candidateVersion,candidateContext,arrivalVersion,arrivalKey,travelMode,delegation,needsLocation,busy,candidateBusy,arrivalBusy,upgrades.roadBusy,upgrades.roadRoutes,upgrades.roadError,position,products,questionCode,need,candidateVisits,candidateError,destinationCoverage,delegationCandidates,arrivalChecks,arrivalError,roadConsent]);
   useEffect(()=>{
     if(delegation?.status==='pending'&&delegation.phoneKind!=='ask'&&!busy&&!questionCode&&productPage&&!products.length){setDelegation(old=>old?{...old,status:'blocked',note:'با شرایط فعلی کالای منطبق پیدا نشد؛ بودجه یا شرط همین خرید را تغییر بده تا انتخاب را ادامه بدهم.'}:old);}

@@ -3,7 +3,7 @@ import {mockAssistant,send,layout} from './helpers.mjs';
 
 const state=(changes={})=>({version:1,topic_query:'گوشی',category_name:'گوشی موبایل',category_cleared:false,max_price_toman:'10000000',budget_needs_input:false,offer_sort:'price',battery_requirement:{status:'unspecified',minimum_mah:null},review_topics:[],pending_requirements:[],...changes});
 function clarification(route,need,code,question){const input=route.request().postDataJSON();return route.fulfill({json:{request_id:input.request_id,status:'needs_input',query:need.topic_query,category_name:need.category_name,max_price_toman:need.max_price_toman,question,question_code:code,products:null,offer_sort:need.offer_sort,battery_requirement:need.battery_requirement,need_state:need,explanation:null}});}
-async function position(page){await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
+async function position(page){await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();await page.getByText('ورود دقیق مختصات',{exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
 
 test('approved outlined branding is used by the app and browser icons',async({page,request})=>{
   await mockAssistant(page,request);await page.goto('/');

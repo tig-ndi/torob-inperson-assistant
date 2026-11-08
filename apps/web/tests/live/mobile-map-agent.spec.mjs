@@ -6,7 +6,7 @@ const input=page=>page.getByRole('textbox',{name:'پیام به دستیار ر�
 async function openMap(page){await page.getByRole('button',{name:'رفتن به نقشه',exact:true}).click();await expect(input(page)).toBeVisible();}
 async function position(page){
  await panel(page).getByRole('button',{name:'موقعیت جست‌وجو',exact:true}).click();
- await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');
+ await page.getByText('ورود دقیق مختصات',{exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');
  await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();await expect(input(page)).toBeVisible();
 }
 async function revealSheet(page){if(await panel(page).locator('[data-mobile-store-sheet]').getAttribute('data-sheet-stop')==='collapsed')await panel(page).getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true}).click();}

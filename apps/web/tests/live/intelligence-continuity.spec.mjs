@@ -15,13 +15,13 @@ for(const method of ['coordinates','gps','map','neighbourhood'])test(`location r
   }else{
     await page.getByRole('region',{name:'گفت‌وگوی خرید'}).getByRole('button',{name:'انتخاب موقعیت',exact:true}).click();
     if(method==='neighbourhood')await page.getByLabel('محلهٔ تهران (مرکز تقریبی)').selectOption('d6');
-    else{await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
+    else{await page.getByText('ورود دقیق مختصات',{exact:true}).click();await page.getByLabel('عرض جغرافیایی').fill('35.7');await page.getByLabel('طول جغرافیایی').fill('51.4');await page.getByRole('button',{name:'اعمال مختصات',exact:true}).click();}
   }
   await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
   if(method==='map'){await expect(page.locator('[data-map-panel]')).toBeVisible();await page.getByRole('button',{name:'بازگشت به گفت‌وگو',exact:true}).click();}
   await expect(page.getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true}).first()).toBeVisible();
   expect(searches.some(p=>p.get('q')==='گوشی'&&p.get('sort_by')==='nearest'&&p.has('user_lat')&&p.has('user_lon'))).toBe(true);
-  await expect(page.getByRole('log')).not.toContainText('چه نوع کالایی');expect(calls).toHaveLength(0);
+  await expect(page.locator('.chat-thread')).not.toContainText('چه نوع کالایی');expect(calls).toHaveLength(0);
   await page.reload();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','results');
   if(method==='coordinates'){
     // Reproduce the persisted shape left by the previous version.

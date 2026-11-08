@@ -2,7 +2,7 @@ import type { Offer, Product } from '../api';
 export type { Offer, Product };
 export type { Position, NeedState, PreparedFollowup, AssistantTurn } from '../app/base/domain/contracts';
 export type Screen = 'home' | 'decide' | 'results' | 'stores' | 'compare' | 'contact' | 'trip';
-export type Overlay = 'filters' | 'location' | 'alts' | 'nav' | 'menu' | 'voice' | 'history' | 'comparison' | 'travel' | 'checks' | 'reply' | 'journey' | 'directions' | 'shops' | 'plan' | 'postpone' | null;
+export type Overlay = 'filters' | 'location' | 'alts' | 'nav' | 'menu' | 'voice' | 'history' | 'comparison' | 'travel' | 'checks' | 'reply' | 'journey' | 'directions' | 'shops' | 'plan' | 'postpone' | 'followup' | 'demo' | 'draft' | 'report' | null;
 export type Place = {lat:number;lon:number;label:string};
 export type VisitInsights = {evaluated_at:string;time_source:'selected_time'|'server_clock';nearby_km:number;search_km:number;
   nearby:{shops:number;declared_open:number;declared_closed:number;unknown:number;truncated:boolean};

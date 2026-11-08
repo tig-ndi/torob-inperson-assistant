@@ -263,6 +263,22 @@
 }
 @media(max-width:999px){.agent-app .purchase-steps li[aria-current="step"] span{font-size:12px!important}}
 
+.conversation-history:not(:has(.chat-message)){display:none}.conversation-history>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);border-bottom:1px solid var(--border)}.conversation-history[open]{margin-bottom:12px}.conversation-history .chat-thread{padding-block:8px}.followup-draft-text{white-space:pre-wrap;user-select:text;font-size:13px;line-height:2}.precise-location>summary,.voice-unavailable summary,.journey-secondary>summary{min-height:44px;cursor:pointer;display:flex;align-items:center;font-size:12px;color:var(--text-2)}.precise-location[open]{display:grid;gap:12px}.journey-secondary{border-top:1px solid var(--border);margin-top:8px}.followup-panel>p{font-size:12px;line-height:1.9}.map-destination-summary{font-size:11px;line-height:1.7;margin:0;color:var(--text-2)}
+.extra-starts>summary{display:flex;align-items:center;min-height:44px;font-size:12px;color:var(--text-2);cursor:pointer}.welcome>.suggestion-grid>.suggestion-card{grid-column:1/-1;min-height:80px;border-color:var(--primary)}
+.comparison-continue.contact-action{background:var(--primary);color:var(--on-primary);border:0;border-radius:14px;min-height:44px;padding:8px 12px;font-weight:700;font-size:14px}
+@media(max-width:999px){
+ .agent-app .welcome-position{margin-block:12px;padding:10px;background:transparent}.welcome-position .inline-actions{gap:8px}.agent-app .welcome h2{margin-top:0;font-size:24px}.agent-app .welcome{padding-top:8px}.agent-app .suggestion-card{min-height:80px}.welcome .suggestion-grid{gap:8px}.welcome-position p{font-size:11px}
+ .conversation-history>summary{min-height:44px;font-size:11px}.active-tool .product-results,.active-tool>[data-screen]{padding-top:8px}
+ .mobile-map-sheet[data-compact-journey=true] .map-journey-steps{display:none}
+ .mobile-map-sheet[data-compact-journey=true] .map-sheet-handle{height:44px;min-height:44px}
+ .mobile-map-sheet[data-compact-journey=true] .mobile-journey-actions>.secondary-action{display:none}
+ .mobile-map-sheet[data-compact-journey=true] .mobile-map-journey{padding:4px 8px 6px}
+ .mobile-map-sheet[data-compact-journey=true] .mobile-view-switch{min-height:48px;padding:2px 8px}
+ .mobile-map-sheet[data-compact-journey=true] .map-sheet-address{padding-bottom:2px}
+ .mobile-map-sheet .mobile-view-switch>button:first-child{color:var(--text-2);background:transparent;border-color:transparent;font-size:11px}
+ .mobile-map-sheet .mobile-view-switch>button:first-child svg{width:15px;height:15px}
+ .mobile-map-sheet[data-compact-journey=true] .map-destination-summary{font-size:10px;line-height:1.6}
+}
 /* Desktop uses the same compact actions and appearance menu as mobile. */
 @media(min-width:1000px){
  .agent-app .chat-header{position:relative;display:grid;grid-template-columns:88px 34px minmax(0,1fr) 44px;gap:8px;height:72px;min-height:72px;padding:12px 14px}
