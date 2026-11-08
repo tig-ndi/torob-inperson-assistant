@@ -15,7 +15,7 @@ export default function ThemePicker({theme,onChange,compact}:{theme:Theme;onChan
     return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);};
   },[open]);
   return <div ref={root} className={'theme-picker'+(compact?' compact':'')}>
-    {compact&&<Hint text="انتخاب ظاهر روشن، تیره یا هماهنگ با دستگاه"><button ref={trigger} className="icon-button" aria-label="انتخاب ظاهر برنامه" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><Current size={20}/></button></Hint>}
-    {(!compact||open)&&<div className="theme-switch" role="group" aria-label="ظاهر برنامه">{choices.map(([value,Icon,label,hint])=><Hint key={value} text={hint}><button type="button" aria-label={`ظاهر ${label}`} aria-pressed={theme===value} onClick={()=>{onChange(value);setOpen(false);if(compact)trigger.current?.focus();}}><Icon size={18}/></button></Hint>)}</div>}
+    {compact&&<Hint text="انتخاب ظاهر روشن، تیره یا هماهنگ با دستگاه"><button ref={trigger} className="icon-button" aria-label="انتخاب ظاهر برنامه" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><Current size={20}/><span>{theme==='system'?'مطابق سیستم':theme==='light'?'حالت روشن':'حالت تاریک'}</span></button></Hint>}
+    {(!compact||open)&&<div className="theme-switch" role="group" aria-label="ظاهر برنامه">{choices.map(([value,Icon,label,hint])=><Hint key={value} text={hint}><button type="button" aria-label={`ظاهر ${label}`} aria-pressed={theme===value} onClick={()=>{onChange(value);setOpen(false);if(compact)trigger.current?.focus();}}><Icon size={18}/><span>{value==='system'?'مطابق سیستم':value==='light'?'روشن':'تاریک'}</span></button></Hint>)}</div>}
   </div>;
 }

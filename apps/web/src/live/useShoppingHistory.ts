@@ -35,7 +35,7 @@ export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shoppin
       }else if(a.screen==='trip')path.push(frame('trip',route('trip',p)));
     }else if(a.screen==='decide')path.push(frame('decide',route('decide')));
     details.current=details.current.filter(el=>el.isConnected&&el.open);
-    const disclosures=(scope:'chat'|'map'|'dialog')=>details.current.filter(el=>scope==='dialog'?!!el.closest('.dialog-backdrop'):scope==='map'?!!el.closest('.map-pane')&&!el.closest('.dialog-backdrop'):!el.closest('.map-pane,.dialog-backdrop')).map(el=>frame('details:'+elementKey(el),()=>{el.open=true;},()=>{el.open=false;}));
+    const disclosures=(scope:'chat'|'map'|'dialog',panel?:string)=>details.current.filter(el=>scope==='dialog'?!!el.closest('.dialog-backdrop')&&(!panel||el.closest<HTMLElement>('[data-overlay-panel]')?.dataset.overlayPanel===panel):scope==='map'?!!el.closest('.map-pane')&&!el.closest('.dialog-backdrop'):!el.closest('.map-pane,.dialog-backdrop')).map(el=>frame('details:'+elementKey(el),()=>{el.open=true;},()=>{el.open=false;}));
     path.push(...disclosures('chat'));
     if(mapVisible&&!desktop){
       path.push(frame('map',()=>latest.current.a.setMapMode('open'),()=>{latest.current.a.setPicking(false);latest.current.a.setMapMode('closed');}));
@@ -48,7 +48,7 @@ export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shoppin
         path.push(frame('map-popup:'+elementKey(popup),()=>{if(shop)node.querySelector<HTMLButtonElement>(`[data-map-shop="${CSS.escape(shop)}"]`)?.click();},()=>dismiss.click()));
       }
     }
-    if(a.overlay){const overlay=a.overlay;path.push(frame('dialog:'+overlay,()=>latest.current.a.setOverlay(overlay),()=>latest.current.a.setOverlay(null)));path.push(...disclosures('dialog'));}
+    a.overlayStack.forEach((overlay,index)=>{const stack=a.overlayStack.slice(0,index+1);path.push(frame('dialog:'+overlay,()=>latest.current.a.restorePanels(stack),()=>latest.current.a.restorePanels(stack.slice(0,-1))));path.push(...disclosures('dialog',overlay));});
     if(a.sellerDialog){const seller=a.sellerDialog;path.push(frame('seller',()=>latest.current.a.setSellerDialog(seller),()=>latest.current.a.setSellerDialog(null)));}
     if(a.newConversationPending)path.push(frame('new-conversation',()=>latest.current.a.newConversation(),()=>latest.current.a.cancelNewConversation()));
     for(const el of node.querySelectorAll<HTMLElement>('[data-navigation-confirm]')){

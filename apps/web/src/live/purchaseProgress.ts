@@ -17,6 +17,15 @@ export function rewindPurchase(p:PurchaseProgress):PurchaseProgress{
  const stage:PurchaseStage=p.stage==='en_route'?'ready':p.stage==='arrived'?(p.startedAt?'en_route':'ready'):p.problem?'problem':p.result==='purchased'||p.result==='not_purchased'?'arrived':p.startedAt?'en_route':'ready';
  return {...p,stage,result:null,finishedAt:null,startedAt:stage==='ready'?null:p.startedAt};
 }
+/** Stage tabs revisit completed steps; they never fabricate arrival or a purchase. */
+export function revisitPurchase(p:PurchaseProgress,index:number):PurchaseProgress|null{
+ const current={ready:0,en_route:1,arrived:2,problem:p.startedAt?2:0,done:3}[p.stage];
+ if(!Number.isInteger(index)||index<0||index>current||index>3)return null;
+ if(index===current)return p;
+ if(index===1&&!p.startedAt||index===2&&p.stage==='done'&&!['purchased','not_purchased'].includes(p.result??''))return null;
+ const stage:PurchaseStage=index===0?'ready':index===1?'en_route':'arrived';
+ return {...p,stage,result:null,finishedAt:null,problem:null,startedAt:index===0?null:p.startedAt};
+}
 export function purchaseAction(text:string):PurchaseAction|null{
  const s=text.replace(/\u200c/g,' ').replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[.!؟،]/g,'').trim();
  if(/^(?:بزن بریم|شروع کن|شروع حرکت|شروع مسیریابی|راه بیفتیم|حرکت کنیم)$/.test(s))return 'start';
