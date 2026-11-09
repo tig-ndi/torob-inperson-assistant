@@ -281,9 +281,17 @@
 }
 /* Desktop uses the same compact actions and appearance menu as mobile. */
 @media(min-width:1000px){
- .agent-app .chat-header{position:relative;display:grid;grid-template-columns:88px 34px minmax(0,1fr) 44px;gap:8px;height:72px;min-height:72px;padding:12px 14px}
- .chat-header>.header-actions{grid-column:1;grid-row:1;gap:0}.chat-header>.brand-mark{grid-column:2;grid-row:1}.chat-header>.header-title{grid-column:3;grid-row:1;min-width:0}.chat-header .header-title h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-header .header-actions .icon-button{width:44px;min-width:44px;height:44px}.chat-header .header-actions>.hint-anchor:has([aria-label="برنامه‌ها و نتایج قبلی"]){display:none}
+ .agent-app .chat-header{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) 88px 44px;gap:8px;height:72px;min-height:72px;padding:12px 14px}
+ .chat-header>.header-actions{grid-column:3;grid-row:1;gap:0}.chat-header>.brand-mark{grid-column:1;grid-row:1}.chat-header>.header-title{grid-column:2;grid-row:1;min-width:0}.chat-header .header-title h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-header .header-actions .icon-button{width:44px;min-width:44px;height:44px}.chat-header .header-actions>.hint-anchor:has([aria-label="برنامه‌ها و نتایج قبلی"]){display:none}
  .chat-header>.mobile-header-menu{display:block;position:relative;grid-column:4;grid-row:1;flex-shrink:0}.chat-header .mobile-header-menu>summary{display:grid;place-items:center;width:44px;height:44px;min-height:44px;list-style:none;cursor:pointer;border-radius:12px}.mobile-header-menu>summary::-webkit-details-marker{display:none}
  .mobile-header-options{position:absolute;left:0;top:48px;width:270px;z-index:25;padding:8px;border:1px solid var(--border);border-radius:16px;background:var(--bg);box-shadow:var(--shadow-2)}.mobile-header-options>button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:8px 12px;text-align:start;font-size:13px;border-radius:10px}
  .mobile-header-options .theme-picker,.mobile-header-options .theme-picker>.hint-anchor{display:block;width:100%}.mobile-header-options .theme-picker>.hint-anchor>.icon-button{display:flex;gap:10px;width:100%;min-height:44px;justify-content:flex-start;padding:8px 12px;font-size:12px}.mobile-header-options .theme-switch{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;padding:4px;gap:3px}.mobile-header-options .theme-switch button{display:flex;flex-direction:column;gap:4px;width:100%;min-height:52px;font-size:10px}.mobile-header-options .theme-picker button span{display:inline}
 }
+
+/* Keep map markers inside the map's stacking context, below its UI chrome. */
+.map-pane>[data-map-ready]{isolation:isolate;z-index:0}
+/* The compact picker owns one full-width, three-column row inside the menu. */
+.mobile-header-options .theme-picker.compact>.theme-switch{position:static;inset:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;padding:6px;box-sizing:border-box;box-shadow:none}
+.mobile-header-options .theme-picker.compact>.theme-switch>.hint-anchor{display:block;min-width:0;width:100%}
+.mobile-header-options .theme-picker.compact>.theme-switch button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;width:100%;min-width:0;height:auto;min-height:64px;padding:8px 3px;font-size:11px;line-height:1.5}
+.mobile-header-options .theme-picker.compact>.theme-switch button span{display:block;white-space:normal;text-align:center;overflow-wrap:anywhere}
