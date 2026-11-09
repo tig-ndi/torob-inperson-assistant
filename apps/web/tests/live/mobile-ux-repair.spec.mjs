@@ -110,8 +110,8 @@ for(const [width,height] of sizes)test(`dense map markers have distinct 32px tar
  for(const target of targets){expect(target.w).toBeGreaterThanOrEqual(32);expect(target.h).toBeGreaterThanOrEqual(32);expect(target.hit).toBe(true);}
  for(let i=0;i<targets.length;i++)for(let j=i+1;j<targets.length;j++){const a=targets[i],b=targets[j];expect(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y).toBe(true);}
  const previousSelection=JSON.parse((await stored(page)).selected)?.offer_id,target=items.find(o=>o.offer_id!==previousSelection);
- await cluster.focus();await page.keyboard.press('Enter');const popup=page.getByRole('region',{name:'مشخصات فروشگاه روی نقشه',exact:true});await expect(popup).toBeVisible();
- for(const o of items){await expect(popup.getByRole('heading',{name:o.shop.name,exact:true})).toBeVisible();await expect(popup).toContainText(o.shop.address);}
+ await cluster.focus();await page.keyboard.press('Enter');const popup=page.getByRole('region',{name:'انتخاب پیشنهاد روی نقشه',exact:true});await expect(popup).toBeVisible();
+ for(const o of items){await expect(popup.locator(`[data-map-offer="${o.offer_id}"]`)).toContainText(o.shop.name);}const popupBounds=await popup.boundingBox();expect(popupBounds.height).toBeLessThanOrEqual(Math.min(180,height*.3)+1);
  await picture(page,'dense-popup');
  await popup.locator(`[data-map-offer="${target.offer_id}"]`).getByRole('button',{name:'افزودن پیشنهاد به مقایسه',exact:true}).click();
  // Existing comparison behavior also selects that shop, so the new selected
@@ -121,7 +121,7 @@ for(const [width,height] of sizes)test(`dense map markers have distinct 32px tar
  await expect(popup.locator(`[data-map-offer="${target.offer_id}"]`).getByRole('button',{name:'حذف پیشنهاد از مقایسه',exact:true})).toHaveAttribute('aria-pressed','true');
  await settle(page);await page.goBack();await expect(popup).toHaveCount(0);await expect(page.locator('[data-map-panel]')).toBeVisible();
  const nextChoice=items.find(o=>o.offer_id!==target.offer_id);
- await cluster.tap();await expect(popup).toBeVisible();await popup.locator(`[data-map-offer="${nextChoice.offer_id}"]`).getByRole('button',{name:'انتخاب این پیشنهاد',exact:true}).tap();
+ await cluster.tap();await expect(popup).toBeVisible();await popup.locator(`[data-map-offer="${nextChoice.offer_id}"]`).getByRole('button',{name:new RegExp('^انتخاب پیشنهاد')}).tap();
  await expect.poll(async()=>JSON.parse((await stored(page)).selected)?.offer_id).toBe(nextChoice.offer_id);
  expect(calls).toHaveLength(1);await picture(page,'dense-map');await writeFile(join(output,`dense-targets-${width}.json`),JSON.stringify(targets,null,2));
  if(width===360){await page.setViewportSize({width:1440,height:900});await expect(page.locator('button.real-pin:visible')).toHaveCount(3);await expect(page.locator('.real-pin.pin-cluster')).toHaveCount(0);await page.setViewportSize({width,height});await expect(cluster).toHaveCount(1);expect(JSON.parse((await stored(page)).selected).offer_id).toBe(nextChoice.offer_id);}

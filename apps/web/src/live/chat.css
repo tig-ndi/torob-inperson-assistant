@@ -295,3 +295,21 @@
 .mobile-header-options .theme-picker.compact>.theme-switch>.hint-anchor{display:block;min-width:0;width:100%}
 .mobile-header-options .theme-picker.compact>.theme-switch button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;width:100%;min-width:0;height:auto;min-height:64px;padding:8px 3px;font-size:11px;line-height:1.5}
 .mobile-header-options .theme-picker.compact>.theme-switch button span{display:block;white-space:normal;text-align:center;overflow-wrap:anywhere}
+@media(max-width:999px){
+ .agent-app .mobile-map-header{padding:5px;border-radius:20px}
+ .agent-app .mobile-map-header .map-message-form{gap:3px;height:48px;min-height:48px;outline:none}
+ .map-message-form>.map-prompt-field{display:flex;align-items:center;gap:2px;flex:1;min-width:0;padding:0 4px;border:1px solid var(--border);border-radius:15px;background:var(--surface)}
+ .map-prompt-field:focus-within{border-color:var(--primary)}
+ .map-message-form .map-prompt-symbol{color:var(--text-2);flex-shrink:0;margin-inline:3px}
+ .agent-app .map-message-form input{padding-block:9px;font-size:16px}
+ .map-message-form>.map-header-mic,.map-message-form>.map-ready-replies{background:transparent;border:0;border-radius:12px}
+ .agent-app .map-message-form .map-return-chat{display:flex;flex-direction:column;justify-content:center;gap:1px;width:44px;min-width:44px;padding:2px;background:var(--surface);border:1px solid var(--border);border-radius:13px}
+ .agent-app .map-message-form .map-return-chat span{display:block;font-size:9px;line-height:1.2}
+ .map-message-form .map-return-chat svg{width:16px;height:16px}
+ .map-pane .shop-popup{max-width:min(260px,calc(100vw - 32px))!important}
+ .map-shop-choices{display:grid;gap:4px;width:220px;max-width:100%;max-height:min(180px,30dvh);overflow-y:auto;overscroll-behavior:contain;padding:4px 0}
+ .map-shop-choices>b{font-size:12px;padding-inline:4px}
+ .map-shop-choices>[data-map-offer]{display:flex;gap:4px}.map-shop-choices [data-map-offer]>button{display:grid;flex:1;min-width:0;gap:2px;min-height:44px;text-align:start;padding:6px 8px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+ .map-shop-choices [data-map-offer]>.map-choice-compare{flex:0 0 44px;align-content:center;text-align:center;color:var(--primary);font-size:10px;padding:4px}
+ .map-shop-choices [data-map-offer]>button b{font-size:11px}.map-shop-choices [data-map-offer]>button small{font-size:10px;color:var(--text-2)}
+}

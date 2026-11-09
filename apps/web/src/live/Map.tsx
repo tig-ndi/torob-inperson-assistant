@@ -127,6 +127,13 @@ export default function RealMap(p:Props){
         row.append(actions);panel.append(row);
       }return panel;
     };
+    const mobileChoices=(rows:Offer[])=>{
+      const panel=document.createElement('section');panel.dir='rtl';panel.className='map-shop-choices';panel.setAttribute('role','region');panel.setAttribute('aria-label','انتخاب پیشنهاد روی نقشه');
+      const title=document.createElement('b');title.textContent='کدام پیشنهاد؟';panel.append(title);
+      for(const o of rows){const row=document.createElement('div');row.dataset.mapOffer=o.offer_id;const select=document.createElement('button');select.type='button';select.setAttribute('aria-label',`انتخاب پیشنهاد ${o.shop.name??'فروشگاه'}`);const name=document.createElement('b'),price=document.createElement('small');name.textContent=o.shop.name??'فروشگاه';price.textContent=`${money(o.price_toman)} تومان · قیمت ثبت‌شده`;select.append(name,price);select.onclick=()=>{latest.current.onOffer(o);activePopup.current?.remove();};row.append(select);
+        if(latest.current.onCompare){const compare=document.createElement('button'),chosen=!!latest.current.offerComparedIds?.has(o.offer_id);compare.type='button';compare.className='map-choice-compare';compare.textContent=chosen?'حذف':'مقایسه';compare.setAttribute('aria-label',chosen?'حذف پیشنهاد از مقایسه':'افزودن پیشنهاد به مقایسه');compare.setAttribute('aria-pressed',String(chosen));compare.onclick=()=>{latest.current.onCompare?.(o);activePopup.current?.remove();};row.append(compare);}panel.append(row);}
+      return panel;
+    };
     for(const [id,rows] of groups){
       let pin=pins.current.get(id);
       if(!pin){
@@ -134,7 +141,7 @@ export default function RealMap(p:Props){
         pin={marker:new maplibregl.Marker({element:button,anchor:'bottom'}),button,popup,rows,clusterRows:rows,renderPopup:()=>{},closeTimer:null};const entry=pin;
         const keepOpen=()=>{if(entry.closeTimer!==null)clearTimeout(entry.closeTimer);entry.closeTimer=null;};
         const close=()=>{if(!latest.current.desktop)return;keepOpen();entry.closeTimer=window.setTimeout(()=>{if(!entry.popup.getElement()?.contains(document.activeElement))entry.popup.remove();},180);};
-        entry.renderPopup=()=>popup.setDOMContent(details(latest.current.desktop?entry.rows:entry.clusterRows,keepOpen,close));
+        entry.renderPopup=()=>popup.setDOMContent(latest.current.desktop?details(entry.rows,keepOpen,close):mobileChoices(entry.clusterRows));
         const show=(explicit=false)=>{if(!latest.current.desktop&&!explicit)return;keepOpen();if(activePopup.current!==popup)activePopup.current?.remove();activePopup.current=popup;popup.setLngLat(entry.marker.getLngLat());entry.renderPopup();popup.addTo(m);const closeButton=popup.getElement()?.querySelector('.maplibregl-popup-close-button');closeButton?.setAttribute('aria-label','بستن مشخصات فروشگاه');closeButton?.setAttribute('title','بستن مشخصات فروشگاه روی نقشه');};
         button.onpointerenter=()=>show();button.onpointerleave=close;button.onfocus=()=>show();button.onblur=close;button.onclick=e=>{e.stopPropagation();if(!latest.current.desktop&&entry.clusterRows.some(o=>o.shop_id!==entry.rows[0]?.shop_id)){show(true);return;}const selected=entry.rows.find(o=>o.offer_id===latest.current.selected)??entry.rows[0];if(selected)latest.current.onOffer(selected);show();};button.ondblclick=e=>e.stopPropagation();
         pins.current.set(id,pin);pin.marker.setLngLat([rows[0]!.shop.lon!,rows[0]!.shop.lat!]).addTo(m);
@@ -153,7 +160,7 @@ export default function RealMap(p:Props){
     placePins.current=markers.filter(marker=>marker.getElement().classList.contains('real-pin'));
     scheduleDensity();
     return()=>markers.forEach(x=>x.remove());
-  },[ready,p.offers,p.selected,p.position,p.places,p.focus,p.comparedIds,p.offerComparedIds,p.productNames,p.replyByOffer]);
+  },[ready,p.offers,p.selected,p.position,p.places,p.focus,p.comparedIds,p.offerComparedIds,p.productNames,p.replyByOffer,p.desktop]);
   useEffect(()=>{
     const m=map.current;if(!m||!ready)return;
     const features:GeoJSON.Feature[]=[];
