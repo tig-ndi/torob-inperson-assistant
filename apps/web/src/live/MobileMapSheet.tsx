@@ -1,5 +1,5 @@
 import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent,type ReactNode} from 'react';
-import {ArrowRight,Check,ChevronUp,ChevronDown,Map,MessageCircle,Navigation,Store,MapPin} from 'lucide-react';
+import {ArrowRight,Check,ChevronUp,ChevronDown,List,Map,MessageCircle,Navigation,Store,MapPin} from 'lucide-react';
 import TouchAction from './TouchAction';
 import {Price} from '../prototype/ui';
 import {distance,fa,openLabel,type Offer} from './data';
@@ -11,7 +11,7 @@ export function MobileViewSwitch({view,onChat,onMap,mapLabel='نقشه و فرو
 
 export type SheetStop='collapsed'|'peek'|'half'|'full';
 type Props={stop?:SheetStop;onStop?:(stop:SheetStop)=>void;choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;compactJourney?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;busy:boolean;hasMore:boolean;
-  productNames?:Record<string,string>;comparedIds?:ReadonlySet<string>;onNavigate:()=>void;onSelect:(o:Offer)=>void;onInspect:(o:Offer)=>void;onMore:()=>void;onChat:()=>void;onPick:()=>void;onHeight:(height:number)=>void};
+  productNames?:Record<string,string>;comparedIds?:ReadonlySet<string>;onShopList?:()=>void;onOtherShops?:()=>void;onNavigate:()=>void;onSelect:(o:Offer)=>void;onInspect:(o:Offer)=>void;onMore:()=>void;onChat:()=>void;onPick:()=>void;onHeight:(height:number)=>void};
 export default function MobileMapSheet(p:Props){
   const [localSnap,setLocalSnap]=useState<SheetStop>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
   const snap=p.stop??localSnap;
@@ -26,7 +26,7 @@ export default function MobileMapSheet(p:Props){
   const pool=p.selected&&!p.offers.some(o=>o.offer_id===p.selected?.offer_id)?[p.selected,...p.offers]:p.offers;
   const full=Math.max(190,p.viewportHeight-(p.viewportHeight<=500?104:220)),peek=Math.min(p.selected?selectedPeek:p.choosingProduct?260:196,full),half=Math.max(peek,Math.min(full,p.viewportHeight*.48));
   const stops={collapsed:92+safeInset+addressHeight,peek:Math.max(peek,92+safeInset+addressHeight),half:Math.max(half,92+safeInset+addressHeight),full:Math.max(full,92+safeInset+addressHeight)};
-  const height=compact?compactHeight:stops[snap];
+  const height=compact?compactHeight:p.journeyActive&&!collapsed?Math.min(p.viewportHeight-104,Math.max(stops[snap],p.viewportHeight*.78)):stops[snap];
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
     if(!panel||!list||!p.selected||collapsed)return;
@@ -60,11 +60,15 @@ export default function MobileMapSheet(p:Props){
   };
   return <section ref={sheet} className="mobile-map-sheet" data-mobile-store-sheet data-sheet-stop={snap} data-compact-journey={compact?'true':undefined} data-journey-list={p.journeyActive?'true':undefined} style={{height:dragHeight??height,transition:dragHeight===null?'height 240ms ease':'none'}} aria-label="فروشگاه‌های روی نقشه">
     <button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={!collapsed} aria-controls="mobile-map-offers" onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap(p.compactJourney?'full':'peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{collapsed&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
-    {!collapsed&&!compact&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
+    {!collapsed&&!compact&&!p.journeyActive&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
     {p.selected&&<div ref={address} className="map-sheet-address"><DestinationAddress key={p.selected.offer_id} address={p.selected.shop.address}/></div>}
+    {p.journeyActive&&!collapsed&&!compact&&<nav className="map-journey-shops" aria-label="فروشگاه‌های همین خرید">
+     <TouchAction className="secondary-action" action={()=>p.onShopList?.()}><ArrowRight size={18}/>برگشت به فهرست فروشگاه‌ها</TouchAction>
+     <TouchAction className="secondary-action" action={()=>p.onOtherShops?.()}><List size={18}/>دیدن فروشگاه‌های دیگر</TouchAction>
+    </nav>}
     {p.journey&&<div hidden={collapsed&&!compact} className="map-sheet-journey">{p.journey}</div>}
     {p.notice&&!collapsed&&!compact&&<p className="map-result-notice" role="status">{p.notice}</p>}
-    <div hidden={collapsed||compact} ref={body} id="mobile-map-offers" className="map-sheet-content">
+    <div hidden={collapsed||compact||p.journeyActive} ref={body} id="mobile-map-offers" className="map-sheet-content">
       {p.feedback}
       {visibleOffers.length?visibleOffers.map(o=><button key={o.offer_id} data-map-choice={o.offer_id} aria-pressed={p.selected?.offer_id===o.offer_id} className={'map-store-choice'+(p.selected?.offer_id===o.offer_id?' selected':'')} onClick={()=>p.onSelect(o)}><div className="map-store-name"><b>{o.shop.name??'فروشگاه بدون نام'}</b>{p.selected?.offer_id===o.offer_id&&<Check size={16}/>}</div><Price v={o.price_toman} size={14}/><p className="map-store-product">{p.productNames?.[o.product_id]}{p.comparedIds?.has(o.offer_id)?' · انتخاب مقایسه':''}</p><p className="map-store-facts">{distance(o.direct_distance_meters)} · {openLabel(o)}</p></button>):!p.feedback?<div className="map-sheet-empty"><p>بالای نقشه بنویس چه می‌خواهی؛ فروشگاه‌های همان خرید اینجا نمایش داده می‌شوند.</p><button className="secondary-action" onClick={p.onPick}>انتخاب موقعیت روی نقشه</button></div>:null}
       {p.busy&&!p.feedback&&<p className="map-sheet-status" role="status">در حال دریافت فروشگاه‌ها…</p>}
