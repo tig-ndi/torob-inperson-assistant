@@ -12,10 +12,10 @@ export function replyContext(a:Shopping):ReplyContext{return {
 };}
 export function runReply(a:Shopping,action:ReplyAction,onOpen:(panel:ReplyPanel)=>void){
   if(action.kind==='panel'){onOpen(action.panel);return;}
+  if(action.kind==='overlay'){a.setOverlay(action.overlay);return;}
   a.setOverlay(null);
   if(action.kind==='message')a.ask(action.text);
   else if(action.kind==='budget')a.applySuggestedBudget(action.value);
-  else if(action.kind==='overlay')a.setOverlay(action.overlay);
   else if(action.kind==='map')a.beginPick();
   else if(action.kind==='gps')a.locate();
   else if(action.kind==='finish')a.finishTrip();

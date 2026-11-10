@@ -375,7 +375,6 @@ export function useShopping() {
     setPurchaseProgress(next);setScreen('trip');setOverlay(null);
     if(action==='start'){
       setDelegation(null);setVisitIntent(i=>i?{...i,visitDate:null,localTime:null}:null);showOffer(selected);
-      if(travelMode!=='manual'&&!roadConsent&&!upgrades.roadRoutes.some(r=>r.offer_id===selected.offer_id))setOverlay('travel');
       say('assistant',`راه افتادیم به سمت «${selected.shop.name??'فروشگاه'}». مسیر و قدم بعدی روی نقشه است؛ وقتی رسیدی «رسیدم» را بزن.`,'action');
     }else if(action==='arrive')say('assistant','رسیدی؛ حالا بازبودن و موجودی را بررسی کن. خرید کردی یا مشکلی پیش آمد؟','action');
     else if(action==='closed'||action==='out_of_stock'){

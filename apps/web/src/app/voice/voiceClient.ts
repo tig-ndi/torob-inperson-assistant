@@ -21,10 +21,10 @@ export async function transcribeAudio(blob: Blob, signal?: AbortSignal): Promise
   });
 
   if (!response.ok) {
-    let detail = 'خطا در تبدیل گفتار به متن.';
+    let detail = response.status >= 500 ? 'الان صدا در دسترس نیست؛ با تایپ ادامه بده.' : 'خطا در تبدیل گفتار به متن.';
     try {
       const err = await response.json();
-      if (typeof err.detail === 'string') detail = err.detail;
+      if (typeof err.detail === 'string' && response.status < 500 && !/\.env|api[_ -]?key|TOROB_|AVALAI_|BOXAPI_|بک.?اند|backend/i.test(err.detail)) detail = err.detail;
     } catch {
       // ignore json parse error
     }
@@ -52,10 +52,10 @@ export async function synthesizeSpeech(text: string, signal?: AbortSignal): Prom
   });
 
   if (!response.ok) {
-    let detail = 'خطا در تولید صدای دستیار.';
+    let detail = response.status >= 500 ? 'الان صدا در دسترس نیست؛ متن پاسخ در دسترس است.' : 'خطا در تولید صدای دستیار.';
     try {
       const err = await response.json();
-      if (typeof err.detail === 'string') detail = err.detail;
+      if (typeof err.detail === 'string' && response.status < 500 && !/\.env|api[_ -]?key|TOROB_|AVALAI_|BOXAPI_|بک.?اند|backend/i.test(err.detail)) detail = err.detail;
     } catch {
       // ignore json parse error
     }

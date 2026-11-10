@@ -85,3 +85,10 @@ test('synthesizeSpeech posts text and creates an object URL', async () => {
     URL.createObjectURL = originalCreateObjectURL;
   }
 });
+
+test('voice provider setup details are never shown to buyers',async()=>{
+ const previous=globalThis.fetch;
+ try{for(const status of [400,503]){globalThis.fetch=async()=>({ok:false,status,json:async()=>({detail:'Set AVALAI_API_KEY in .env and restart backend'})});
+  for(const run of [()=>transcribeAudio(new Blob(['audio'])),()=>synthesizeSpeech('سلام')])await assert.rejects(run,e=>e instanceof VoiceError&&!/\.env|API_KEY|backend/.test(e.message));
+ }}finally{globalThis.fetch=previous;}
+});

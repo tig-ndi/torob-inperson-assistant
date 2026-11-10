@@ -6,11 +6,12 @@ import {NavigationHistory,type NavigationFrame} from './navigationHistory';
 import type {SheetStop} from './MobileMapSheet';
 
 /** One history owner for the active chat, map, native disclosures and dialogs. */
-export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shopping,mapVisible:boolean,desktop:boolean,stop:SheetStop,setStop:(s:SheetStop)=>void){
+export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shopping,mapVisible:boolean,desktop:boolean,stop:SheetStop,setStop:(s:SheetStop)=>void,reply?:{panel:string;setPanel:(panel:string)=>void}){
   const latest=useRef({a,mapVisible,desktop,stop,setStop});latest.current={a,mapVisible,desktop,stop,setStop};
   const scan=useRef<()=>void>(()=>{});
   const details=useRef<HTMLDetailsElement[]>([]),ids=useRef(new WeakMap<Element,number>()),sequence=useRef(0);
   const history=useRef<NavigationHistory|null>(null);
+  const latestReply=useRef(reply);latestReply.current=reply;
   const elementKey=(el:Element)=>{if(!ids.current.has(el))ids.current.set(el,++sequence.current);return String(ids.current.get(el));};
   const frame=(key:string,enter:()=>void,leave=()=>{})=>({key,enter,leave});
   scan.current=()=>{
@@ -49,6 +50,10 @@ export function useShoppingHistory(root:RefObject<HTMLDivElement|null>,a:Shoppin
       }
     }
     a.overlayStack.forEach((overlay,index)=>{const stack=a.overlayStack.slice(0,index+1);path.push(frame('dialog:'+overlay,()=>latest.current.a.restorePanels(stack),()=>latest.current.a.restorePanels(stack.slice(0,-1))));path.push(...disclosures('dialog',overlay));});
+    if(a.overlay==='reply'&&latestReply.current&&latestReply.current.panel!=='suggestions'){
+      const panel=latestReply.current.panel;
+      path.push(frame('reply:'+panel,()=>latestReply.current?.setPanel(panel),()=>latestReply.current?.setPanel('suggestions')));
+    }
     if(a.sellerDialog){const seller=a.sellerDialog;path.push(frame('seller',()=>latest.current.a.setSellerDialog(seller),()=>latest.current.a.setSellerDialog(null)));}
     if(a.newConversationPending)path.push(frame('new-conversation',()=>latest.current.a.newConversation(),()=>latest.current.a.cancelNewConversation()));
     for(const el of node.querySelectorAll<HTMLElement>('[data-navigation-confirm]')){

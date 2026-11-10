@@ -21,6 +21,11 @@ test('follow-up views preserve the buyer panel and return without reopening hidd
  assert.deepEqual(openPanel(['journey','followup'],'demo'),['journey','followup','demo']);
  assert.deepEqual(openPanel(['followup','demo'],'report'),['followup','demo','report']);
 });
+test('ready reply tools and check children return to their task panel',()=>{
+ assert.deepEqual(openPanel(['reply'],'location'),['reply','location']);
+ assert.deepEqual(openPanel(['checks'],'voice'),['checks','voice']);
+ assert.deepEqual(openPanel(['reply','location'],'reply'),['reply']);
+});
 test('stage tabs rewind to any reached stage without marking a purchase or losing evidence',()=>{
  const ready={...freshProgress('offer'),evidence:{source:'simulated',outcome:'available'}};
  const moving=advancePurchase(ready,'start','2026-11-08T10:00:00Z'),arrived=advancePurchase(moving,'arrive'),done=advancePurchase(arrived,'purchased');

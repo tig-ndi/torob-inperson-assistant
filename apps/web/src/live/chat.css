@@ -313,3 +313,24 @@
  .map-shop-choices [data-map-offer]>.map-choice-compare{flex:0 0 44px;align-content:center;text-align:center;color:var(--primary);font-size:10px;padding:4px}
  .map-shop-choices [data-map-offer]>button b{font-size:11px}.map-shop-choices [data-map-offer]>button small{font-size:10px;color:var(--text-2)}
 }
+
+/* Purchase progress scrolls with its own content, never over travel controls. */
+.journey-step-nav{position:static}
+.dialog-parent-back{width:44px;min-width:44px;height:44px;justify-content:center;padding:0}
+.alternative-reasons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%;margin-top:8px}
+.alternative-reasons button{min-height:44px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface);color:var(--text);font:inherit}
+.alternative-reasons button[aria-pressed=true]{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.older-messages>summary{min-height:44px;display:flex;align-items:center;color:var(--text-2);font-size:12px;cursor:pointer}
+.map-pane .map-credit{left:8px;right:auto;max-width:calc(100% - 16px);padding:0;opacity:1;background:var(--bg);border:1px solid var(--border);border-radius:12px;font-size:11px;line-height:1.8}
+.map-credit>summary{list-style:none;width:44px;height:44px;display:grid;place-items:center;font-size:23px;cursor:pointer}
+.map-credit>summary::-webkit-details-marker{display:none}
+.map-credit>div{padding:8px 12px;max-width:260px;overflow-wrap:anywhere}
+.map-credit a{display:inline-flex;align-items:center;min-height:44px}
+
+.seller-contact{display:flex;flex-direction:column;gap:12px;min-width:0}
+.seller-contact p,.seller-contact small{font-size:12px;line-height:1.9;color:var(--text-2)}
+.seller-contact .live-input{width:100%;min-width:0}
+.seller-contact-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.seller-contact-actions>a,.seller-contact-actions>button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font-size:12px}
+.seller-contact-actions>p{grid-column:1/-1}
+.checks-communication summary{display:flex;align-items:center;min-height:44px;cursor:pointer}
