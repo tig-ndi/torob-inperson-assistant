@@ -341,3 +341,5 @@
  .map-journey-shops svg{flex-shrink:0}
  .mobile-map-sheet[data-compact-journey=true] .map-journey-shops{display:none}
 }
+
+.journey-route-request{display:flex;flex-direction:column;gap:6px;margin-block:8px}.journey-route-request>.secondary-action{min-height:44px}.journey-route-request small{font-size:11px;line-height:1.8;color:var(--text-2)}
