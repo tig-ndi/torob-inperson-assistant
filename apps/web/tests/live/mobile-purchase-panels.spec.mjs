@@ -110,5 +110,17 @@ for(const [width,height] of sizes)test(`purchase map shows explicit store naviga
  for(const button of [back,others]){await button.scrollIntoViewIfNeeded();const b=await button.boundingBox(),footer=await sheet.locator('.mobile-view-switch').boundingBox();expect(b.height).toBeGreaterThanOrEqual(44);expect(b.y+b.height).toBeLessThanOrEqual(footer.y+1);expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width);await expect(button.locator('svg')).toHaveCount(1);}
  await screenshot(page,'shop-actions-visible');await others.click();const shops=page.getByRole('dialog',{name:'فروشگاه‌های دیگر همین محصول',exact:true});await expect(shops.locator('[data-offer]').first()).toBeVisible();await shops.getByRole('button',{name:'بازگشت به صفحهٔ قبلی',exact:true}).click();await expect(shops).toHaveCount(0);await expect(j).toHaveAttribute('data-purchase-stage','ready');
  const start=j.getByRole('button',{name:'بزن بریم',exact:true});await start.scrollIntoViewIfNeeded();await expect(back).toBeInViewport();await expect(others).toBeInViewport();const b=await start.boundingBox(),footer=await sheet.locator('.mobile-view-switch').boundingBox();expect(b.y+b.height).toBeLessThanOrEqual(footer.y+1);await screenshot(page,'shop-navigation-fix');
- await back.click();await expect(page.locator('[data-map-panel]')).toBeHidden();await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','stores');await expect(page.locator('[data-offer]').first()).toBeVisible();expect(calls).toHaveLength(1);await layout(page);
+ await back.click();await expect(page.locator('[data-map-panel]')).toBeVisible();await expect(sheet).toHaveAttribute('data-sheet-stop','full');await expect(sheet).not.toHaveAttribute('data-journey-list','true');await expect(sheet.locator('.map-sheet-content')).toBeVisible();await expect(sheet.locator('.map-store-choice').first()).toBeVisible();expect(calls).toHaveLength(1);await layout(page);
+});
+
+for(const [width,height] of sizes)test(`drawer expansion stops at real purchase content without empty space at ${width}`,async({page,request})=>{
+ await page.setViewportSize({width,height});await setup(page,request);const j=await mapJourney(page),sheet=page.locator('[data-mobile-store-sheet]'),handle=sheet.getByRole('button',{name:'تغییر ارتفاع فهرست فروشگاه‌ها',exact:true});
+ for(let i=0;i<3&&await sheet.getAttribute('data-sheet-stop')!=='full';i++)await handle.click();await expect(sheet).toHaveAttribute('data-sheet-stop','full');
+ const gap=()=>sheet.evaluate(el=>el.querySelector('.mobile-view-switch').getBoundingClientRect().top-el.querySelector('.mobile-map-journey').getBoundingClientRect().bottom);
+ for(const [stage,action] of [['ready','بزن بریم'],['en_route','رسیدم به فروشگاه'],['arrived','خریدم؛ خرید انجام شد'],['done',null]]){
+  await expect(j).toHaveAttribute('data-purchase-stage',stage);await expect.poll(gap).toBeLessThanOrEqual(4);
+  const box=await handle.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,Math.max(8,box.y-150),{steps:5});await page.mouse.up();await expect(sheet).not.toHaveAttribute('data-sheet-stop','collapsed');await expect.poll(gap).toBeLessThanOrEqual(4);
+  await screenshot(page,`content-fit-${stage}`);if(action)await j.getByRole('button',{name:action,exact:true}).click();
+ }
+ await layout(page);
 });

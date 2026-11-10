@@ -23,10 +23,32 @@ export default function MobileMapSheet(p:Props){
   const collapsed=snap==='collapsed',compact=!!p.compactJourney&&snap!=='full';
   const [compactHeight,setCompactHeight]=useState(220);
   useLayoutEffect(()=>{if(!compact||!sheet.current)return;const panel=sheet.current;const children=Array.from(panel.children).filter((el):el is HTMLElement=>el instanceof HTMLElement&&!el.hidden&&el!==body.current);const measure=()=>setCompactHeight(Math.ceil(children.reduce((sum,el)=>sum+el.getBoundingClientRect().height,0))+safeInset+2);measure();const observer=new ResizeObserver(measure);children.forEach(el=>observer.observe(el));return()=>observer.disconnect();},[compact,snap,p.selected?.offer_id,safeInset,p.journey]);
+  const [contentHeight,setContentHeight]=useState<number|null>(null);
+  useLayoutEffect(()=>{
+    const panel=sheet.current;if(!panel||p.active===false)return;
+    const outer=(el:HTMLElement)=>{const style=getComputedStyle(el);return el.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);};
+    const visible=(el:HTMLElement)=>!el.hidden&&getComputedStyle(el).display!=='none';
+    const children=Array.from(panel.children).filter((el):el is HTMLElement=>el instanceof HTMLElement&&visible(el));
+    const measure=()=>{
+      const style=getComputedStyle(panel);
+      const edges=(style:CSSStyleDeclaration)=>(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0)+(parseFloat(style.borderTopWidth)||0)+(parseFloat(style.borderBottomWidth)||0);
+      const natural=children.reduce((sum,el)=>{
+        // Measure intrinsic content, not the flex area stretched by a snap stop.
+        if(el===body.current||el.classList.contains('map-sheet-journey'))return sum+edges(getComputedStyle(el))+Array.from(el.children).filter((child):child is HTMLElement=>child instanceof HTMLElement&&visible(child)).reduce((n,child)=>n+outer(child),0);
+        return sum+outer(el);
+      },edges(style));
+      setContentHeight(Math.ceil(natural));
+    };
+    measure();const observer=new ResizeObserver(measure);
+    children.forEach(el=>{observer.observe(el);if(el===body.current||el.classList.contains('map-sheet-journey'))Array.from(el.children).forEach(child=>observer.observe(child));});
+    return()=>observer.disconnect();
+  },[snap,compact,p.active,p.journey,p.offers,p.selected,p.viewportHeight,safeInset]);
   const pool=p.selected&&!p.offers.some(o=>o.offer_id===p.selected?.offer_id)?[p.selected,...p.offers]:p.offers;
   const full=Math.max(190,p.viewportHeight-(p.viewportHeight<=500?104:220)),peek=Math.min(p.selected?selectedPeek:p.choosingProduct?260:196,full),half=Math.max(peek,Math.min(full,p.viewportHeight*.48));
   const stops={collapsed:92+safeInset+addressHeight,peek:Math.max(peek,92+safeInset+addressHeight),half:Math.max(half,92+safeInset+addressHeight),full:Math.max(full,92+safeInset+addressHeight)};
-  const height=compact?compactHeight:p.journeyActive&&!collapsed?Math.min(p.viewportHeight-104,Math.max(stops[snap],p.viewportHeight*.78)):stops[snap];
+  const requestedHeight=p.journeyActive&&!collapsed?Math.min(p.viewportHeight-104,Math.max(stops[snap],p.viewportHeight*.78)):stops[snap];
+  const expandedLimit=Math.max(stops.collapsed,Math.min(p.journeyActive?p.viewportHeight-104:full,contentHeight??Infinity));
+  const height=compact?compactHeight:collapsed?stops.collapsed:Math.min(requestedHeight,expandedLimit);
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
     if(!panel||!list||!p.selected||collapsed)return;
@@ -51,10 +73,10 @@ export default function MobileMapSheet(p:Props){
   const cycle=()=>setSnap(v=>p.compactJourney?(v==='full'?'collapsed':'full'):v==='collapsed'?'peek':v==='peek'?'half':v==='half'?'full':'collapsed');
   const start=(e:PointerEvent<HTMLButtonElement>)=>{
     if(e.button!==0)return;if(e.pointerType!=='touch')e.preventDefault();cleanup.current?.();
-    const startY=e.clientY,id=e.pointerId,target=e.currentTarget;let next=height;target.setPointerCapture(id);
-    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;next=Math.min(full,Math.max(p.compactJourney?compactHeight:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
+    const startY=e.clientY,id=e.pointerId,target=e.currentTarget;let next=height,moved=false;target.setPointerCapture(id);
+    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;if(Math.abs(event.clientY-startY)>4)moved=true;next=Math.min(expandedLimit,Math.max(p.compactJourney?compactHeight:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
     const remove=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',cancel);if(target.hasPointerCapture(id))target.releasePointerCapture(id);cleanup.current=null;};
-    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactHeight],['full',full]]:[['collapsed',stops.collapsed],['peek',peek],['half',half],['full',full]];if(Math.abs(next-height)<4)cycle();else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best)[0]);setDragHeight(null);};
+    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactHeight],['full',expandedLimit]]:[['collapsed',stops.collapsed],['peek',Math.min(peek,expandedLimit)],['half',Math.min(half,expandedLimit)],['full',expandedLimit]];if(!moved)cycle();else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best)[0]);setDragHeight(null);};
     const cancel=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();setDragHeight(null);};
     cleanup.current=remove;window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',cancel);
   };
