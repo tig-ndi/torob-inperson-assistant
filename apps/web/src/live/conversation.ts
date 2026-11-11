@@ -58,9 +58,10 @@ export function visitIntent(text:string,context:string|null):VisitIntent|null {
   return {topic,nearbyKm,localTime,visitDate:visitDate(text),reuseProduct:!explicit&&!!context};
 }
 
-export function visitGuidance(v:VisitInsights,_label:string){
+export function visitGuidance(v:VisitInsights,_label:string,limit:number|null=null){
   const n=v.nearby,time=new Intl.DateTimeFormat('fa-IR',{weekday:'long',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tehran'}).format(new Date(v.evaluated_at));
   const near=n.declared_open?`${fa(n.declared_open)} فروشگاه در شعاع ${fa(v.nearby_km)} کیلومتری، طبق برنامه بازند.`:n.shops&&n.declared_closed===n.shops&&!n.truncated?'تمام فروشگاه‌های ثبت‌شدهٔ نزدیک، طبق برنامه بسته‌اند.':`در محدودهٔ نزدیک، فروشگاهِ باز طبق برنامه پیدا نشد؛ ساعت ${fa(n.unknown)} فروشگاه هم نامشخص است.`;
+  if(limit!==null)return `برای ساعت ${time}: ${near} سقف زمان رفتن تو ${fa(limit)} دقیقه است؛ بازبودن به‌تنهایی کافی نیست. فقط مقصدی را پیشنهاد می‌کنم که برآورد رسیدن آن هم در این زمان باشد.`;
   const open=v.open_offers.items[0];
 
   const market=v.markets[0];return `برای ساعت ${time}: ${near} ${open?`گزینهٔ باز «${open.shop.name??'فروشگاه ثبت‌شده'}» در فاصلهٔ ${distance(open.direct_distance_meters)} است.`:`تا شعاع ${fa(v.search_km)} کیلومتر، پیشنهاد باز و منطبق با شرایط پیدا نشد.`}${market?` «${market.name}» هم یک محدودهٔ احتمالی با موجودی و ساعت نامشخص است.`:''} کارت تصمیم و گزینه‌های بعدی را پایین گذاشتم.`;

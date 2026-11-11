@@ -5,11 +5,11 @@ import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitDate as parseVisitDate,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery} from './requestPlanning';
+import {rankingNeedContext,queuedPurchase,restoredNeedSummary,purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery} from './requestPlanning';
 import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
-import {visitCommand,visitGoal,phoneKind,broadPhone,selectVisit,type DelegatedVisit} from './delegatedVisit';
+import {travelLimit,withinTravelLimit,visitCommand,visitGoal,phoneKind,broadPhone,selectVisit,type DelegatedVisit} from './delegatedVisit';
 import {currentMapOffers} from './mapResults';
 import {useUpgrades} from './useUpgrades';
 import {shouldConfirmNewConversation} from './navigationHistory';
@@ -24,6 +24,11 @@ export function useShopping() {
   const [questionCode,setQuestionCode]=useJourneyState('query','',':questionCode');
   const [delegation,setDelegation]=useJourneyState<DelegatedVisit|null>('delegation',null);
   const [purchaseQueue,setPurchaseQueue]=useJourneyState<string[]>('purchaseQueue',[]);
+  const [queueSource,setQueueSource]=useJourneyState('query','',':queueSource');
+  const [queueBudget,setQueueBudget]=useJourneyState('query','',':queueBudget');
+  const [queuedTopic,setQueuedTopic]=useJourneyState('query','',':queuedTopic');
+  const [travelLimitText,setTravelLimitText]=useJourneyState('duration','',':travelLimit');
+  const travelLimitMinutes=travelLimitText?Number(travelLimitText):null;
   const [journeyId,setJourneyId]=useJourneyState<string>('query',crypto.randomUUID(),':journey');
   const [pendingDeparture,setPendingDeparture]=useState<string|null>(null);
   const [purchaseProgress,setPurchaseProgress]=useJourneyState<PurchaseProgress|null>('purchaseProgress',null);
@@ -49,6 +54,8 @@ export function useShopping() {
     attempt_limit:'سقف درخواست‌های ثبت‌شدهٔ دستیار تمام شده است. جست‌وجوی مستقیم همچنان فعال است.',
   }[status.reason];
   const [agent,setAgent]=useState(true),[messages,setMessages]=useJourneyState<AssistantMessage[]>('messages',[]),[need,setNeed]=useJourneyState<NeedState|null>('need',null);
+  const [purchaseMemories,setPurchaseMemories]=useJourneyState<NeedState[]>('purchaseMemories',[]);
+  useEffect(()=>{if(!need?.topic_query)return;const names=purchaseTopics(need.topic_query);setPurchaseMemories(old=>[need,...old.filter(n=>!names.some(t=>purchaseTopics(n.topic_query??'').some(other=>samePurchaseFamily(t,other))))].slice(0,12));},[need]);
   const [thread,setThread]=useJourneyState<ChatEntry[]>('thread',[]),[visitIntent,setVisitIntent]=useJourneyState<VisitIntent|null>('visit',null),[needsLocation,setNeedsLocation]=useJourneyState('bool',false,':needsLocation');
   const [insights,setInsights]=useState<VisitInsights|null>(null),[insightsBusy,setInsightsBusy]=useState(false),[insightsError,setInsightsError]=useState<string|null>(null);
   const [mapMode,setMapMode]=useJourneyState<'auto'|'open'|'closed'>('mapMode','auto'),[picking,setPicking]=useState(false),[mapFocus,setMapFocus]=useJourneyState<Place|null>('mapFocus',null);
@@ -66,7 +73,7 @@ export function useShopping() {
   const say=useCallback((role:ChatEntry['role'],text:string,kind:ChatEntry['kind']='message')=>setThread(t=>[...t.slice(-99),{id:crypto.randomUUID(),role,text,kind}]),[]);
   const [busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[toast,setToast]=useState<string|null>(null);
   const [reload,setReload]=useState(0),[weight,setWeight]=useJourneyState('weight',50);
-  const candidateContext=JSON.stringify([products.map(p=>p.product_id),position,filters,visitIntent,travelMode,need,reload,delegation?.id]);
+  const candidateContext=JSON.stringify([products.map(p=>p.product_id),position,filters,visitIntent,travelMode,travelLimitMinutes,need,reload,delegation?.id]);
   const [explanation,setExplanation]=useState<Explanation|null>(null),[assistantResults,setAssistantResults]=useJourneyState('bool',false,':assistantResults'),[restoredTrip,setRestoredTrip]=useState<SavedTrip|null>(null);
   const controller=useRef<AbortController|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const loadedOffersKey=useRef<string|null>(null);
@@ -85,7 +92,7 @@ export function useShopping() {
     return()=>c.abort();
   },[reload]);
   useEffect(()=>{const rows=[...products,...models,...candidateVisits.map(v=>v.product),...(product?[product]:[])];if(rows.length)setKnownProducts(old=>({...old,...Object.fromEntries(rows.map(p=>[p.product_id,p]))}));},[products,models,product,candidateVisits]);
-  useEffect(()=>{if(!productPage?.items.length)return;const item:RecentResult={id:crypto.randomUUID(),query,page:{...productPage,items:products},need,filters:{...filters},assistant:assistantResults,visit:visitIntent,createdAt:new Date().toISOString()};setRecentResults(old=>[item,...old.filter(r=>r.query!==query||JSON.stringify(r.filters)!==JSON.stringify(filters)||r.visit?.localTime!==visitIntent?.localTime)].slice(0,12));},[productPage]);
+  useEffect(()=>{if(!productPage)return;const item:RecentResult={id:crypto.randomUUID(),query,page:{...productPage,items:products},need,filters:{...filters},assistant:assistantResults,visit:visitIntent,createdAt:new Date().toISOString()};setRecentResults(old=>[item,...old.filter(r=>r.query!==query||JSON.stringify(r.filters)!==JSON.stringify(filters)||r.visit?.localTime!==visitIntent?.localTime)].slice(0,12));},[productPage]);
   useEffect(()=>{const rows=[...offers,...compare,...(insights?.open_offers.items??[]),...(selected?[selected]:[])];if(rows.length)retainOffers(rows);},[offers,compare,insights,selected,retainOffers]);
   useEffect(()=>{
     const candidates=[...new Map([...models,...products.slice(0,3)].map(p=>[p.product_id,p])).values()];
@@ -126,7 +133,7 @@ export function useShopping() {
     const c=new AbortController();setArrivalBusy(true);
     api.arrivals(arrivalOffers,position,visitIntent?.localTime??null,travelMode,travelMinutes,selected?.offer_id??null,c.signal,roadConsent,visitIntent?.visitDate??null).then(rows=>{if(!c.signal.aborted){setArrivalChecks(Object.fromEntries(rows.map(r=>[r.offer_id,r])));setArrivalVersion(arrivalKey);}}).catch(e=>{if(!c.signal.aborted){setArrivalError(e.message);setArrivalVersion(arrivalKey);}}).finally(()=>{if(!c.signal.aborted)setArrivalBusy(false);});return()=>c.abort();
   },[arrivalKey]);
-  const candidateOffers=recommendation(candidateVisits.flatMap(v=>v.insights.open_offers.items),arrivalChecks,weight);
+  const candidateOffers=recommendation(candidateVisits.flatMap(v=>v.insights.open_offers.items),arrivalChecks,weight).filter(o=>withinTravelLimit(o,arrivalChecks,travelLimitMinutes));
   const {agentAlternatives,retryAgentAlternatives}=useFollowupAlternatives({offer:delegation?null:selected,reply:!delegation&&selected?upgrades.replyByOffer[selected.offer_id]??null:null,event:followupEvent,filters,position,visitTime:visitIntent?.localTime??null,visitDate:visitIntent?.visitDate??null,onOffers:retainOffers,onMessage:say});
   const sellerConcern=selected?getSellerConcern(upgrades.replyByOffer[selected.offer_id],arrivalChecks[selected.offer_id]?.arrival_at):null;
   const safetyKey=JSON.stringify([sellerConcern,position,upgrades.roadRevision,selected?.offer_id,visitIntent?.localTime,visitIntent?.visitDate,travelMode,travelMinutes,arrivalChecks[selected?.offer_id??'']?.risk,selected?.opening_hours.status]);
@@ -148,7 +155,7 @@ export function useShopping() {
     if(!more){setProducts([]);setProductPage(null);setExplanation(null);setQuestionCode('');}
     if(!more&&!preserveContext){setAssistantResults(false);setExplanation(null);setNeed(null);setMessages(silent&&pending.current?[{role:'user',content:pending.current}]:[]);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);if(!silent){say('user',q);setVisitIntent(null);setNeedsLocation(false);}}
     void run(async signal=>{
-      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
+      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
       if(signal.aborted)return;setProductPage(result);setProducts(old=>more?[...old,...result.items]:result.items);
       if(silent&&localIntent){
         setAssistantResults(true);
@@ -162,7 +169,19 @@ export function useShopping() {
     });
   };
   const ask=(value:string,retrying=false)=>{
-    const displayText=value.trim().slice(0,1000);let q=displayText;if(!q)return;
+    const displayText=value.trim().slice(0,1000);let q=displayText;let queueSelection=false;if(!q)return;
+    const cap=travelLimit(q);if(cap!==undefined)setTravelLimitText(cap===null?'':String(cap));
+    const restoreTopic=/برگردیم|برگرد به/.test(q)?purchaseTopics(q)[0]:null;
+    if(restoreTopic){
+      const memory=purchaseMemories.find(n=>purchaseTopics(n.topic_query??'').some(t=>samePurchaseFamily(t,restoreTopic)));
+      const old=recentResults.find(r=>r.need&&purchaseTopics(r.need.topic_query??r.query).some(t=>samePurchaseFamily(t,restoreTopic)));
+      if(memory){
+        if(!retrying)say('user',displayText);
+        if(old&&!memory.pending_requirements.length&&!memory.budget_needs_input&&memory.battery_requirement.status!=='awaiting_minimum')restoreResult({...old,need:memory,filters:{...old.filters,max:memory.max_price_toman??''}});
+        else{controller.current?.abort();setBusy(false);setNeed(memory);setFilters(f=>({...f,max:memory.max_price_toman??''}));setProduct(null);setSelected(null);setProducts([]);setProductPage(null);setScreen('decide');setQuery(memory.topic_query??'');setQuestionCode(memory.pending_requirements.length?'unsupported_filter':memory.budget_needs_input?'budget':memory.battery_requirement.status==='awaiting_minimum'?'battery_capacity':'');setMessages([{role:'user',content:memory.topic_query??restoreTopic}]);}
+        say('assistant',`شرایط همان خرید را برگرداندم: ${restoredNeedSummary(memory)}`);return;
+      }
+    }
     const progressAction=purchaseAction(q);if(selected&&progressAction){if(!retrying)say('user',displayText);actOnPurchase(progressAction);return;}
     if(purchaseProgress?.stage==='done'){newConversation();setThread(thread);if(!retrying)say('user',displayText);deferredAsk.current=q;setBusy(true);setScreen('decide');return;}
     setCompletedVisit(null);
@@ -212,15 +231,24 @@ export function useShopping() {
     if(requestedTopics.length>1){
       controller.current?.abort();setBusy(false);setError(null);
       if(!retrying)say('user',displayText);
-      setPurchaseQueue(requestedTopics);setFilters(f=>({...f,...Object.fromEntries(Object.entries(visitPreferences(q)).filter(([key])=>key!=='max'))}));
+      setQueueSource(q);setQueueBudget('');setQueuedTopic('');setPurchaseQueue(requestedTopics);setFilters(f=>({...f,...Object.fromEntries(Object.entries(visitPreferences(q)).filter(([key])=>key!=='max'))}));
       const clock=parseVisitClock(q);if(clock)setVisitIntent({topic:'',nearbyKm:visitIntent?.nearbyKm??2,visitDate:parseVisitDate(q)??visitIntent?.visitDate??null,localTime:clock});
       setNeedsLocation(false);setScreen('decide');
       say('assistant',`هر ${requestedTopics.length} کالا را نگه داشتم: ${requestedTopics.join('، ')}. اول کدام را بررسی کنیم؟ بودجهٔ هر کالا را جدا مشخص کن؛ بقیهٔ کالاها هم اینجا می‌مانند.`);return;
     }
-    if(purchaseQueue.length&&requestedTopics.length===1){
-      const chosen=requestedTopics[0]!;
-      setPurchaseQueue(old=>exclusivePurchase(q)?[]:old.filter(topic=>!purchaseTopics(topic).some(t=>purchaseTopics(chosen).includes(t))));
-      if(!/نزدیک|اطراف|حضوری|کجا/.test(q))q+='؛ فروشگاه‌های نزدیک برای خرید حضوری را بررسی کن';
+    if(queueSource&&(queuedTopic||purchaseQueue.length&&requestedTopics.length===1)){
+      const chosen=requestedTopics[0]??queuedTopic;
+      const ownBudget=visitPreferences(q).max;
+      const each=/هر\s*(?:کالا|کدوم|کدام)|برای هر/.test(q);
+      const sharedBudget=visitPreferences(queueSource).max;
+      const budget=ownBudget||(each?sharedBudget:null)||queueBudget||(/همان بودجه|همون بودجه/.test(q)?need?.max_price_toman:null);
+      if(!budget){
+        if(!retrying)say('user',displayText);setQueuedTopic(chosen);
+        say('assistant',`«${chosen}» و مشخصات دستگاه و درگاه را نگه داشتم. ${sharedBudget?'بودجهٔ گفته‌شده برای هر کالا است یا مجموع خرید؟ اگر مجموع است، سقف این کالا را جدا بگو.':'سقف بودجهٔ همین کالا را بگو؛ بقیهٔ کالاها برای بعد محفوظ‌اند.'}`);return;
+      }
+      if(each)setQueueBudget(budget);
+      q=queuedPurchase(queueSource,chosen,budget);queueSelection=true;setQueuedTopic('');
+      setPurchaseQueue(old=>exclusivePurchase(displayText)?[]:old.filter(topic=>!samePurchaseFamily(topic,chosen)));
     }
     if(/(?:روی|تو(?:ی)?)\s*نقشه|نقشه.*(?:نشان|نشون|ببین)/.test(q)&&!/گوشی|شارژر|هدفون|کفش|لپ.?تاپ|موبایل|کابل/.test(q)&&(products.length||selected)){
       if(!retrying)say('user',displayText);if(selected)showOffer(selected);else{setMapFocus(null);setMapMode('open');}return;
@@ -245,7 +273,7 @@ export function useShopping() {
     const requestedDate=parsedDate===undefined?visitIntent?.visitDate??null:parsedDate;
     const requestedTime=parseVisitClock(q)??(/الان|همین حالا|ساعت فعلی/.test(q)?null:visitIntent?.localTime??null);
     let intent=parseVisitIntent(q,context);
-    if(!intent&&context&&Object.keys(preferences).length&&!requestedTopics.length)intent={topic:context,nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime,reuseProduct:true};if(intent&&!intent.localTime&&requestedTime)intent={...intent,visitDate:requestedDate,localTime:requestedTime};
+    if(!intent&&context&&Object.keys(preferences).length&&!requestedTopics.length&&!queueSelection)intent={topic:context,nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime,reuseProduct:true};if(intent&&!intent.localTime&&requestedTime)intent={...intent,visitDate:requestedDate,localTime:requestedTime};
     if(intent)intent={...intent,visitDate:requestedDate};
     setVisitIntent(intent??(requestedTime||requestedDate||wantsVisit||task?.status==='pending'?{topic:context??'',nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime}:!changesPurchase?visitIntent:null));
     if(intent&&intent.topic===context&&need?.pending_requirements.length)intent=null;
@@ -296,9 +324,9 @@ export function useShopping() {
     setInsights(null);setInsightsError(null);setInsightsBusy(false);
     if(!product||!position)return;
     const c=new AbortController();setInsightsBusy(true);
-    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,{...filters,sort:undefined},visitIntent?.localTime,visitIntent?.visitDate,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation&&!['en_route','arrived','problem','done'].includes(purchaseProgress?.stage??''))say('assistant',visitGuidance(v,position.label));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
+    api.visit(product.product_id,position,filters,visitIntent,c.signal).then(v=>{if(!c.signal.aborted){setInsights(v);const key=JSON.stringify([product.product_id,position.lat,position.lon,{...filters,sort:undefined},visitIntent?.localTime,visitIntent?.visitDate,v.nearby,v.open_offers.items[0]?.offer_id]);if(lastGuidance.current!==key){lastGuidance.current=key;writeSession('guidance',key);if(!delegation&&!['en_route','arrived','problem','done'].includes(purchaseProgress?.stage??''))say('assistant',visitGuidance(v,position.label,travelLimitMinutes));}}}).catch(e=>{if(!c.signal.aborted)setInsightsError(e.message);}).finally(()=>{if(!c.signal.aborted)setInsightsBusy(false);});
     return()=>c.abort();
-  },[product?.product_id,position,filters,visitIntent,reload,delegation?.id]);
+  },[product?.product_id,position,filters,visitIntent,travelLimitMinutes,reload,delegation?.id]);
   useEffect(()=>{
     setProbable([]);if(!product?.category_name||!position||filters.open||filters.credit||filters.pay||filters.kala||filters.fast)return;
     const c=new AbortController();api.probable(product.category_name,product.product_id,position,filters,c.signal).then(setProbable).catch(e=>{if(!c.signal.aborted)flash('فروشگاه‌های احتمالی بارگذاری نشدند: '+e.message);});return()=>c.abort();
@@ -415,7 +443,7 @@ export function useShopping() {
     if(!selected)return;setDelegation(null);setFollowupEvent({id:crypto.randomUUID(),offer_id:selected.offer_id,outcome,source,createdAt:Date.now()});
     if(activePurchase&&(outcome==='closed'||outcome==='out_of_stock'))setPurchaseProgress({...advancePurchase(activePurchase,outcome),evidence:{outcome,source}});
   };
-  const clearConversation=()=>{setNewConversationPending(false);setPendingDeparture(null);setPurchaseProgress(null);setDelegation(null);setFollowupEvent(null);setQuestionCode('');setPurchaseQueue([]);deferredAsk.current=null;setJourneyId(crypto.randomUUID());setTravelMinutes('');setTravelMode('walking');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setThread([]);setMessages([]);setNeed(null);setQuery('');setProducts([]);setProductPage(null);setProduct(null);setOffers([]);setSelected(null);setCompare([]);setModels([]);setPrepared(null);setExplanation(null);setInsights(null);setVisitIntent(null);setNeedsLocation(false);setRestoredTrip(null);setFilters({...DEFAULT_FILTERS});setMapMode(current=>current==='open'?'open':'auto');setMapFocus(null);setMapLibrary([]);setPicking(false);lastGuidance.current='';setScreen('home');setOverlay(null);pending.current='';};
+  const clearConversation=()=>{setNewConversationPending(false);setPendingDeparture(null);setPurchaseProgress(null);setDelegation(null);setFollowupEvent(null);setQuestionCode('');setPurchaseQueue([]);setPurchaseMemories([]);setQueueSource('');setQueueBudget('');setQueuedTopic('');setTravelLimitText('');deferredAsk.current=null;setJourneyId(crypto.randomUUID());setTravelMinutes('');setTravelMode('walking');setCompletedVisit(null);controller.current?.abort();setBusy(false);setError(null);setThread([]);setMessages([]);setNeed(null);setQuery('');setProducts([]);setProductPage(null);setProduct(null);setOffers([]);setSelected(null);setCompare([]);setModels([]);setPrepared(null);setExplanation(null);setInsights(null);setVisitIntent(null);setNeedsLocation(false);setRestoredTrip(null);setFilters({...DEFAULT_FILTERS});setMapMode(current=>current==='open'?'open':'auto');setMapFocus(null);setMapLibrary([]);setPicking(false);lastGuidance.current='';setScreen('home');setOverlay(null);pending.current='';};
   const newConversation=()=>{if(shouldConfirmNewConversation(thread.length))setNewConversationPending(true);else clearConversation();};
   const restoreNavigation=(next:Screen,progress?:PurchaseProgress|null)=>{
     controller.current?.abort();setBusy(false);setError(null);setOverlay(null);setPendingDeparture(null);
@@ -431,7 +459,7 @@ export function useShopping() {
     // Effects that fetch candidates/checks run first; wait for their committed data.
     if(!candidateVisits.length&&!candidateError&&candidateBusy===false&&!destinationCoverage)return;
     if(delegationCandidates.length&&(!upgrades.roadRoutes.length&&!upgrades.roadError||delegationCandidates.some(o=>!arrivalChecks[o.offer_id])&&!arrivalError))return;
-    const winner=selectVisit(delegationCandidates,arrivalChecks,upgrades.roadRoutes,delegation.goal,delegation.excluded);
+    const winner=selectVisit(delegationCandidates,arrivalChecks,upgrades.roadRoutes,delegation.goal,delegation.excluded,travelLimitMinutes);
     const p=winner?(knownProducts[winner.product_id]??candidateVisits.find(v=>v.product.product_id===winner.product_id)?.product):null;
     if(!winner||!p){setSelected(null);setDelegation(old=>old?{...old,status:'blocked',note:candidateError??arrivalError??upgrades.roadError??'بین مقصدهای بررسی‌شده، مسیر و فرصت خرید مطمئن پیدا نشد. ساعت، روش رفتن یا محدوده را تغییر بده.'}:old);return;}
     setProduct(p);selectOffer(winner);retainOffers([winner]);setScreen('trip');setOverlay(null);setMapMode(current=>current==='open'?'open':'auto');setRestoredTrip(null);setDelegation(old=>old?{...old,status:'planned',offerId:winner.offer_id,note:`از بین ${delegationCandidates.length} مقصد نزدیکِ بررسی‌شده، ${delegation.goal==='cheapest'?'کمترین قیمتِ دارای فرصت مراجعه':delegation.goal==='nearest'?'مسیر کوتاه‌ترِ دارای فرصت مراجعه':'مسیر سریع‌ترِ دارای فرصت مراجعه'} انتخاب شد؛ موجودی هنوز تأیید نشده است.`}:old);
@@ -448,7 +476,7 @@ export function useShopping() {
   };
   const applyFilters=(f:Filters)=>{
     setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:"pending",note:""}:old);setFilters(f);setOverlay(null);
-    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
+    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
     else if(product&&['contact','trip'].includes(screen))setScreen('stores');
   };
   const applySuggestedBudget=(max:string)=>{
@@ -469,10 +497,10 @@ export function useShopping() {
     if(product&&['stores','contact','trip'].includes(screen)){setScreen('stores');return;}
     setQuery(topic);setScreen('results');setProducts([]);setProductPage(null);
     void run(async signal=>{
-      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
+      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
       if(!signal.aborted){setProducts(page.items);setProductPage(page);}
     });
   };
-  return {...upgrades,overlayStack,backOverlay,restorePanels:(stack:NonNullable<Overlay>[])=>setOverlayStack(stack),jumpPurchase,newConversationPending,cancelNewConversation:()=>setNewConversationPending(false),confirmNewConversation:clearConversation,restoreNavigation,activePurchase,backPurchase,actOnPurchase,resumePurchase,recordVisitResult,saveCurrentPlan,delegation,cancelDelegation:()=>{setDelegation(null);setQuestionCode('');},retryDelegation:()=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',note:''}:old);setReload(n=>n+1);upgrades.retryRoad();},questionCode,applySuggestedBudget,purchaseQueue,agentAlternatives,retryAgentAlternatives,sellerConcern,voiceRequest,openVoice:(text:string|null=null,mode:'record'|'listen'='record')=>{setVoiceRequest({text,mode});setOverlay('voice');},recordFollowup:(o:Offer,outcome:import('./data').Report['outcome'],source:import('./data').Report['source'])=>setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source,createdAt:Date.now()}),setFollowupFromCheck:(o:Offer,outcome:'closed'|'out_of_stock'|'no_answer')=>{if(upgrades.replyByOffer[o.offer_id]?.outcome!==outcome)setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source:'simulated',createdAt:Date.now()});},roadConsent,setRoadConsent,routeTargets,followupEvent,journeyId,expandVisit:()=>{setFilters(f=>({...f,radius:Math.min(1000,Math.max(30,f.radius*2))}));setVisitIntent(i=>i?{...i,nearbyKm:Math.min(50,Math.max(5,i.nearbyKm*2))}:i);},setVisitTime:(clock:string|null)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setVisitIntent(i=>({topic:i?.topic??query??product?.category_name??'',nearbyKm:i?.nearbyKm??2,visitDate:clock?i?.visitDate??null:null,localTime:clock,reuseProduct:true}));},travelMode,setTravelMode:(mode:TravelMode)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setTravelMode(mode);},travelMinutes,setTravelMinutes,arrivalChecks,arrivalBusy,arrivalError,destinationCoverage,candidateVisits,candidateOffers,candidateBusy,candidateError,needsSafetyReview,safetyRisk,acknowledgeSafety:()=>setSafetyAcknowledged(safetyKey),completedVisit,finishTrip,rememberOffers:retainOffers,mapOffers,knownProducts,recentResults,restoreResult,mapPreviewBusy,mapPreviewError,screen,go,setScreen,overlay,setOverlay,filters,setFilters,applyFilters,position,setPosition:updatePosition,summary,saved,setSaved,query,products,productPage,product,offers,hasMore,selected,setSelected:selectOffer,compare,toggleCompare,models,toggleModel,clearComparison,probable,prepared,status,agentMessage,agent,setAgent,messages,need,explanation,restoredTrip,busy,error,setError,toast,flash,search,ask,choose,moreOffers,contact,restore,locate,weight,setWeight,retry:()=>setReload(n=>n+1),run,thread,say,needsLocation,resumeVisit,insights,insightsBusy,insightsError,visitIntent,mapMode,setMapMode,picking,beginPick,finishPick,setPicking,mapFocus,clearMapFocus:()=>setMapFocus(null),showPlace,showOffer,stop,newConversation,retryMessage:()=>ask(pending.current,true)};
+  return {...upgrades,travelLimitMinutes,overlayStack,backOverlay,restorePanels:(stack:NonNullable<Overlay>[])=>setOverlayStack(stack),jumpPurchase,newConversationPending,cancelNewConversation:()=>setNewConversationPending(false),confirmNewConversation:clearConversation,restoreNavigation,activePurchase,backPurchase,actOnPurchase,resumePurchase,recordVisitResult,saveCurrentPlan,delegation,cancelDelegation:()=>{setDelegation(null);setQuestionCode('');},retryDelegation:()=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',note:''}:old);setReload(n=>n+1);upgrades.retryRoad();},questionCode,applySuggestedBudget,purchaseQueue,agentAlternatives,retryAgentAlternatives,sellerConcern,voiceRequest,openVoice:(text:string|null=null,mode:'record'|'listen'='record')=>{setVoiceRequest({text,mode});setOverlay('voice');},recordFollowup:(o:Offer,outcome:import('./data').Report['outcome'],source:import('./data').Report['source'])=>setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source,createdAt:Date.now()}),setFollowupFromCheck:(o:Offer,outcome:'closed'|'out_of_stock'|'no_answer')=>{if(upgrades.replyByOffer[o.offer_id]?.outcome!==outcome)setFollowupEvent({id:crypto.randomUUID(),offer_id:o.offer_id,outcome,source:'simulated',createdAt:Date.now()});},roadConsent,setRoadConsent,routeTargets,followupEvent,journeyId,expandVisit:()=>{setFilters(f=>({...f,radius:Math.min(1000,Math.max(30,f.radius*2))}));setVisitIntent(i=>i?{...i,nearbyKm:Math.min(50,Math.max(5,i.nearbyKm*2))}:i);},setVisitTime:(clock:string|null)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setVisitIntent(i=>({topic:i?.topic??query??product?.category_name??'',nearbyKm:i?.nearbyKm??2,visitDate:clock?i?.visitDate??null:null,localTime:clock,reuseProduct:true}));},travelMode,setTravelMode:(mode:TravelMode)=>{setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:'pending',offerId:null,note:''}:old);setTravelMode(mode);},travelMinutes,setTravelMinutes,arrivalChecks,arrivalBusy,arrivalError,destinationCoverage,candidateVisits,candidateOffers,candidateBusy,candidateError,needsSafetyReview,safetyRisk,acknowledgeSafety:()=>setSafetyAcknowledged(safetyKey),completedVisit,finishTrip,rememberOffers:retainOffers,mapOffers,knownProducts,recentResults,restoreResult,mapPreviewBusy,mapPreviewError,screen,go,setScreen,overlay,setOverlay,filters,setFilters,applyFilters,position,setPosition:updatePosition,summary,saved,setSaved,query,products,productPage,product,offers,hasMore,selected,setSelected:selectOffer,compare,toggleCompare,models,toggleModel,clearComparison,probable,prepared,status,agentMessage,agent,setAgent,messages,need,explanation,restoredTrip,busy,error,setError,toast,flash,search,ask,choose,moreOffers,contact,restore,locate,weight,setWeight,retry:()=>setReload(n=>n+1),run,thread,say,needsLocation,resumeVisit,insights,insightsBusy,insightsError,visitIntent,mapMode,setMapMode,picking,beginPick,finishPick,setPicking,mapFocus,clearMapFocus:()=>setMapFocus(null),showPlace,showOffer,stop,newConversation,retryMessage:()=>ask(pending.current,true)};
 }
 export type Shopping = ReturnType<typeof useShopping>;

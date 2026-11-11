@@ -52,7 +52,7 @@ function queryString(values: Record<string, string | number | boolean | null | u
   for (const [key, value] of Object.entries(values)) if (value !== null && value !== undefined) query.set(key, String(value));
   return query.toString();
 }
-export type SearchInput = CatalogueSearch;
+export type SearchInput = CatalogueSearch & {rankingContext?:string};
 export function searchCatalogue(input: SearchInput, signal: AbortSignal): Promise<CataloguePage> {
   if (!input.query.trim() || input.query.length > 120) throw new ContractError('عبارت کالا باید بین ۱ تا ۱۲۰ نویسه باشد.');
   money(input.maxPrice);
@@ -60,7 +60,7 @@ export function searchCatalogue(input: SearchInput, signal: AbortSignal): Promis
   const params = queryString({ q: input.query, offset: integer(input.offset ?? 0, 0, 1000000), limit: integer(input.limit ?? 12, 1, 50),
     max_price_toman: input.maxPrice, category_cleared: input.categoryCleared,
     minimum_capacity_kg:input.minimumCapacity==null?null:integer(input.minimumCapacity,1,1000),
-    require_anc:input.requireAnc,exclude_portable_fridge:input.excludedKinds?.includes('portable_fridge'),
+    ranking_context:input.rankingContext,require_anc:input.requireAnc,exclude_portable_fridge:input.excludedKinds?.includes('portable_fridge'),
     reference_product_id:input.referenceProductId,colour:input.sourceFilters?.colour,size:input.sourceFilters?.size,connector:input.sourceFilters?.connector,
     category_name: input.categoryCleared ? null : input.categoryName,
     min_battery_capacity_mah: input.minimumBattery == null ? null : integer(input.minimumBattery, 0, 1000000),

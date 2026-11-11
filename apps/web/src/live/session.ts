@@ -25,7 +25,7 @@ const parsers={
   products:(v:unknown)=>list(v,parseCatalogueProduct,200),productPage:nullable(parseCataloguePage),product:nullable(parseProduct),
   offers,compare:offers,selected:(v:unknown)=>v===null?null:offers([v])[0],models:(v:unknown)=>list(v,parseProduct,3),
   messages:(v:unknown)=>list(v,x=>{const m=record(x);return {role:oneOf(m.role,['user','assistant']),content:text(m.content,1000)};},8),
-  need:nullable(parseNeedState),
+  need:nullable(parseNeedState),purchaseMemories:(v:unknown)=>list(v,parseNeedState,12),
   thread:(v:unknown)=>list(v,x=>{const m=record(x);return {id:text(m.id,100),role:oneOf(m.role,['user','assistant']),text:text(m.text),kind:m.kind===undefined?undefined:oneOf(m.kind,['message','action'])};},100),
   visit:nullable(visit),bool,weight:(v:unknown)=>integer(v,0,100),scroll:(v:unknown)=>integer(v,0,10000000),
   mapMode:(v:unknown)=>oneOf(v,['auto','open','closed']),mapFocus:nullable(point),mapLibrary:offers,

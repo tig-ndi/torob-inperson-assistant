@@ -10,6 +10,7 @@ export function selectedProductIndex(text:string,count:number):number|null{
   return index<count?index:null;
 }
 export function purchaseTopics(text:string):string[]{
+  if(/^(?:اگر|اگه)(?:\s|$)/.test(normalized(text)))return [];
   const positive=normalized(text).replace(/(?:به\s*جای|بجای)\s+.+?(?=\s+(?:یک|یه)\s+)/g,'').replace(/(?:به\s*جای|بجای)\s+\S+\s+/g,'');
   const priority=/(?:اول|فعلا|فعلاً)\s+فقط\s+(?:یک\s+|یه\s+)?(.+?)(?=[؛;،]|$)/.exec(positive);
   const active=priority&&/برای بعد|بعدا|بعداً/.test(positive)?priority[1]!:positive;
@@ -94,4 +95,22 @@ export function directPurchaseQuery(text:string):string|null{
   .replace(/(?:می\s*(?:خواهم|خوام)|لازم دارم|نیاز دارم|لطفا|لطفاً|یک|یه|را|رو)(?=$|[\s؛;،.!؟])/g,' ')
   .replace(/[؛;،.!؟]/g,' ').replace(/\s+/g,' ').trim();
  const topic=topics[0]!;return samePurchaseFamily(rest,topic)?topic:null;
+}
+
+// A queue item inherits device/connector context, never the other item nouns.
+export function queuedPurchase(original:string,chosen:string,budget:string):string{
+ const source=normalized(original);
+ const device=/(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|لپ تاپ).*?(?=\s+(?:تا|بودجه)|[؛،.]|$)/.exec(source)?.[0]??'';
+ const port=/(?:تایپ\s*سی|usb[ -]?c|میکرو\s*usb|لایتنینگ)/i.exec(source)?.[0]??'';
+ return `${chosen} ${port} ${device} تا ${budget} تومان می‌خواهم`.replace(/\s+/g,' ').trim();
+}
+export function restoredNeedSummary(need:{topic_query:string|null;max_price_toman:string|null;source_filters?:{colour:string|null;size:string|null;connector:string|null};battery_requirement:{minimum_mah:number|null};pending_requirements:{source_text:string}[]}):string{
+ const f=need.source_filters??{colour:null,size:null,connector:null};
+ return [need.topic_query,need.max_price_toman?`سقف بودجه ${need.max_price_toman} تومان`:null,f.colour?`رنگ ${f.colour}`:null,f.size?`سایز ${f.size}`:null,f.connector?`درگاه ${f.connector}`:null,need.battery_requirement.minimum_mah?`حداقل باتری ${need.battery_requirement.minimum_mah} میلی‌آمپرساعت`:null,...need.pending_requirements.map(p=>`شرط هنوز بررسی‌نشده: ${p.source_text}`)].filter(Boolean).join('؛ ');
+}
+
+export function rankingNeedContext(need:{preferences?:string[];review_topics:string[];category_cleared?:boolean}):string{
+ if(need.category_cleared)return '';
+ const labels:Record<string,string>={coding:'برنامه نویسی',lightweight:'سبک',walking:'پیاده روی',anc:'حذف نویز فعال',energy:'کم مصرف',family:'خانواده',camera:'دوربین',battery:'باتری'};
+ return [...(need.preferences??[]),...need.review_topics].map(key=>labels[key]??'').join(' ');
 }

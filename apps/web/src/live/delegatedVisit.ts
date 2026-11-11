@@ -22,12 +22,25 @@ export function broadPhone(topic:string){return /^(?:گوشی(?: موبایل)?|
 
 // Safety is a hard boundary. Distance or price never makes a closed shop valid.
 // Compare only the bounded, source-backed candidates for which street routes exist.
-export function selectVisit(offers:Offer[],checks:Record<string,ArrivalCheck>,routes:RoadRoute[],goal:DelegatedVisit['goal'],excluded:string[]=[]):Offer|null{
+export function selectVisit(offers:Offer[],checks:Record<string,ArrivalCheck>,routes:RoadRoute[],goal:DelegatedVisit['goal'],excluded:string[]=[],limit:number|null=null):Offer|null{
  const roads=new Map(routes.map(r=>[r.offer_id,r]));
- const rows=offers.filter(o=>!excluded.includes(o.shop_id)&&checks[o.offer_id]?.risk==='ready'&&checks[o.offer_id]?.basis==='street_route'&&roads.has(o.offer_id));
+ const rows=offers.filter(o=>withinTravelLimit(o,checks,limit)&&!excluded.includes(o.shop_id)&&checks[o.offer_id]?.risk==='ready'&&checks[o.offer_id]?.basis==='street_route'&&roads.has(o.offer_id));
  const price=(a:Offer,b:Offer)=>a.price_toman===null?b.price_toman===null?0:1:b.price_toman===null?-1:BigInt(a.price_toman)<BigInt(b.price_toman)?-1:BigInt(a.price_toman)>BigInt(b.price_toman)?1:0;
  return rows.sort((a,b)=>{
   const ar=roads.get(a.offer_id)!,br=roads.get(b.offer_id)!;
   return (goal==='cheapest'?price(a,b):0)||(goal==='nearest'?ar.distance_meters-br.distance_meters:0)||ar.duration_seconds-br.duration_seconds||ar.distance_meters-br.distance_meters||price(a,b)||a.offer_id.localeCompare(b.offer_id);
  })[0]??null;
+}
+
+export function travelLimit(text:string):number|null|undefined{
+ const s=clean(text).replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
+ if(/محدودیت زمان.*(?:ندارم|مهم نیست|حذف)|وقت رفتن.*مهم نیست/.test(s))return null;
+ const words:Record<string,number>={پنج:5,ده:10,پانزده:15,بیست:20,سی:30,چهل:40,شصت:60};
+ const match=/(?:فقط|حداکثر(?: تا)?)\s+(\d{1,3}|پنج|ده|پانزده|بیست|سی|چهل|شصت)\s*دقیقه.*(?:رفتن|رسیدن|وقت|فرصت)/.exec(s)??/(\d{1,3}|پنج|ده|پانزده|بیست|سی|چهل|شصت)\s*دقیقه\s+بیشتر\s+(?:برای\s+(?:رفتن|رسیدن)\s+)?(?:وقت|فرصت)\s+ندارم/.exec(s);
+ if(!match)return undefined;
+ const n=words[match[1]!]??Number(match[1]);return n>0&&n<=999?n:undefined;
+}
+export function withinTravelLimit(offer:Offer,checks:Record<string,ArrivalCheck>,limit:number|null):boolean{
+ if(limit===null)return true;
+ const check=checks[offer.offer_id];return check?.minutes_max!=null&&check.minutes_max<=limit;
 }
