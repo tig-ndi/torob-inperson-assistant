@@ -139,7 +139,7 @@ NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES,
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
 BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
-QUERY_STOPWORDS = frozenset('انتخاب انتخابش تصمیم برنامه مسیر خودت بچین تعیین حرکت هر روز زیر حضوری نزدیک اطراف نزدیکترین نزدیکم اطرافم ترین من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
+QUERY_STOPWORDS = frozenset('بود منظورم اینبار بار انتخاب انتخابش تصمیم برنامه مسیر خودت بچین تعیین حرکت هر روز زیر حضوری نزدیک اطراف نزدیکترین نزدیکم اطرافم ترین من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
 GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
 MAX_TOPIC_WORDS = 4
 TOPIC_SEPARATORS = re.compile(r'\s+(?:و|یا)\s+|[،,;؛]')
@@ -306,6 +306,8 @@ def multiple_topic_heads(text: str, category_names, identity_words=None) -> bool
     """
     if not text or not isinstance(text, str):
         return False
+    if re.match(r'^(?:اگر|اگه)\b', normalize_text(text)):
+        return False
     sequences = _category_sequences(category_names)
     heads = {sequence[0] for sequence in sequences}
     signatures = []
@@ -423,6 +425,8 @@ def proposed_budget(plan: IntentPlan, request: AssistantRequest) -> str | None:
     if explicit is not None:
         return explicit
     text = normalize_text(latest)
+    if re.search(r'(?:همان|همون)\s+بودجه', text) and not re.search(r'تغییر|کمتر|بیشتر|کاهش|افزایش', text):
+        return request.max_price_toman
     if re.search(r'بودجه.*(?:حفظ\s*کن|نگه\s*دار|همان.*بماند|همون.*بمونه)', text) and not re.search(r'تغییر|کمتر|بیشتر|کاهش|افزایش', text):
         return request.max_price_toman
     if re.search(r'ارزان\s*تر|ارزون\s*تر|گران\s*تر|گرون\s*تر', text) or re.search(r'\bبودجه\b.*(?:کن|تغییر|کمتر|بیشتر|ریال)', text):
@@ -593,6 +597,8 @@ def product_span(text: str, category_names, identity_words) -> str | None:
                      {'لپ', 'لپتاپ', 'نوت', 'نوتبوک', 'مک', 'macbook'} if semantic_category == 'لپ تاپ و نوت بوک' else set())
         positions = [index for index, token in enumerate(tokens) if token in (preferred or heads)]
         for start in positions:
+            if tokens[start] in QUERY_STOPWORDS:
+                continue
             if accessory_head and tokens[start]!=accessory_head:
                 continue
             if tokens[start] == 'شماره' and _category_prefix_length(tokens, start, sequences) < 2:

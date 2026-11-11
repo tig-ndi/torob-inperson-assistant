@@ -208,7 +208,7 @@ class Catalogue:
             if sort_by != 'nearest':params.append(query)
             params.extend([limit + 1, offset])
             nearest_clause = 'AND nearest_distance IS NOT NULL ' if sort_by == 'nearest' else ''
-            ordering = 'nearest_distance,p.product_id' if sort_by == 'nearest' else 'source_rank(p.category_name,p.specs) DESC,preference_rank(?,p.category_name),product_search.rank,p.product_id'
+            ordering = 'source_rank(p.category_name,p.specs) DESC,nearest_distance,p.product_id' if sort_by == 'nearest' else 'source_rank(p.category_name,p.specs) DESC,preference_rank(?,p.category_name),product_search.rank,p.product_id'
             rows = connection.execute(
                 "SELECT p.* " + nearest_select + " FROM product_search JOIN products p "
                 "ON p.product_id=product_search.product_id WHERE product_search MATCH ? "

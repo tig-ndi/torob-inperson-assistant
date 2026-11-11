@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from apps.api.intent import AssistantRequest
 
 
-FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی', 'سیستم عامل', 'درگاه')
+FIELDS = ('رنگ', 'سایز', 'اندازه', 'جنس', 'حافظه', 'رم', 'وزن', 'توان', 'گارانتی', 'قسطی', 'سیستم عامل', 'درگاه', 'ظرفیت', 'طول', 'کاربری', 'پروتکل')
 GENERIC_RELEASE = {'بدون این شرط', 'بدون این فیلتر'}
 ALL_RELEASE = {'همه شرط های اجرا نشده را حذف کن', 'همه شرط های حل نشده را حذف کن',
                'همه فیلترهای اجرا نشده را حذف کن'}
@@ -89,8 +89,16 @@ def update_pending(items: list[PendingRequirement], text: str, *, supported_fiel
     if 'درگاه' not in supported_fields and connector(cleaned):
         updated['درگاه'] = PendingRequirement(key='درگاه', source_text=text)
     from apps.api.source_filters import COLOURS
-    if any(re.search(re.escape(colour) + r'(?:ش)?\s+(?:(?:را|رو)\s+)?(?:نباش|نمی\s*خوا|نمیخوام)', cleaned) for colour in COLOURS):
+    if 'رنگ' not in supported_fields and any(re.search(re.escape(colour) + r'(?:ش)?\s+(?:(?:را|رو)\s+)?(?:نباش|نمی\s*خوا|نمیخوام)', cleaned) for colour in COLOURS):
         updated['رنگ'] = PendingRequirement(key='رنگ', source_text=text)
+    if re.search(r'\d+\s*وات', cleaned):
+        updated['توان'] = PendingRequirement(key='توان', source_text=text)
+    if re.search(r'(?<!\w)(?:pd|pps|qc)(?!\w)', cleaned, re.I) and re.search(r'لازم|می\s*خوا|باید', cleaned):
+        updated['پروتکل'] = PendingRequirement(key='پروتکل', source_text=text)
+    if re.search(r'انتقال داده', cleaned) and not re.search(r'انتقال داده.*(?:مهم نیست|لازم نیست)', cleaned):
+        updated['کاربری'] = PendingRequirement(key='کاربری', source_text=text)
+    if re.search(r'(?:\d+(?:\.\d+)?|یک|دو|سه|نیم)\s*متری', cleaned):
+        updated['طول'] = PendingRequirement(key='طول', source_text=text)
     controlled = False
     operations: dict[str, set[str]] = {}
     # Segmentation affects only attribution of a removal operator; monetary and
@@ -195,10 +203,13 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
                 supported.append(field)
     source_filters = edited_filters(previous, latest, lambda field: field in supported, has_pending=bool(pending))
     accepted_fields = tuple(FIELD_NAMES[field] for field in supported if getattr(source_filters, field) is not None)
-    supported_platform = semantic_category == 'گوشی موبایل' and operating_system(latest) and operating_system(topic or '') and not negated_operating_system(latest)
+    supported_platform = semantic_category == 'گوشی موبایل' and operating_system(topic or '') and not negated_operating_system(latest) and (operating_system(latest) or not any(p.key=='سیستم عامل' and negated_operating_system(p.source_text) for p in pending))
     # Seller credit conditions are supported by the offers API; approval of
     # financing is never inferred from this preference.
-    update = update_pending(pending, latest, supported_fields=accepted_fields + ('قسطی',) + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
+    # Phone minimum capacity is handled by its validated source predicate.
+    # Other capacities remain explicit unresolved needs, never silent matches.
+    capacity_fields = ('ظرفیت',) if semantic_category == 'گوشی موبایل' or 'ماشین لباسشویی' in (topic or '') and minimum_capacity(latest) is not None else ()
+    update = update_pending(pending, latest, supported_fields=capacity_fields + accepted_fields + ('قسطی',) + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
     if topic and negated_operating_system(latest):
         by_key = {item.key:item for item in update.items}
         by_key['سیستم عامل'] = PendingRequirement(key='سیستم عامل',source_text=latest)

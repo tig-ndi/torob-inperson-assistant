@@ -38,6 +38,8 @@ def _clause_update(text: str, current: BatteryRequirement, allow_bare: bool) -> 
     declined = re.search(rf'حداقل\s+(?:ظرفیت\s+)?{BATTERY_LABEL}(?:\s+(?:را|رو))?\s+نمی\s*(?:خواهم|خوام|خواد)(?!\w)', text)
     if (keep or remove or unimportant or declined) and re.search(rf'\bحداقل\s+{AMOUNT}', text):
         return BatteryRequirement(status='awaiting_minimum')
+    if re.search(r'بدون\s+حداقل\s+(?:ظرفیت\s+)?(?:باتری|باطری)', text):
+        return BatteryRequirement(status='no_minimum')
     if keep:
         return current
     if (allow_bare and re.fullmatch(r'(?:بدون حداقل|حداقلی ندارم|حداقل ندارم)', text)) or remove or unimportant or declined:
@@ -67,8 +69,9 @@ def _clause_update(text: str, current: BatteryRequirement, allow_bare: bool) -> 
             if re.search(r'[0-9].*\bتا\b', prefix):
                 raise ValueError('ambiguous range')
             return BatteryRequirement(status='minimum', minimum_mah=value)
-        if allow_bare and re.fullmatch(AMOUNT, text):
-            value = parse_toman(text)
+        bare = re.fullmatch(rf'(?:حداقل\s+)?({AMOUNT})(?:\s+می\s*خوا(?:هم|م))?', text)
+        if allow_bare and bare:
+            value = parse_toman(bare[1])
             if value > MAX_CAPACITY_MAH:
                 raise ValueError('unsupported capacity')
             return BatteryRequirement(status='minimum', minimum_mah=value)
@@ -119,4 +122,6 @@ def capacity_followup(request: AssistantRequest) -> bool:
     if len(request.messages) > 1 and matches_question(request.messages[-2].content, 'battery_capacity'):
         if re.fullmatch(rf'{AMOUNT}(?:\s*{UNIT})?[ .،؛؟!]*|بدون حداقل', latest):
             return True
+    if request.context_battery_requirement and request.context_battery_requirement.status == 'awaiting_minimum' and re.search(rf'حداقل\s+{AMOUNT}', latest):
+        return True
     return bool(re.search(capacity_clause(AMOUNT), latest) or re.search(r'^(?:با\s+)?(?:ظرفیت\s*)?(?:باتری|باطری)\s+(?:قوی|خوب)|^(?:فیلتر|شرط|حداقل)\s+(?:ظرفیت\s+)?(?:باتری|باطری).*(?:حذف|بردار|فیلتر\s*نکن)', latest))

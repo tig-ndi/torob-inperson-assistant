@@ -143,6 +143,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                min_battery_capacity_mah: Annotated[int | None, Query(ge=0, le=MAX_CAPACITY_MAH)] = None,
                reference_product_id: str | None = Query(None,min_length=1,max_length=120),
                require_anc: bool = False,
+               ranking_context: str = Query('',max_length=1000),
                minimum_capacity_kg: int | None = Query(None,gt=0,le=1000),
                exclude_portable_fridge: bool = False,
                colour: str | None = Query(None, min_length=1, max_length=32),
@@ -164,7 +165,7 @@ def create_app(database: Path | None = None, *, clock: Callable[[], datetime] | 
                                     category_name=effective_category, min_battery_capacity_mah=min_battery_capacity_mah,
                                     user_lat=user_lat, user_lon=user_lon, sort_by=sort_by,
                                     source_filters={'colour': colour, 'size': size, 'connector': connector},reference_product_id=reference_product_id,
-                                    require_anc=require_anc,minimum_capacity_kg=minimum_capacity_kg,
+                                    require_anc=require_anc,minimum_capacity_kg=minimum_capacity_kg,ranking_context=ranking_context,
                                     excluded_kinds=['portable_fridge'] if exclude_portable_fridge else [])
         except InvalidQuery as exc:
             raise HTTPException(422, str(exc)) from exc

@@ -20,7 +20,7 @@ from apps.api.category import (
 )
 from apps.api.intent import AssistantRequest, CONTACT_RESULT_LIMITATION, IntentPlan, QUESTIONS, clear_product_topic, is_contact_request, matches_question, multiple_topic_heads, product_span, product_clauses, proposed_budget, explicit_budget, query_choices, question_prompt, releases_unsupported
 from apps.api.explanations import explain_search
-from apps.api.selection import selection_context
+from apps.api.selection import ranking_need_context
 from apps.api.battery import UNIT
 from apps.api.battery_intent import capacity_followup, phone_topic, resolve_requirement
 from apps.api.visit_intent import is_constraint_followup, has_unsupported_modifier
@@ -28,7 +28,7 @@ from apps.api.need_state import FIELD_PATTERN, resolve_need_state, visit_sort, i
 from tools.prepare_data import normalize_text
 from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import platform_topic
-from apps.api.purchase_context import refines_purchase, retained_identity
+from apps.api.purchase_context import refines_purchase, retained_identity, cumulative_brand_topic, factual_question, restore_purchase, accessory_target
 from apps.api.models import BatteryRequirement
 from apps.api.model_comparison import comparison_queries, comparison_summary
 
@@ -214,6 +214,7 @@ class AssistantService:
         status = self.status()
         if not status['ready']:
             raise AgentError(status['reason'], 429 if status['reason'] == 'attempt_limit' else 503)
+        request = await restore_purchase(self.catalogue, request)
         self.ledger.reserve(request.request_id, self.settings.model, self.settings.attempt_limit)
         usage, cost, reported_model = {}, None, None
         try:
@@ -238,6 +239,8 @@ class AssistantService:
                 plan = IntentPlan.model_validate_json(content)
                 if (plan.query and request.context_query and is_constraint_followup(request.messages[-1].content)
                         and detect_category_intent(request.messages[-1].content) is None):
+                    plan = plan.model_copy(update={'query': normalize_text(request.context_query)})
+                if refines_purchase(request.messages[-1].content, request.context_query, request.context_category):
                     plan = plan.model_copy(update={'query': normalize_text(request.context_query)})
                 plan = plan.model_copy(update={'query': retained_identity(
                     request.messages[-1].content, request.context_query, plan.query)})
@@ -288,7 +291,7 @@ class AssistantService:
             # The active product is the latest grounded span. If the stored topic
             # itself is polluted and the new message only refines it, recover the
             # last explicit product span instead of searching the polluted text.
-            authoritative = latest_span if latest_span is not None and not coordinated else None
+            authoritative = request.context_query if refinement else latest_span if latest_span is not None and not coordinated else None
             if authoritative is None and request.context_query is not None:
                 context_span = product_span(request.context_query, category_names, identity_words)
                 if context_span is None or normalize_text(request.context_query) != context_span:
@@ -429,6 +432,8 @@ class AssistantService:
             # including a premature model budget question. An uncertain explicit amount
             # keeps its budget clarification; never call the model a second time.
             routing_message = plan.query if plan.query and (refinement or context_control or capacity_reply and latest_category is None and has_phone_context) else ' ؛ '.join(product_clauses(latest_msg))
+            if (plan.query or request.context_query or '').startswith('شارژر') and accessory_target(' '.join(m.content for m in request.messages if m.role=='user')):
+                routing_message = 'شارژر گوشی ' + routing_message
             if refinement and (request.context_query or '').startswith(('شارژر', 'کابل', 'کیف', 'قاب', 'کاور', 'محافظ', 'باتری')) and re.match(r'^(?:برای|واسه|مخصوص)\s+', normalize_text(latest_msg)):
                 routing_message = f'{request.context_query} {latest_msg}'
             if not budget_uncertain and (
@@ -451,6 +456,7 @@ class AssistantService:
                 plan = IntentPlan(action='clarify', query=None, budget_text=None, question='product_kind')
 
             if plan.query:
+                plan = plan.model_copy(update={'query': cumulative_brand_topic(plan.query, request.context_query, latest_msg, refinement or latest_category is None or latest_category == request.context_category)})
                 plan = plan.model_copy(update={'query': retained_identity(latest_msg, request.context_query, plan.query)})
 
             page = None
@@ -495,7 +501,7 @@ class AssistantService:
 
                 plan = plan.model_copy(update={'query': platform_topic(
                     plan.query, latest_msg, request.context_query,
-                    effective_category or detect_category_intent(plan.query or '') or latest_category or request.context_category)})
+                    effective_category or detect_category_intent(plan.query or '') or latest_category or (request.context_category if refinement or plan.query == request.context_query else None))})
                 if plan.query.startswith('کابل') and (
                         re.search(r'کابل.*(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل)',normalize_text(latest_msg))
                         or (request.context_query or '').startswith('کابل گوشی')):
@@ -561,6 +567,8 @@ class AssistantService:
                 effective_category = None
             if not budget_uncertain:
                 question = needs.clarification
+                if not battery_phone and any(p.key=='ظرفیت' for p in needs.state.pending_requirements):
+                    question = 'unsupported_filter'
                 if question is None and needs.state.pending_requirements and plan.question not in {'product_kind', 'battery_capacity', 'battery_scope'}:
                     question = 'unsupported_filter'
                 if question:
@@ -589,7 +597,6 @@ class AssistantService:
                         plan = IntentPlan(action='search', query=topic, budget_text=None, question=None)
                         effective_category = (None if needs.state.category_cleared
                                               else needs.state.category_name)
-            from apps.api.purchase_context import accessory_target
             if (not budget_uncertain and ((needs.state.category_name or '').startswith('شارژر') or (needs.state.topic_query or '').startswith('کابل گوشی'))
                     and needs.state.source_filters.connector is None
                     and (accessory_target(' '.join(m.content for m in request.messages if m.role=='user')) or (needs.state.topic_query or '').startswith('کابل گوشی'))
@@ -651,7 +658,7 @@ class AssistantService:
                         excluded_kinds=needs.state.excluded_kinds,
                         minimum_capacity_kg=needs.state.minimum_capacity_kg,
                         reference_product_id=needs.state.reference_product_id,
-                        ranking_context=selection_context(request),
+                        ranking_context=ranking_need_context(needs.state),
                         min_battery_capacity_mah=requirement.minimum_mah,
                         **({'user_lat': request.user_lat, 'user_lon': request.user_lon, 'sort_by': 'nearest'}
                            if offer_sort == 'nearest' else {}),
@@ -693,6 +700,12 @@ class AssistantService:
                 'question_code': plan.question,
                 'explanation': explanation,
             }
+            if plan.question == 'unsupported_filter' and any(p.key in {'ظرفیت','طول','کاربری','پروتکل'} for p in needs.state.pending_requirements):
+                names = '، '.join(p.key for p in needs.state.pending_requirements)
+                result['question'] = (CONTACT_RESULT_LIMITATION + ' ' if contact_requested else '') + f'شرط‌های «{names}» حفظ شده‌اند، اما هنوز فیلتر قابل اتکایی برای آن‌ها اجرا نشده است. نتیجهٔ منطبق را تأیید نمی‌کنم؛ مشخصات را بررسی کنیم یا صریحاً بگو کدام شرط را کنار بگذاریم.'
+            factual = factual_question(latest_msg)
+            if factual:
+                result.update(status='needs_input',question=factual,question_code='purchase_status',products=None,explanation=None)
             self.ledger.finish(request.request_id, 'completed', usage, cost, reported_model=reported_model)
             return result
         except asyncio.CancelledError:

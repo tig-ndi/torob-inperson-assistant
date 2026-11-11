@@ -30,9 +30,15 @@ def connector(value):
 def requested_filters(text):
     text = normalize_text(text)
     values = {}
-    colours = [v for v in COLOURS if re.search(r'(?<!\w)' + v + r'(?:ش|اش)?(?!\w)', text)]
-    if len(colours) == 1 and not re.search(r'نباش|نمی\s*خوا|نمیخوام', text):
-        values['colour'] = 'مشکی' if colours[0] == 'سیاه' else colours[0]
+    # Attribute edits are clause-local: rejecting black does not reject white.
+    positive_colours = set()
+    for clause in re.split(r'[؛;،,]|\b(?:اما|ولی)\b', text):
+        if re.search(r'نباش|نمی\s*خوا|نمیخوام|مهم نیست', clause):
+            continue
+        positive_colours.update('مشکی' if v == 'سیاه' else v for v in COLOURS
+                                if re.search(r'(?<!\w)' + v + r'(?:ش|اش)?(?!\w)', clause))
+    if len(positive_colours) == 1:
+        values['colour'] = positive_colours.pop()
     size = re.search(r'سایز(?:ش)?(?:\s+(?:را|رو|به))?\s*(\d{1,2}(?:\.5)?)(?![\d.])', text)
     if size and not re.match(r'\s*(?:تا|-|یا|و)\s*\d', text[size.end():]) and not re.search(r'نباش|نمی\s*خوا|نمیخوام', text):
         values['size'] = size[1]
@@ -78,7 +84,7 @@ def edited_filters(previous, text, available, *, has_pending=False):
     """Remove only an explicitly waived field; retain the rest across turns."""
     text = normalize_text(text)
     values = previous.model_dump()
-    if values['colour'] and re.search(re.escape(values['colour']) + r'(?:ش)?\s+(?:(?:را|رو)\s+)?(?:نباش|نمی\s*خوا|نمیخوام)', text):
+    if values['colour'] and re.search(re.escape(values['colour']) + r'(?:ش)?\s+(?:(?:را|رو)\s+)?(?:نباش|نمی\s*خوا|نمیخوام|مهم نیست)', text):
         values['colour'] = None
     active = [key for key, value in values.items() if value is not None]
     if re.match(r'^بدون این (?:شرط|فیلتر)', text) and len(active) == 1 and not has_pending:

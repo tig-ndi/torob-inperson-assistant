@@ -117,3 +117,12 @@ def recommend_selection(page: ProductPage, request: AssistantRequest) -> Selecti
     else:
         caution = 'تناسب نهایی و موجودی هنوز باید بررسی شوند.'
     return Selection(first.product_id, f'برای شروع بررسی، «{first.persian_title}»{price}: {reason}. {caution} کارت همین مدل و فروشگاه‌هایش پایین در دسترس است.', evidence)
+
+
+def ranking_need_context(state):
+    """Identical stable source-ranking input for first and subsequent pages."""
+    from apps.api.purchase_preferences import preferences_context
+    if state.category_cleared:
+        return ''
+    return preferences_context(state.preferences) + ' ' + ' '.join(
+        {'camera':'دوربین','battery':'باتری'}[topic] for topic in state.review_topics)

@@ -127,8 +127,8 @@ def matches_product_kind(query,category,title,specs,brand=None,model=None):
         if any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', name) for word in aliases):
             return 0
     query = positive_brand_query(query)
-    if re.search(r'پاور\s*بانک',query) and not re.search(r'(?<!\w)(?:ماژول|برد|قطعه|کابل|کیف|کاور|قاب|مدار|پوسته)(?!\w)',query):
-        if not re.search(r'پاور\s*بانک',category) or re.search(r'(?<!\w)(?:ماژول|برد|کابل|کیف|کاور|قاب|مدار|پوسته|قطعه)(?!\w)',normalize_text(title or '')):
+    if re.search(r'پاور\s*بانک',query) and not re.search(r'(?<!\w)(?:باتری|باطری|ماژول|برد|قطعه|کابل|کیف|کاور|قاب|مدار|پوسته)(?!\w)',query):
+        if not re.search(r'پاور\s*بانک',category) or re.search(r'(?<!\w)(?:باتری|باطری|ماژول|برد|کابل|کیف|کاور|قاب|مدار|پوسته|قطعه)(?!\w)',normalize_text(title or '')):
             return 0
     for aliases in MODEL_WORDS:
         if any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', query) for word in aliases):
