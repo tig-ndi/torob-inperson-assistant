@@ -5,7 +5,7 @@ import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitDate as parseVisitDate,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic} from './requestPlanning';
+import {purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery} from './requestPlanning';
 import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
@@ -43,9 +43,9 @@ export function useShopping() {
   const [statusChecked,setStatusChecked]=useState(false),deferredAsk=useRef<string|null>(null);
   const agentMessage=!status?'وضعیت دستیار دریافت نشده؛ اتصال را دوباره بررسی کنید.':{
     ready:'دستیار آمادهٔ گفت‌وگوست.',
-    disabled:'دستیار در اجرای فعلی غیرفعال است؛ TOROB_ASSISTANT_ENABLED=1 را تنظیم و بک‌اند را بدون Offline دوباره اجرا کنید.',
-    missing_key:'کلید BoxAPI در تنظیمات اجرای فعلی پیدا نشد؛ پس از ذخیرهٔ .env بک‌اند را دوباره اجرا کنید.',
-    invalid_config:'تنظیمات دستیار معتبر نیست؛ نام مدل، قالب کلید و سقف درخواست را در .env بررسی کنید.',
+    disabled:'دستیار گفت‌وگو فعلاً در دسترس نیست؛ نام کالا را برای جست‌وجوی ساده بنویس.',
+    missing_key:'دستیار گفت‌وگو فعلاً در دسترس نیست؛ جست‌وجوی سادهٔ کالا فعال است.',
+    invalid_config:'دستیار گفت‌وگو فعلاً در دسترس نیست؛ جست‌وجوی سادهٔ کالا فعال است.',
     attempt_limit:'سقف درخواست‌های ثبت‌شدهٔ دستیار تمام شده است. جست‌وجوی مستقیم همچنان فعال است.',
   }[status.reason];
   const [agent,setAgent]=useState(true),[messages,setMessages]=useJourneyState<AssistantMessage[]>('messages',[]),[need,setNeed]=useJourneyState<NeedState|null>('need',null);
@@ -148,7 +148,7 @@ export function useShopping() {
     if(!more){setProducts([]);setProductPage(null);setExplanation(null);setQuestionCode('');}
     if(!more&&!preserveContext){setAssistantResults(false);setExplanation(null);setNeed(null);setMessages(silent&&pending.current?[{role:'user',content:pending.current}]:[]);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);if(!silent){say('user',q);setVisitIntent(null);setNeedsLocation(false);}}
     void run(async signal=>{
-      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,filters,signal,more?products.length:0);
+      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
       if(signal.aborted)return;setProductPage(result);setProducts(old=>more?[...old,...result.items]:result.items);
       if(silent&&localIntent){
         setAssistantResults(true);
@@ -258,7 +258,11 @@ export function useShopping() {
       if(product&&intent.reuseProduct){setScreen('stores');setMapMode(current=>current==='open'?'open':'auto');say('assistant','همین محصول را با موقعیت و ساعت انتخابی دوباره بررسی می‌کنم.','action');return;}
       search(intent.topic,false,intent.topic===context&&!!need,true,intent);return;
     }
-    if(!status?.ready){setNeedsLocation(false);say('assistant','در حال حاضر جست‌وجوی مستقیم اطلاعات ثبت‌شده در دسترس است. '+agentMessage);search(q.slice(0,120),false,false,true);return;}
+    if(!status?.ready){
+      setNeedsLocation(false);const simple=directPurchaseQuery(q);
+      if(!simple){setScreen('decide');say('assistant',agentMessage+' فقط نام کوتاه کالا و در صورت نیاز سقف بودجه را بنویس؛ مثلاً «گوشی تا ده میلیون می‌خواهم».');return;}
+      say('assistant',agentMessage);search(simple,false,false,true,null);return;
+    }
     setNeedsLocation(false);
     const history=conversationHistory(messages,{role:'user' as const,content:q},thread.filter(m=>m.role==='assistant'&&m.kind!=='action').at(-1)?.text);
     setScreen('decide');setQuery(q);setOverlay(null);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);

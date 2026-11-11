@@ -1,5 +1,6 @@
+import {sellerPreferences} from './sellerPreferences.ts';
 // Longest phrase wins within a family, but never hides a different purchase.
-const families=[['قاب برای گوشی','کاور برای گوشی','قاب گوشی','کاور گوشی'],['کیف گوشی','کیف برای گوشی'],['شارژر برای گوشی','شارژر برای موبایل','شارژر برای لپ تاپ','شارژر لپ تاپ','شارژر موبایل','شارژر گوشی','شارژر'],['کابل برای گوشی','کابل شارژ','کابل'],['هدفون','هندزفری'],['گوشی دکمه ای','گوشی','موبایل'],['کفش','کتانی'],['لپ تاپ'],['باتری','باطری'],['پاوربانک']];
+const families=[['قاب برای گوشی','کاور برای گوشی','قاب گوشی','کاور گوشی','قاب','کاور'],['کیف گوشی','کیف برای گوشی','کیف'],['شارژر برای گوشی','شارژر برای موبایل','شارژر برای لپ تاپ','شارژر لپ تاپ','شارژر موبایل','شارژر گوشی','شارژر'],['کابل برای گوشی','کابل شارژ','کابل'],['هدفون','هندزفری'],['گوشی دکمه ای','گوشی','موبایل'],['کفش','کتانی'],['لپ تاپ'],['باتری','باطری'],['پاوربانک']];
 const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
 export function selectedProductIndex(text:string,count:number):number|null{
   const value=normalized(text).replace(/[.؟!،]+$/,'');
@@ -10,7 +11,9 @@ export function selectedProductIndex(text:string,count:number):number|null{
 }
 export function purchaseTopics(text:string):string[]{
   const positive=normalized(text).replace(/(?:به\s*جای|بجای)\s+.+?(?=\s+(?:یک|یه)\s+)/g,'').replace(/(?:به\s*جای|بجای)\s+\S+\s+/g,'');
-  const clauses=positive.split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
+  const priority=/(?:اول|فعلا|فعلاً)\s+فقط\s+(?:یک\s+|یه\s+)?(.+?)(?=[؛;،]|$)/.exec(positive);
+  const active=priority&&/برای بعد|بعدا|بعداً/.test(positive)?priority[1]!:positive;
+  const clauses=active.split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
   let rest=clauses.map(clause=>{
     if(/^\s*نه\s+(?:خود\s+)?(?:گوشی|موبایل|شارژر|کابل|هدفون|پاوربانک|کفش|لپ\s*تاپ)(?:\s|$)/.test(clause))return '';
     const refused=/نمی\s*(?:خواهم|خوام)/.exec(clause);
@@ -20,15 +23,14 @@ export function purchaseTopics(text:string):string[]{
     const earlierPurchase=/(?<!ن)می\s*(?:خواهم|خوام)/.test(before);
     return !fieldRefusal&&!earlierPurchase?clause.slice(refused.index+refused[0].length):clause;
   }).join(' ؛ ');
-  // Attributes between the accessory and «برای» still describe one purchase.
-  // Keep coordinated nouns intact: «گوشی و شارژر» remains two purchases.
-  rest=rest.replace(/(شارژر|کابل|قاب|کاور|کیف)([^؛،]{0,60}?)\s+(?:برای|واسه|مخصوص)\s+(گوشی|موبایل|لپ تاپ)/g,(full,head,middle,device)=>
-    /(?:^|\s)و(?:\s|$)|می\s*خوا|شارژر|کابل|قاب|کاور|کیف/.test(middle)?full:`${head} برای ${device}`);
+  // A shared «برای گوشی» belongs to the coordinated accessories, not the queue.
+  if(/شارژر|کابل|قاب|کاور|کیف/.test(rest))
+    rest=rest.replace(/(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|لپ تاپ)/g,'');
   const found:string[]=[];
-  // Battery/camera specifications of a phone are not additional purchases.
-  // Keep the actual coordinated request "گوشی و باتری" recognizable.
-  if(/گوشی|موبایل|لپ تاپ/.test(rest)&&/(?:با|ظرفیت|دوام|شارژدهی|حداقل)[^؛،]{0,25}(?:باتری|باطری)|(?:باتری|باطری)[^؛،]{0,15}(?:میلی آمپر|mah)/i.test(rest))
-    rest=rest.replace(/باتری|باطری/g,'');
+  // Qualitative battery clauses describe the phone; explicit «و باتری» stays a purchase.
+  if(/گوشی|موبایل|لپ تاپ/.test(rest))
+    rest=rest.replace(/(?:باتری|باطری)\s+(?:هم\s+)?(?:خوب|قوی|مناسب|بادوام)(?:\s|$)/g,'')
+      .replace(/(?:با|ظرفیت|دوام|شارژدهی|حداقل)[^؛،]{0,25}(?:باتری|باطری)|(?:باتری|باطری)[^؛،]{0,15}(?:میلی آمپر|mah)/gi,'');
   const phrases=families.flatMap((names,family)=>names.map(name=>({name,family}))).sort((a,b)=>b.name.length-a.name.length);
   const seen=new Set<number>();
   for(const {name,family} of phrases){
@@ -53,7 +55,7 @@ export function shortPurchaseTopic(text:string):string|null{
   return purchaseTopics(value)[0]??null;
 }
 
-export function exclusivePurchase(text:string){return /(?:^|[؛،\s])فقط\s+(?:یه\s+|یک\s+)?(?:شارژر|کابل|قاب|کاور|کیف|گوشی|موبایل|کفش|کتانی|هدفون|لپ\s*تاپ)(?:\s|$)/.test(normalized(text))&&purchaseTopics(text).length===1;}
+export function exclusivePurchase(text:string){return /(?:^|[؛،\s])فقط\s+(?:یه\s+|یک\s+)?(?:شارژر|کابل|قاب|کاور|کیف|گوشی|موبایل|کفش|کتانی|هدفون|لپ\s*تاپ)(?:\s|$)/.test(normalized(text))&&purchaseTopics(text).length===1&&!/برای بعد|بعدا|بعداً/.test(text);}
 
 export function conversationHistory<T extends {role:'user'|'assistant';content:string}>(previous:T[],fresh:T,visibleAnswer:string|undefined):T[]{
   const history=[...previous.slice(-4)];
@@ -79,4 +81,17 @@ export function productReferenceIndex(text:string,count:number):number|null{
 export function samePurchaseFamily(a:string,b:string){
  const family=(s:string)=>families.findIndex(names=>names.some(n=>n===normalized(s)||n.replace(" برای "," ")===normalized(s)));
  const index=family(a);return index>=0&&index===family(b);
+}
+
+
+// The offline fallback accepts only an unambiguous item plus a validated budget.
+// Unknown attributes stay a clarification, rather than silently becoming filters.
+export function directPurchaseQuery(text:string):string|null{
+ const topics=purchaseTopics(text);if(topics.length!==1)return null;
+ if(/بودجه|حداکثر|(?:^|\s)(?:تا|زیر)(?:\s|$)/.test(normalized(text))&&!sellerPreferences(text).max)return null;
+ let rest=normalized(text).replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
+ rest=rest.replace(/(?:زیر|حداکثر|تا|بودجه(?: ام)?)\s+(?:(?:[0-9٬,.]+|صفر|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|دویست|سیصد|چهارصد|پانصد|ششصد|هفتصد|هشتصد|نهصد|هزار|میلیون|میلیارد|و)(?:\s+|(?=[؛;،.!؟]|$)))+(?:(?:تومان|تومن)\s*)?/g,' ')
+  .replace(/(?:می\s*(?:خواهم|خوام)|لازم دارم|نیاز دارم|لطفا|لطفاً|یک|یه|را|رو)(?=$|[\s؛;،.!؟])/g,' ')
+  .replace(/[؛;،.!؟]/g,' ').replace(/\s+/g,' ').trim();
+ const topic=topics[0]!;return samePurchaseFamily(rest,topic)?topic:null;
 }

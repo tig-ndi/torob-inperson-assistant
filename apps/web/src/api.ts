@@ -786,12 +786,11 @@ export function formatWarranty(warranty: unknown): string {
     if (typeof record.provider === 'string' && record.provider.trim()) parts.push(record.provider.trim());
     if (typeof record.duration === 'string' && record.duration.trim()) parts.push(record.duration.trim());
     if (typeof record.type === 'string' && record.type.trim()) parts.push(record.type.trim());
+    if (typeof record.period_months === 'number' && Number.isFinite(record.period_months) && record.period_months > 0)
+      parts.push(`مدت: ${String(record.period_months).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'.charAt(+d))} ماه`);
+    else if (!parts.some(part=>part===record.duration)) parts.push('مدت گارانتی ثبت نشده');
     if (parts.length > 0) return parts.join(' · ');
-    try {
-      return JSON.stringify(warranty);
-    } catch {
-      return 'ثبت شده';
-    }
+    return 'جزئیات گارانتی ثبت نشده';
   }
   return 'ثبت نشده';
 }

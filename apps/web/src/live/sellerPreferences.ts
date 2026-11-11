@@ -9,6 +9,9 @@ export function sellerPreferences(text:string):Partial<Filters>{
     ['open',/فقط(?:فروشگاه|مغازه)?(?:های)?باز|فروشگاه(?:های)?باز|مغازه(?:های)?باز/],
     ['credit',/قسطی|اعتباری/],['pay',/تربپی/],['kala',/کالابرگ/],['fast',/ارسالفوری/],
   ];
+  const normalized=text.replace(/\u200c/g,' ').replace(/\s+/g,' ');
+  if(/همه(?:ٔ| ی)?\s*فروشگاه/.test(normalized)&&/(?:قسطی|اقساط|اعتباری|ترب\s*پی).*(?:لازم نیست|نیاز نیست|نمی\s*خوا|بردار|حذف(?!\s*نکن))/.test(normalized))
+    Object.assign(result,{credit:false,pay:false,kala:false});
   for(const clause of clauses){
     const input=clause.replace(/[\s\u200c٬,]/g,'');
     const keep=/حذفنکن|برندار|لغونکن|غیرفعالنکن|تغییرنده|حفظکن|نگهدار/.test(input);
@@ -22,6 +25,8 @@ export function sellerPreferences(text:string):Partial<Filters>{
     if(!keep&&/همه(?:ی)?فیلتر(?:ها)?(?:را|رو)?(?:بردار|حذف|پاک|لغو)|بدونهیچفیلتر/.test(input))
       Object.assign(result,{open:false,credit:false,pay:false,kala:false,fast:false,min:'',max:'',withinRadius:false});
     if(!keep&&/(?:بودجه|سقفقیمت|محدودیتقیمت).*(?:بردار|حذف|لغو|مهمنیست)|بدون(?:سقف|محدودیت)قیمت/.test(input))result.max='';
+    const wordBudget=clause.replace(/\u200c/g,' ').match(/(?:زیر|حداکثر|بودجه(?: ام)?|تا)\s+([آ-ی\s]+?)\s*(?=می\s*خوا|باش|بخر|است|هست|که|برای|با|$|[.،؛؟!])/);
+    if(wordBudget&&/هزار|میلیون|میلیارد/.test(wordBudget[1]!)){const amount=wordToman(wordBudget[1]!.replace(/\s*(?:تومان|تومن)$/,''));if(amount!==null)result.max=amount;}
     const price=input.match(/(?:زیر|حداکثر|بودجه(?:ام)?|تا)(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
     if(price){
       const [whole,fraction='']=price[1]!.split('.');
@@ -31,4 +36,20 @@ export function sellerPreferences(text:string):Partial<Filters>{
     }
   }
   return result;
+}
+
+// Whole Persian amounts only; preserve exact integer money without floating point.
+export function wordToman(text:string):string|null{
+ const values:Record<string,bigint>=Object.fromEntries('صفر یک دو سه چهار پنج شش هفت هشت نه ده یازده دوازده سیزده چهارده پانزده شانزده هفده هجده نوزده'.split(' ').map((w,i)=>[w,BigInt(i)]));
+ for(const [i,w] of 'بیست سی چهل پنجاه شصت هفتاد هشتاد نود'.split(' ').entries())values[w]=BigInt(20+i*10);
+ for(const [i,w] of 'صد دویست سیصد چهارصد پانصد ششصد هفتصد هشتصد نهصد'.split(' ').entries())values[w]=BigInt((i+1)*100);
+ const scales:Record<string,bigint>={هزار:1000n,میلیون:1000000n,میلیارد:1000000000n};
+ let total=0n,group=0n,lastScale=1000000000000n,lastRank=4,number=false;
+ for(const token of text.trim().split(/\s+/)){
+  if(token==='و'){if(!number)return null;number=false;continue;}
+  if(scales[token]!==undefined){const scale=scales[token]!;if(!number||!group||scale>=lastScale)return null;total+=group*scale;group=0n;lastScale=scale;lastRank=4;number=true;}
+  else if(values[token]!==undefined){const value=values[token]!,rank=value>=100n?3:value>=20n?2:1;if(number||rank>=lastRank)return null;group+=value;lastRank=rank;number=true;}
+  else return null;
+ }
+ const amount=total+group;return number&&amount<=9223372036854775807n?String(amount):null;
 }
