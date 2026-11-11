@@ -27,6 +27,56 @@ class JudgingRegressions(unittest.TestCase):
         self.response=fixtures.completion(fixtures.proposal(query=query,action='clarify' if question else 'search',question=question))
         return self.post(fixtures.body(text,**({'context_need_state':state} if state else {})))
 
+    def test_shoe_budget_clause_cannot_become_product(self):
+        self.add_product('shoe_budget','کفش زنانه پیاده روی','کفش ورزشی',[{'key':'سایز','value':'38'},{'key':'رنگ','value':'سفید'}])
+        self.add_product('tripod','سه پایه دوربین','سه پایه')
+        result=self.turn('کفش زنانه برای پیاده‌روی روزانه، سایز ۳۸، سفید و تا سه میلیون می‌خواهم.','کفش زنانه')
+        self.assertEqual(result['max_price_toman'],'3000000',result)
+        self.assertTrue(result['need_state']['topic_query'].startswith('کفش'),result)
+        self.assertEqual([p['product_id'] for p in result['products']['items']],['shoe_budget'],result)
+        self.assertEqual(result['need_state']['source_filters']['size'],'38')
+
+    def test_powerbank_filters_components_before_ranking(self):
+        self.add_product('powerbank','پاوربانک قابل حمل','پاوربانک')
+        self.add_product('module','ماژول پاوربانک دو پورت','پاوربانک')
+        self.add_product('cable_bank','کابل پاوربانکی','کابل و مبدل')
+        result=self.turn('به جای هدفون یک پاوربانک تا دو میلیون می‌خواهم.','پاوربانک')
+        self.assertEqual([p['product_id'] for p in result['products']['items']],['powerbank'],result)
+        qualified=self.turn('پاوربانک قابل حمل تا دو میلیون تومان می‌خواهم','پاوربانک قابل حمل')
+        self.assertEqual([p['product_id'] for p in qualified['products']['items']],['powerbank'],qualified)
+        self.assertEqual(matches_product_kind('پاوربانک قابل حمل','پاوربانک','ماژول پاوربانک دو پورت','[]'),0)
+        self.assertEqual(matches_product_kind('ماژول پاوربانک','پاوربانک','ماژول پاوربانک دو پورت','[]'),1)
+
+    def test_negated_brand_retrieves_other_phones_and_preserves_budget(self):
+        self.add_product('samsung','گوشی سامسونگ A54','گوشی موبایل')
+        self.add_product('nokia','گوشی نوکیا','گوشی موبایل')
+        result=self.turn('حالا فقط گوشی غیرسامسونگ با همان بودجه نشان بده.','گوشی غیرسامسونگ',fixtures.phone_battery_state(topic_query='گوشی',max_price_toman='10000000',battery_requirement={'status':'unspecified','minimum_mah':None}))
+        self.assertTrue(result['products']['items'],result)
+        self.assertNotIn('samsung',[p['product_id'] for p in result['products']['items']])
+        self.assertEqual(result['max_price_toman'],'10000000')
+
+    def test_topic_roles_and_exclusion_aliases_are_stable(self):
+        from apps.api.intent import multiple_topic_heads, product_span
+        categories=['گوشی موبایل','شارژر گوشی','کابل و مبدل','باتری گوشی موبایل']
+        self.assertFalse(multiple_topic_heads('گوشی اندرویدی میخواهم؛ باتری هم خوب باشد',categories))
+        self.assertTrue(multiple_topic_heads('شارژر و کابل برای گوشی میخواهم',categories))
+        self.assertEqual(product_span('اول فقط کابل را بررسی کن؛ شارژر برای بعد',categories,set()),'کابل')
+        for query in ['گوشی غیرسامسونگ','گوشی غیر سامسونگ','گوشی بدون سامسونگ']:
+            self.assertEqual(matches_product_kind(query,'گوشی موبایل','گوشی SAMSUNG A54','[]'),0)
+            self.assertEqual(matches_product_kind(query,'گوشی موبایل','گوشی نوکیا','[]'),1)
+        self.assertEqual(matches_product_kind('گوشی سامسونگ','گوشی موبایل','گوشی نوکیا','[]'),0)
+
+    def test_declining_battery_minimum_keeps_other_phone_needs(self):
+        state=fixtures.phone_battery_state(topic_query='گوشی اندروید',battery_requirement={'status':'awaiting_minimum','minimum_mah':None})
+        result=self.turn('حداقل ظرفیت باتری نمی‌خواهم؛ اندروید و دوربین باقی بماند.','گوشی اندروید',state)
+        self.assertEqual(result['need_state']['battery_requirement']['status'],'no_minimum',result)
+        self.assertNotEqual(result['question_code'],'battery_capacity')
+        from apps.api.battery_intent import capacity_update
+        from apps.api.models import BatteryRequirement
+        contradictory=capacity_update('حداقل ظرفیت باتری نمیخواهم حداقل ۵۰۰۰ میلی آمپر ساعت',BatteryRequirement(status='awaiting_minimum'))
+        self.assertEqual(contradictory.status,'awaiting_minimum')
+        self.assertIn('اندروید',result['need_state']['topic_query'])
+
     def test_whole_washer_and_fridge_never_retrieve_spare_parts(self):
         for head,category in [('ماشین لباسشویی','لوازم یدکی ماشین لباسشویی و ظرفشویی'),('یخچال','قطعات و لوازم جانبی یخچال و فریزر')]:
             with self.subTest(head=head):

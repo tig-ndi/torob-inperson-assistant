@@ -35,11 +35,12 @@ def _clause_update(text: str, current: BatteryRequirement, allow_bare: bool) -> 
     keep = re.search(REMOVAL_LABEL + r'(?:حذف\s+(?:نکن(?:ید)?|نشود|نشه)|بر\s*ندار(?:ید)?)\b', text)
     remove = re.search(REMOVAL_LABEL + r'(?:حذف\s+(?:بکن(?:ید)?|کن(?:ید)?|شود|بشه)|بردار(?:ید)?|(?:فعلا\s+)?فیلتر\s*نکن)\b', text)
     unimportant = re.search(rf'(?:ظرفیت\s+)?{BATTERY_LABEL}\s+(?:(?:دیگه|دیگر|اصلا|برای من)\s+)*(?:مهم نیست|اهمیتی ندارد)\b', text)
-    if (keep or remove or unimportant) and re.search(rf'\bحداقل\s+{AMOUNT}', text):
+    declined = re.search(rf'حداقل\s+(?:ظرفیت\s+)?{BATTERY_LABEL}(?:\s+(?:را|رو))?\s+نمی\s*(?:خواهم|خوام|خواد)(?!\w)', text)
+    if (keep or remove or unimportant or declined) and re.search(rf'\bحداقل\s+{AMOUNT}', text):
         return BatteryRequirement(status='awaiting_minimum')
     if keep:
         return current
-    if (allow_bare and re.fullmatch(r'(?:بدون حداقل|حداقلی ندارم|حداقل ندارم)', text)) or remove or unimportant:
+    if (allow_bare and re.fullmatch(r'(?:بدون حداقل|حداقلی ندارم|حداقل ندارم)', text)) or remove or unimportant or declined:
         return BatteryRequirement(status='no_minimum')
     if not mentioned and not allow_bare:
         return None

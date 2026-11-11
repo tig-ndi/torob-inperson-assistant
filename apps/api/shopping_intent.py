@@ -87,8 +87,24 @@ def keypad_request(text):
     return bool(re.search(r'گوشی\s+دکمه\s*ای|دکمه\s*های?\s+درشت',text))
 
 
+def brand_exclusions(query):
+    """Keep exclusions in the existing literal topic, apply them to recorded identity."""
+    text = normalize_text(query)
+    return [aliases for aliases in MODEL_WORDS if any(re.search(
+        r'(?<!\w)(?:غیر\s*|به\s*جز\s+|بجز\s+|بدون\s+)' + re.escape(word) + r'(?!\w)', text)
+        for word in aliases)]
+
+
+def positive_brand_query(query):
+    text = normalize_text(query)
+    for aliases in brand_exclusions(text):
+        for word in aliases:
+            text = re.sub(r'(?<!\w)(?:غیر\s*|به\s*جز\s+|بجز\s+|بدون\s+)' + re.escape(word) + r'(?!\w)', ' ', text)
+    return ' '.join(text.split())
+
+
 def retrieval_query(query):
-    text=normalize_text(query)
+    text=positive_brand_query(query)
     if text.startswith('کابل') and re.search(r'گوشی|موبایل',text):
         text=re.sub(r'گوشی|موبایل',' ',text)
         text=' '.join(text.split())
@@ -107,6 +123,13 @@ def matches_product_kind(query,category,title,specs,brand=None,model=None):
     query=normalize_text(query);category=normalize_text(category or '')
     # A matching compatibility/specification row is not the identity being bought.
     name = normalize_text(' '.join(filter(None,(title,brand,model))))
+    for aliases in brand_exclusions(query):
+        if any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', name) for word in aliases):
+            return 0
+    query = positive_brand_query(query)
+    if re.search(r'پاور\s*بانک',query) and not re.search(r'(?<!\w)(?:ماژول|برد|قطعه|کابل|کیف|کاور|قاب|مدار|پوسته)(?!\w)',query):
+        if not re.search(r'پاور\s*بانک',category) or re.search(r'(?<!\w)(?:ماژول|برد|کابل|کیف|کاور|قاب|مدار|پوسته|قطعه)(?!\w)',normalize_text(title or '')):
+            return 0
     for aliases in MODEL_WORDS:
         if any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', query) for word in aliases):
             if not any(re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', name) for word in aliases):

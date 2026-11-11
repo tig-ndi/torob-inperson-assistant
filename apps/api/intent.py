@@ -149,6 +149,9 @@ def _strip_budget_phrases(text: str) -> str:
     cleaned = normalize_text(text)
     cleaned = re.sub(rf'(?:زیر\s+|حداکثر\s+|تا\s+|(?:سقف\s+)?{BUDGET_PREFIX}){AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
     cleaned = re.sub(rf'{AMOUNT}\s*(?:تومان|تومن|ریال)(?:ه)?', ' ', cleaned)
+    # A scaled maximum is already accepted by explicit_budget, even without تومان.
+    cleaned = re.sub(rf'(?:زیر|حداکثر|تا)\s+({AMOUNT})(?=\s*(?:می\s*خوا|باش|بخر|است|هست|که|برای|با|و|$|[.،؛؟!]))',
+                     lambda m: ' ' if re.search(r'هزار|میلیون|میلیارد', m[1]) else m[0], cleaned)
     return re.sub(rf'(?:سقف\s+)?{BUDGET_PREFIX}{AMOUNT}(?=\s*(?:کن|بکن|بگذار|بذار|باشد|باشه|است|تغییر|$|[.،؛؟!]))', ' ', cleaned)
 
 
@@ -307,6 +310,11 @@ def multiple_topic_heads(text: str, category_names, identity_words=None) -> bool
     heads = {sequence[0] for sequence in sequences}
     signatures = []
     purchase_text = ' ؛ '.join(product_clauses(text, prioritize=False))
+    # Device complements and qualitative phone properties are not purchases.
+    if re.search(r'شارژر|کابل|قاب|کاور|کیف', purchase_text):
+        purchase_text = re.sub(r'(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|لپ تاپ)', '', purchase_text)
+    if detect_category_intent(text) == CAT_MOBILE_PHONE:
+        purchase_text = re.sub(r'(?:باتری|باطری)\s+(?:هم\s+)?(?:خوب|قوی|مناسب|بادوام)(?:\s|$)', '', purchase_text)
     for segment in MENTION_SEPARATORS.split(_strip_budget_phrases(purchase_text)):
         tokens = re.findall(r'[^\W_]+', segment, flags=re.UNICODE)
         start = next((index for index, token in enumerate(tokens) if token in heads), None)
@@ -605,7 +613,7 @@ def product_span(text: str, category_names, identity_words) -> str | None:
                     continue  # Keep the identifier after the label, including unknown models.
                 if span and token in QUERY_STOPWORDS:
                     break
-                if span and re.match(r'(?:کم\s*مصرف|سبک|دارای|با قابلیت|ضد آب|حذف نویز|نویز کنسلینگ|فقط|حداقل)(?:\s|$)', ' '.join(tokens[start + relative:])):
+                if span and re.match(r'(?:کم\s*مصرف|سبک|دارای|با قابلیت|قابل حمل|ضد آب|حذف نویز|نویز کنسلینگ|فقط|حداقل)(?:\s|$)', ' '.join(tokens[start + relative:])):
                     # Retain the original request for evidence-based ranking;
                     # qualitative properties are not literal brand/model tokens.
                     break

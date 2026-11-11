@@ -8,6 +8,9 @@ def affirmative_purchase_text(text: str) -> str:
     # The old item in a replacement and explicitly refused items are not purchases.
     cleaned = re.sub(r'(?:به\s*جای|بجای)\s+.+?(?=\s+(?:یک|یه)\s+)', '', cleaned)
     cleaned = re.sub(r'(?:به\s*جای|بجای)\s+\S+\s+', '', cleaned)
+    priority = re.search(r'(?:اول|فعلا)\s+فقط\s+(.+?)(?=[؛;،]|$)', cleaned)
+    if priority and re.search(r'برای بعد|بعدا', cleaned):
+        cleaned = priority[1]
     clauses = re.split(r'[؛;،,!؟\n]|\b(?:اما|ولی)\b', cleaned)
     output = []
     for clause in clauses:
