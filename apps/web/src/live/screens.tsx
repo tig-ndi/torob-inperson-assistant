@@ -1,6 +1,7 @@
 import {formatWarranty} from '../api';
 import SellerContact from './SellerContact';
 import PurchaseJourney from './PurchaseJourney';
+import BrandMark from './BrandMark';
 import {recommendedFirst} from './requestPlanning';
 import { useEffect, useState, type ReactNode } from 'react';
 import { MapPin, Copy, Navigation, Bookmark, Package, ArrowLeft, SlidersHorizontal, Check, Clock, Compass, Footprints, ClipboardCheck } from 'lucide-react';
@@ -14,10 +15,10 @@ import VisitCards from './VisitCards';
 import {ProductFacts,OfferEvidence,BuyingClues,RoadCard,IndoorGuide,ReadTrip,SellerEvidence} from './RoadUI';
 import {TripReservation} from './ChecksUI';
 const QUICK_STARTS=[
-  {Icon:Clock,title:'الان شارژر لازم دارم',sub:'فروشگاه باز و گزینه‌های نزدیک',prompt:'شارژر موبایل می‌خواهم، نزدیک من کجا باز است؟'},
-  {Icon:Compass,title:'نزدیک من چی پیدا می‌شه؟',sub:'هدفون؛ با انتخاب نقطه، بدون GPS',prompt:'نزدیک‌ترین فروشگاه برای خرید هدفون را پیدا کن'},
-  {Icon:Footprints,title:'کدام فروشگاه ارزش رفتن دارد؟',sub:'گوشی؛ فاصله و ساعت کاری کنار قیمت',prompt:'گوشی لازم دارم، نزدیک من کجا می‌توانم حضوری بخرم؟'},
-  {Icon:ClipboardCheck,title:'قبل از رفتن بررسی کنیم',sub:'هدفون؛ موجودی و برنامهٔ مراجعه',prompt:'هدفون لازم دارم، فروشگاه نزدیک و باز پیدا کن'},
+  {Icon:Clock,title:'شارژر لازم دارم',sub:'فروشگاه باز نزدیک من',prompt:'شارژر موبایل می‌خواهم، نزدیک من کجا باز است؟'},
+  {Icon:Compass,title:'هدفون نزدیک من',sub:'با انتخاب نقطه روی نقشه',prompt:'نزدیک‌ترین فروشگاه برای خرید هدفون را پیدا کن'},
+  {Icon:Footprints,title:'گوشی می‌خواهم',sub:'مقایسهٔ قیمت و فاصله',prompt:'گوشی لازم دارم، نزدیک من کجا می‌توانم حضوری بخرم؟'},
+  {Icon:ClipboardCheck,title:'بررسی پیش از رفتن',sub:'هدفون؛ موجودی و مراجعه',prompt:'هدفون لازم دارم، فروشگاه نزدیک و باز پیدا کن'},
 ];
 type A={a:Shopping};
 export const Card=({children}:{children:ReactNode})=><section className="space-y-3 rounded-2xl border border-line bg-surface p-4">{children}</section>;
@@ -27,10 +28,17 @@ export async function copyText(text:string,a:Shopping){try{await navigator.clipb
 function ProductImage({p}:{p:Product}){const [failed,setFailed]=useState(false);return <div className="grid size-20 shrink-0 place-items-center rounded-2xl bg-white">{!failed&&safeImage(p.image_urls[0])?<img className="size-18 object-contain" src={safeImage(p.image_urls[0])} alt="" loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>:<Package className="text-gray-400" size={28}/>}</div>;}
 export function Home({a}:A){return <div>
   {a.completedVisit&&<section className="completed-visit" data-completed-visit><span><Check size={23}/></span><h2>حالا برای خرید بعدی چی لازم داری؟</h2><p>برنامهٔ مراجعه برای «{a.completedVisit.productName}» از «{a.completedVisit.shopName}» را بستیم. گفت‌وگو و نتایج قبلی باقی مانده‌اند.</p><p>{a.position?`جست‌وجوی بعدی می‌تواند اطراف ${a.position.label} باشد.`:'برای بررسی فروشگاه‌های نزدیک، موقعیت را انتخاب کن.'}</p><button className="secondary-action" onClick={a.beginPick}>{a.position?'تغییر موقعیت برای خرید بعدی':'انتخاب موقعیت روی نقشه'}</button></section>}
-  {!a.thread.length&&<section className="welcome"><h2>چی لازم داری؟</h2><p>نیازت را پایین بنویس؛ کالا و فروشگاه را قبل از رفتن بررسی کنیم.</p><div className="suggestion-grid">
-    {QUICK_STARTS.slice(0,1).map(({Icon,title,sub,prompt})=><button key={title} className="suggestion-card" onClick={()=>a.ask(prompt)}><Icon className="suggestion-icon" size={20} aria-hidden="true"/><b>{title}</b><small>{sub}</small></button>)}
-  </div><details className="extra-starts"><summary>شروع‌های پیشنهادی دیگر</summary><div className="suggestion-grid">    {QUICK_STARTS.slice(1).map(({Icon,title,sub,prompt})=><button key={title} className="suggestion-card" onClick={()=>a.ask(prompt)}><Icon className="suggestion-icon" size={20} aria-hidden="true"/><b>{title}</b><small>{sub}</small></button>)}
-</div></details><section className="welcome-position" aria-label="شروع با موقعیت"><MapPin size={18}/><div><b>{a.position?a.position.label:'فروشگاه نزدیک می‌خواهی؟'}</b><p>انتخاب موقعیت اختیاری است؛ می‌توانی روی نقشه نقطه بگذاری.</p></div><div className="inline-actions"><button className="secondary-action" onClick={a.beginPick}>{a.position?'تغییر نقطه روی نقشه':'انتخاب روی نقشه'}</button><button className="journey-text-action" onClick={a.locate}>موقعیت فعلی من</button></div></section></section>}
+  {!a.thread.length&&<section className="welcome" aria-label="شروع خرید حضوری">
+    <header className="welcome-intro">
+      <div className="welcome-brand"><BrandMark className="welcome-mark"/><h2>همراه خرید حضوری ترب</h2></div>
+      <p>کالا و فروشگاه را پیدا کن؛ قیمت‌ها و مسیر رفتن را قبل از خرید ببین.</p>
+    </header>
+    <h3 className="welcome-question">چی لازم داری؟ <span>پایین بنویس یا یک پیشنهاد را بزن</span></h3>
+    <div className="suggestion-grid" role="group" aria-label="پیشنهادهای شروع خرید">
+      {QUICK_STARTS.map(({Icon,title,sub,prompt})=><button key={title} className="suggestion-card" onClick={()=>a.ask(prompt)}><Icon className="suggestion-icon" size={20} aria-hidden="true"/><b>{title}</b><small>{sub}</small></button>)}
+    </div>
+    <section className="welcome-position" aria-label="شروع با موقعیت"><MapPin size={18}/><div><b>{a.position?a.position.label:'فروشگاه نزدیک می‌خواهی؟'}</b><p>برای دیدن فاصله و مسیر، موقعیتت را انتخاب کن؛ اختیاری است.</p></div><div className="inline-actions"><button className="secondary-action" onClick={a.beginPick}>{a.position?'تغییر نقطه روی نقشه':'انتخاب روی نقشه'}</button><button className="journey-text-action" onClick={a.locate}>موقعیت فعلی من</button></div></section>
+  </section>}
   {!!a.thread.length&&!a.saved.length&&!a.completedVisit&&<Note>هنوز برنامهٔ خریدی ذخیره نکرده‌ای. می‌توانی گفت‌وگو را ادامه بدهی یا از بالای صفحه گفت‌وگوی تازه بسازی.</Note>}
   {(a.saved.length>0||a.recentResults.length>0)&&<button className="history-home-link" onClick={()=>a.setOverlay('history')}><Bookmark size={17}/>برنامه‌ها و نتایج قبلی <span>{fa(a.saved.length)} برنامه</span></button>}
 </div>;}
