@@ -25,9 +25,9 @@ export function sellerPreferences(text:string):Partial<Filters>{
     if(!keep&&/همه(?:ی)?فیلتر(?:ها)?(?:را|رو)?(?:بردار|حذف|پاک|لغو)|بدونهیچفیلتر/.test(input))
       Object.assign(result,{open:false,credit:false,pay:false,kala:false,fast:false,min:'',max:'',withinRadius:false});
     if(!keep&&/(?:بودجه|سقفقیمت|محدودیتقیمت).*(?:بردار|حذف|لغو|مهمنیست)|بدون(?:سقف|محدودیت)قیمت/.test(input))result.max='';
-    const wordBudget=clause.replace(/\u200c/g,' ').match(/(?:زیر|حداکثر|بودجه(?: ام)?|تا)\s+([آ-ی\s]+?)\s*(?=می\s*خوا|باش|بخر|است|هست|که|برای|با|$|[.،؛؟!])/);
+    const wordBudget=clause.replace(/\u200c/g,' ').match(/(?:زیر|حداکثر|بودجه(?: ام)?|تا)(?:\s+(?:را|رو))?\s+([آ-ی\s]+?)\s*(?=می\s*خوا|باش|بخر|کن|است|هست|که|برای|با|$|[.،؛؟!])/);
     if(wordBudget&&/هزار|میلیون|میلیارد/.test(wordBudget[1]!)){const amount=wordToman(wordBudget[1]!.replace(/\s*(?:تومان|تومن)$/,''));if(amount!==null)result.max=amount;}
-    const price=input.match(/(?:زیر|حداکثر|بودجه(?:ام)?|تا)(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
+    const price=input.match(/(?:زیر|حداکثر|بودجه(?:ام)?|تا)(?:را|رو)?(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
     if(price){
       const [whole,fraction='']=price[1]!.split('.');
       const multiplier=price[2]==='میلیارد'?1000000000n:price[2]==='میلیون'?1000000n:1n;

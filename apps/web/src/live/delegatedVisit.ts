@@ -1,6 +1,7 @@
 import type {Offer} from './data.ts';
 import type {ArrivalCheck} from './journey.ts';
 import type {RoadRoute} from './upgrades.ts';
+import {wordToman} from './sellerPreferences.ts';
 
 export type DelegatedVisit={id:string;goal:'nearest'|'fastest'|'balanced'|'cheapest';status:'pending'|'planned'|'blocked';request:string;phoneKind:'ask'|'smart'|'basic'|'any'|null;excluded:string[];offerId:string|null;note:string};
 const clean=(s:string)=>s.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
@@ -35,10 +36,20 @@ export function selectVisit(offers:Offer[],checks:Record<string,ArrivalCheck>,ro
 export function travelLimit(text:string):number|null|undefined{
  const s=clean(text).replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
  if(/محدودیت زمان.*(?:ندارم|مهم نیست|حذف)|وقت رفتن.*مهم نیست/.test(s))return null;
- const words:Record<string,number>={پنج:5,ده:10,پانزده:15,بیست:20,سی:30,چهل:40,شصت:60};
- const match=/(?:فقط|حداکثر(?: تا)?)\s+(\d{1,3}|پنج|ده|پانزده|بیست|سی|چهل|شصت)\s*دقیقه.*(?:رفتن|رسیدن|وقت|فرصت)/.exec(s)??/(\d{1,3}|پنج|ده|پانزده|بیست|سی|چهل|شصت)\s*دقیقه\s+بیشتر\s+(?:برای\s+(?:رفتن|رسیدن)\s+)?(?:وقت|فرصت)\s+ندارم/.exec(s);
- if(!match)return undefined;
- const n=words[match[1]!]??Number(match[1]);return n>0&&n<=999?n:undefined;
+ const word='(?:صفر|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|دویست|سیصد|چهارصد|پانصد|ششصد|هفتصد|هشتصد|نهصد)';
+ const amount=`(?:\\d+|${word}(?:\\s+و\\s+${word})*|نیم)`;
+ const values:number[]=[];
+ const numeric=(value:string)=>value==='نیم'?0.5:/^\d+$/.test(value)?Number(value):Number(wordToman(value)??NaN);
+ for(const m of s.matchAll(new RegExp(`(^|[\\s؛،])(${amount})\\s*(دقیقه|ساعت)(?:\\s+و\\s+(نیم|${amount}\\s*دقیقه))?(?=$|[\\s؛،.!؟])`,'g'))){
+  const before=s.slice(0,m.index!+m[1]!.length),after=s.slice(m.index!+m[0].length);
+  if(!/(?:فقط|حداکثر(?: تا)?)\s*$/.test(before)&&!/^\s+بیشتر\s+(?:برای\s+(?:رفتن|رسیدن)\s+)?(?:وقت|فرصت)\s+ندارم/.test(after))continue;
+  const n=numeric(m[2]!);
+  values.push(n*(m[3]==='ساعت'?60:1)+(m[4]?m[4]==='نیم'?(m[3]==='ساعت'?30:0.5):numeric(m[4].replace(/\s*دقیقه$/,'')):0));
+ }
+ const n=values[0];return n!==undefined&&Number.isInteger(n)&&n>0&&n<=999&&values.every(v=>v===n)?n:undefined;
+}
+export function hasTravelDeadline(text:string):boolean{
+ const s=clean(text);return /(?:دقیقه|ساعت)/.test(s)&&(/(?:فقط|حداکثر).*?(?:وقت|فرصت|رفتن|رسیدن)/.test(s)||/(?:وقت|فرصت)\s+ندارم/.test(s));
 }
 export function withinTravelLimit(offer:Offer,checks:Record<string,ArrivalCheck>,limit:number|null):boolean{
  if(limit===null)return true;

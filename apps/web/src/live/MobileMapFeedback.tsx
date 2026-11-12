@@ -1,11 +1,13 @@
 import {ArrowRight,ChevronLeft} from 'lucide-react';
 import type {Shopping} from './state';
 import {fa,money} from './data';
+import {Decide} from './screens';
 
 // Use the same products, questions and actions as the conversation. Only their
 // presentation changes on the mobile map.
 export default function MobileMapFeedback({a,retry}:{a:Shopping;retry:()=>void}){
  if(a.selected&&['contact','trip'].includes(a.screen))return null;
+ if(a.screen==='decide'&&a.assistantFailure)return <div className="map-agent-feedback"><Decide a={a}/></div>;
  if(a.error)return <div className="map-agent-feedback" role="alert"><p>{a.error}</p><button className="secondary-action" onClick={retry}>تلاش دوباره</button></div>;
  if(a.busy)return <p className="map-agent-feedback" role="status">دارم همین خرید را بررسی می‌کنم…</p>;
  const question=a.screen==='decide'?a.thread.filter(m=>m.role==='assistant'&&m.kind!=='action').at(-1)?.text:null;

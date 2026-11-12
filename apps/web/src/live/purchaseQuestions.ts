@@ -8,6 +8,8 @@ import {chargerFacts} from './chargerFacts.ts';
 type Context={product:Product|null;recommended:Product|null;products:Product[];selected:Offer|null;offers:Offer[];checks:Record<string,ArrivalCheck>;routes:RoadRoute[];note:string};
 export function purchaseQuestion(text:string):'reason'|'compatibility'|'reservation'|'price'|null{
  const s=text.replace(/\u200c/g,' ').replace(/ي/g,'ی').replace(/ك/g,'ک');
+ // A contact request can accompany a new purchase; answer it in that purchase flow.
+ if(/رزرو|زنگ بزن|تماس واقعی/.test(s)&&/(?<![\wن])می\s*خوا|لازم دارم|نیاز دارم|دنبال|پیدا کن|جست\s*وجو کن|نشان بده|نشون بده|نمایش بده|(?:^|\s)بخر(?:ید)?(?:$|\s)/.test(s))return null;
  if(/به جای|عوض کن|جدید.*می\s*خوا|دیگه.*می\s*خوا/.test(s))return null;
  if(/رزرو|زنگ بزن|تماس واقعی/.test(s)&&/قطعی|واقعی|شد|بزن|انجام/.test(s))return 'reservation';
  if(/قیمت ثبت.*قیمت پاسخ|قیمت پاسخ.*قیمت ثبت/.test(s))return 'price';

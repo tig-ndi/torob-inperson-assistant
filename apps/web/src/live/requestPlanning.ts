@@ -1,4 +1,4 @@
-import {sellerPreferences} from './sellerPreferences.ts';
+import {sellerPreferences,wordToman} from './sellerPreferences.ts';
 // Longest phrase wins within a family, but never hides a different purchase.
 const families=[['قاب برای گوشی','کاور برای گوشی','قاب گوشی','کاور گوشی','قاب','کاور'],['کیف گوشی','کیف برای گوشی','کیف'],['شارژر برای گوشی','شارژر برای موبایل','شارژر برای لپ تاپ','شارژر لپ تاپ','شارژر موبایل','شارژر گوشی','شارژر'],['کابل برای گوشی','کابل شارژ','کابل'],['هدفون','هندزفری'],['گوشی دکمه ای','گوشی','موبایل'],['کفش','کتانی'],['لپ تاپ'],['باتری','باطری'],['پاوربانک']];
 const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
@@ -97,12 +97,52 @@ export function directPurchaseQuery(text:string):string|null{
  const topic=topics[0]!;return samePurchaseFamily(rest,topic)?topic:null;
 }
 
-// A queue item inherits device/connector context, never the other item nouns.
+// Keep the chosen item's own requirements apart from the other queued items.
 export function queuedPurchase(original:string,chosen:string,budget:string):string{
  const source=normalized(original);
- const device=/(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|لپ تاپ).*?(?=\s+(?:تا|بودجه)|[؛،.]|$)/.exec(source)?.[0]??'';
- const port=/(?:تایپ\s*سی|usb[ -]?c|میکرو\s*usb|لایتنینگ)/i.exec(source)?.[0]??'';
- return `${chosen} ${port} ${device} تا ${budget} تومان می‌خواهم`.replace(/\s+/g,' ').trim();
+ const topics=purchaseTopics(source);
+ const names=families.filter(names=>topics.some(topic=>names.some(name=>samePurchaseFamily(name,topic))))
+   .flat().sort((a,b)=>b.length-a.length);
+ const devices=[...source.matchAll(new RegExp(`(?:برای|واسه|مخصوص)\\s+(?:گوشی|موبایل|لپ تاپ).*?(?=\\s+(?:تا|بودجه)|[؛،.]|\\s+و\\s+(?:${names.join('|')})(?=$|\\s)|$)`,'g'))];
+ // Mask target devices without changing offsets; they are not other queue items.
+ const body=devices.reduce((text,m)=>text.slice(0,m.index)+' '.repeat(m[0].length)+text.slice(m.index!+m[0].length),source);
+ const mentions=[...body.matchAll(new RegExp(`(^|[\\s،؛])(${names.join('|')})(?=$|[\\s،؛؟])`,'g'))];
+ const index=mentions.findIndex(m=>samePurchaseFamily(m[2]!,chosen));
+ let item=chosen,device=devices.length===1?devices[0]![0]:'';
+ if(index>=0){
+  const m=mentions[index]!,start=m.index!+m[1]!.length;
+  const end=index+1<mentions.length?mentions[index+1]!.index!:body.length;
+  const ownDevice=devices.find(m=>m.index!>=start&&m.index!<end)?.[0];
+  device=ownDevice??device;
+  item=source.slice(start,end).replace(ownDevice??'','')
+    .replace(/(?:برای\s+)?هر\s*(?:کالا|کدام|کدوم)\s+([^؛،.]+)/g,(match,amount:string)=>budgetOnlyEdit('تا '+amount)!==undefined?'':match)
+    .replace(/(?:تا|زیر|حداکثر|بودجه(?:\s*(?:ام|را|رو))?)\s+[^؛،]*?(?:میلیون|میلیارد|هزار|تومان|تومن)(?:\s+(?:و\s+[^؛،]*?(?:هزار|میلیون)|تومان|تومن))?/g,' ')
+    .replace(/(?:برای\s+)?هر\s*(?:کالا|کدام|کدوم)|می\s*خوا(?:هم|م)|لازم دارم|برای بعد|بعداً?|اول\s+فقط/g,' ')
+    .replace(/^[\s؛،.]+|[\s؛،.]+$/g,'').replace(/\s+و$/,'').trim();
+ }
+ const accessory=/^(?:شارژر|کابل|قاب|کاور|کیف|باتری)/.test(chosen);
+ const portPattern=/(?:تایپ\s*سی|usb[ -]?[abc]|میکرو\s*usb|لایتنینگ)/gi;
+ const ports=[...new Set(source.match(portPattern)??[])];
+ const port=accessory&&!item.match(portPattern)&&ports.length===1?ports[0]:'';
+ return `${item} ${port} ${accessory?device:''} تا ${budget} تومان می‌خواهم`.replace(/\s+/g,' ').trim();
+}
+
+// A plain return/question restores locally; any extra instruction must be processed.
+export function restoredPurchaseEdit(text:string,topic:string):string|null{
+ const s=normalized(text),names=families.find(names=>names.some(name=>samePurchaseFamily(name,topic)))??[topic];
+ const match=new RegExp(`(?:برگردیم|برگرد به)[\\s\\S]*?(?:${[...names].sort((a,b)=>b.length-a.length).join('|')})(?=$|[\\s؛،؟])`).exec(s);
+ if(!match)return null;
+ const tail=s.slice(match.index+match[0].length).replace(/^[\s؛،.؟]+/,'').trim();
+ if(!tail||/^(?:چه|کدام|کدوم)\s+شرط.*(?:داشتم|بود)|^شر(?:ط|ایط).*چی بود/.test(tail))return null;
+ return tail.replace(/^(?:ولی|اما)\s+/,'');
+}
+export function budgetOnlyEdit(text:string):string|undefined{
+ const s=normalized(text).replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
+ const m=/^(?:فقط\s+)?(?:بودجه(?: ام)?|سقف قیمت|حداکثر|تا|زیر)(?:\s+(?:را|رو))?\s+(.+?)(?:\s+(?:کن|بکن|باشد|باشه|بگذار|بذار|بماند|بمونه))?[.؟!]*$/.exec(s);
+ if(!m)return undefined;
+ const amount=m[1]!.replace(/\s*(?:تومان|تومن)$/,'').trim();
+ if(!/^\d+(?:\.\d+)?(?:\s*(?:تومان|تومن|میلیون|میلیارد))?$/.test(amount)&&wordToman(amount)===null)return undefined;
+ return sellerPreferences(s).max;
 }
 export function restoredNeedSummary(need:{topic_query:string|null;max_price_toman:string|null;source_filters?:{colour:string|null;size:string|null;connector:string|null};battery_requirement:{minimum_mah:number|null};pending_requirements:{source_text:string}[]}):string{
  const f=need.source_filters??{colour:null,size:null,connector:null};
