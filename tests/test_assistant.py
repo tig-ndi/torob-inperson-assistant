@@ -1192,6 +1192,44 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(response.json()['code'], 'provider_model_mismatch')
         self.assertEqual(len(self.calls), 1)
 
+    def test_deepseek_accepts_qualified_and_unqualified_exact_model_names(self):
+        model = 'deepseek/deepseek-v4.1-flash-1017'
+        settings = AgentSettings(True, 'synthetic-secret-never-log', model=model, attempt_limit=3)
+        self.service.settings = self.provider.settings = settings
+        for reported in (model, model.rsplit('/', 1)[-1]):
+            with self.subTest(reported=reported):
+                self.response = completion(proposal(), model=reported)
+                response = self.post()
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()['model'], model)
+                self.assertEqual(response.json()['max_price_toman'], '10000000')
+                self.assertEqual({p['product_id'] for p in response.json()['products']['items']},
+                                 {'product_one', 'product_two'})
+        self.assertEqual(len(self.calls), 2)
+
+    def test_deepseek_does_not_accept_a_different_provider_or_model(self):
+        settings = AgentSettings(True, 'synthetic-secret-never-log',
+                                 model='deepseek/deepseek-v4.1-flash-1017', attempt_limit=3)
+        self.service.settings = self.provider.settings = settings
+        for reported in ('openai/deepseek-v4.1-flash-1017', 'deepseek/deepseek-v4.1-flash', 'gpt-6.1-sol'):
+            with self.subTest(reported=reported):
+                self.response = completion(proposal(), model=reported)
+                response = self.post()
+                self.assertEqual(response.status_code, 502)
+                self.assertEqual(response.json()['code'], 'provider_model_mismatch')
+        self.assertEqual(len(self.calls), 3)
+
+    def test_deepseek_json_is_validated_before_catalogue_results(self):
+        model = 'deepseek/deepseek-v4.1-flash-1017'
+        self.service.settings = self.provider.settings = AgentSettings(
+            True, 'synthetic-secret-never-log', model=model, attempt_limit=3)
+        self.response = completion(proposal(), model=model)
+        self.response['choices'][0]['message']['content'] = '{"action":"search"}'
+        response = self.post()
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()['code'], 'invalid_output')
+        self.assertEqual(self.rows()[0][0], 'failed')
+
     def test_duplicate_and_persistent_attempt_limits_prevent_new_network_calls(self):
         request = body()
         self.assertEqual(self.post(request).status_code, 200)
@@ -1222,7 +1260,8 @@ class AssistantApiTests(unittest.TestCase):
 class EnvelopeTests(unittest.TestCase):
     def test_luna_and_legacy_models_keep_bounded_structured_requests_without_fallback(self):
         self.assertEqual(AgentSettings().model, 'gpt-5.6-luna')
-        for model, effort in [('gpt-6-luna', 'low'), ('gpt-5.6-luna', 'low'), ('gpt-5-mini', 'low'), ('gpt-5.4-mini', 'none')]:
+        for model, effort in [('gpt-6-luna', 'low'), ('gpt-5.6-luna', 'low'), ('gpt-5-mini', 'low'),
+                              ('gpt-5.4-mini', 'none'), ('deepseek/deepseek-v4.1-flash-1017', 'none')]:
             calls = []
 
             def handler(request):
@@ -1239,6 +1278,24 @@ class EnvelopeTests(unittest.TestCase):
                 self.assertEqual(calls[0]['max_completion_tokens'], 1200)
                 self.assertTrue(calls[0]['response_format']['json_schema']['strict'])
                 self.assertFalse(calls[0]['store'])
+
+    def test_only_the_selected_synchronous_deepseek_model_is_allowlisted(self):
+        model = 'deepseek/deepseek-v4.1-flash-1017'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / '.env').write_text(
+                f'BOXAPI_API_KEY=synthetic-test-key\nTOROB_ASSISTANT_ENABLED=1\n'
+                f'TOROB_ASSISTANT_MODEL={model}\nTOROB_ASSISTANT_ATTEMPT_LIMIT=1000\n', encoding='utf-8')
+            with patch.dict('os.environ', {}, clear=True):
+                settings = AgentSettings.load(root)
+            self.assertEqual(settings.model, model)
+            self.assertEqual(settings.attempt_limit, 1000)
+            self.assertNotIn('synthetic-test-key', repr(settings))
+            for unsupported in (model + ':batch', model + ':free', 'deepseek/deepseek-r1'):
+                with self.subTest(unsupported=unsupported), patch.dict(
+                        'os.environ', {'TOROB_ASSISTANT_MODEL': unsupported}, clear=True):
+                    with self.assertRaises(ValueError):
+                        AgentSettings.load(root)
 
     def test_quoted_key_and_explicit_luna_six_model_load_without_changing_cap(self):
         with tempfile.TemporaryDirectory() as tmp:

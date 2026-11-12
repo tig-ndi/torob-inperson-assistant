@@ -119,7 +119,8 @@ class AgentSettings:
             return os.environ.get(key, values.get(key, default))
         model = get('TOROB_ASSISTANT_MODEL', 'gpt-5.6-luna')
         limit = int(get('TOROB_ASSISTANT_ATTEMPT_LIMIT', '3'))
-        if model not in {'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini'} or limit < 1:
+        if model not in {'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.4-mini',
+                         'deepseek/deepseek-v4.1-flash-1017'} or limit < 1:
             raise ValueError("unsupported model or attempt limit")
         key = get('BOXAPI_API_KEY', '')
         if len(key) >= 2 and key[0] == key[-1] and key[0] in {'"', "'"}:
@@ -226,7 +227,14 @@ class AssistantService:
             name = raw.get('model')
             if isinstance(name, str) and len(name) <= 120:
                 canonical = name.rsplit('/', 1)[-1]
-                if canonical != self.settings.model and not re.fullmatch(re.escape(self.settings.model) + r'-[0-9]{4}-[0-9]{2}-[0-9]{2}', canonical):
+                if '/' in self.settings.model:
+                    # Gateways may echo the configured provider prefix or omit it.
+                    # A different provider/version is still a model mismatch.
+                    same_model = name in {self.settings.model, self.settings.model.rsplit('/', 1)[-1]}
+                else:
+                    same_model = canonical == self.settings.model or bool(re.fullmatch(
+                        re.escape(self.settings.model) + r'-[0-9]{4}-[0-9]{2}-[0-9]{2}', canonical))
+                if not same_model:
                     reported_model = 'unexpected_model'
                     raise AgentError('provider_model_mismatch', 502)
                 reported_model = canonical
