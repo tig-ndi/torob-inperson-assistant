@@ -1,6 +1,7 @@
 """Shared boundaries between a purchase, its properties and a target device."""
 import re
 from tools.prepare_data import normalize_text
+from apps.api.purchase_language import affirmative_purchase_text
 
 
 def credit_preference(text: str) -> bool:
@@ -57,11 +58,11 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
         return False
     from apps.api.category import detect_category_intent
     current_category = category or detect_category_intent(topic)
-    named = detect_category_intent(text)
+    named = detect_category_intent(affirmative_purchase_text(text))
     explicit_new = bool(named and current_category and named != current_category
                         and re.search(r'(?<![\wن])می\s*خوا|دنبال|لازم دارم', text)
                         and not re.match(r'^(?:اگر|اگه|برای|واسه)', text))
-    head = re.search(r'(?<!\w)(گوشی|موبایل|کابل|شارژر|هدفون|هندزفری|پاور\s*بانک|کفش|کتانی|لپ\s*تاپ|باتری|یخچال)\b', text)
+    head = re.search(r'(?<!\w)(گوشی|موبایل|کابل|شارژر|هدفون|هندزفری|پاور\s*بانک|کفش|کتانی|لپ\s*تاپ|باتری|یخچال)\b', affirmative_purchase_text(text))
     target_reply = topic.startswith(('شارژر','کابل','کیف','قاب','کاور','محافظ','باتری')) and re.match(r'^(?:برای|واسه|مخصوص)\s+(?:گوشی|موبایل|دستگاه|مدل|سامسونگ|ردمی|آیفون|لپ\s*تاپ)', text)
     if head and not target_reply and not re.match(r'^(?:اگر|اگه)\b', text) and re.search(r'(?<![\wن])می\s*خوا|لازم دارم|دنبال', text):
         canonical = lambda value: re.sub(r'\s+', '', value).replace('موبایل','گوشی').replace('کتانی','کفش').replace('هندزفری','هدفون')
@@ -73,6 +74,7 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
         return True
     if not explicit_new and (re.match(r'^(?:اگر|اگه)\b', text)
             or re.search(r'درگاه|تایپ\s*سی|میکرو\s*usb|لایتنینگ|\bpd\b|\bpps\b|\bqc\b|\d+\s*وات', text, re.I)
+            or re.search(r'(?<!\w)(?:رم|حافظه)\s*(?:حداقل\s*)?(?:\d+|بماند|بمونه|همان|همون)', text)
             or re.search(r'همان دستگاه|همون دستگاه|(?:مدل|کابل).*متری|انتقال داده|فقط شارژ|ENC|enc|ANC|anc|مصرف انرژی|در مشخصات|حذف نویز|بی\s*سیم|هر دو برند|هر دو شرط', text)
             or re.search(r'(?:همان|همون)\s+بودجه|بودجه.*(?:کن|بماند|بمونه)', text)
             or re.search(r'قیمت ثبت.*قیمت پاسخ|رزرو.*(?:قطعی|واقعی)|زنگ بزن', text)

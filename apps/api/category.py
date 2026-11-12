@@ -109,6 +109,7 @@ TARGET_DEVICE_REGEX = (
 def normalize_product_text(text: str) -> str:
     """Conservative whole-word input aliases; never infer a brand or model."""
     text = normalize_text(text)
+    text = re.sub(r'(?<!\w)(?:لپ\s*تاپ|لپتاب|لب\s*تاپ|لبتاب)(?!\w)', 'لپ تاپ', text)
     aliases = {'gooshi': 'گوشی', 'gushi': 'گوشی', 'mobile': 'موبایل',
                'laptop': 'لپ تاپ', 'headphone': 'هدفون', 'headphones': 'هدفون',
                'charger': 'شارژر', 'کتونی': 'کفش', 'mikham': 'میخواهم', 'mikhaham': 'میخواهم',

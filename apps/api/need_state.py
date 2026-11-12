@@ -218,12 +218,17 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     if changed or query and old_topic and query != old_topic and not is_constraint_followup(latest):
         reference = request.reference_product_id
     previous_state = request.context_need_state
+    from apps.api.ram import minimum_ram_gb
+    ram_minimum = minimum_ram_gb(latest, previous_state.minimum_ram_gb if previous_state and not changed else None) if semantic_category == 'لپ تاپ و نوت بوک' else None
+    if ram_minimum is not None:
+        update = PendingUpdate([item for item in update.items if item.key != 'رم'], update.clarification, update.controlled)
     keep_comparison = bool(previous_state and not changed and (
         is_constraint_followup(latest) or is_need_control(latest)
         or refines_purchase(latest, old_topic, request.context_category)
         or query == old_topic and re.search(r'بودجه|قیمت|تومان|میلیون', latest)))
     capacity = minimum_capacity(latest, previous_state.minimum_capacity_kg if previous_state and not changed else None) if 'ماشین لباسشویی' in (topic or '') else None
     resolved = AssistantNeedState(
+        minimum_ram_gb=ram_minimum,
         minimum_capacity_kg=capacity,
         excluded_kinds=update_excluded_kinds(previous_state.excluded_kinds if previous_state else [], latest, changed),
         comparison_queries=previous_state.comparison_queries if keep_comparison else [],

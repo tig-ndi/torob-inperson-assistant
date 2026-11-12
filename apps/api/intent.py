@@ -136,7 +136,7 @@ TENS = dict(zip("بیست سی چهل پنجاه شصت هفتاد هشتاد ن
 HUNDREDS = dict(zip("صد دویست سیصد چهارصد پانصد ششصد هفتصد هشتصد نهصد".split(), range(100, 1000, 100)))
 SCALES = {"هزار": 1000, "میلیون": 10**6, "میلیارد": 10**9}
 NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES, 'و'])
-AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS})(?!\w))'
+AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS}|نیم)(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
 BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
 QUERY_STOPWORDS = frozenset('بود منظورم اینبار بار انتخاب انتخابش تصمیم برنامه مسیر خودت بچین تعیین حرکت هر روز زیر حضوری نزدیک اطراف نزدیکترین نزدیکم اطرافم ترین من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
@@ -363,6 +363,10 @@ def parse_toman(quote: str) -> int:
             group, last_scale = Fraction(0), scale
             last_rank = 4
             previous_number = True
+        elif token == 'نیم' and not previous_number and group > 0:
+            group += Fraction(1, 2)
+            last_rank = 0
+            previous_number = True
         elif token in ONES or token in TENS or token in HUNDREDS:
             rank = 3 if token in HUNDREDS else 2 if token in TENS else 1
             if previous_number or rank >= last_rank:
@@ -451,6 +455,15 @@ def query_choices(request: AssistantRequest) -> list[str]:
     The model selects among them; the repository determines whether evidence exists.
     """
     latest = request.messages[-1].content
+    if request.context_query and request.context_need_state:
+        from apps.api.model_comparison import revised_comparison_queries
+        if revised_comparison_queries(latest, request.context_need_state.comparison_queries):
+            return [normalize_text(request.context_query)]
+    if (request.context_query and request.context_need_state
+            and request.context_need_state.pending_requirements
+            and detect_category_intent(affirmative_purchase_text(latest)) is None
+            and re.search(r'(?<!\w)(?:رم|حافظه|توان|وات|مدل خاصی)(?!\w)', normalize_text(latest))):
+        return [normalize_text(request.context_query)]
     from apps.api.purchase_context import released_brand_topic
     released = released_brand_topic(latest, request.context_query)
     if released:

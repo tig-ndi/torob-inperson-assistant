@@ -24,6 +24,7 @@ class DestinationRequest(VisitRequest):
     excluded_kinds:list[Literal['portable_fridge']]=Field(default_factory=list,max_length=1)
     require_anc:bool=False
     minimum_capacity_kg:int|None=Field(default=None,strict=True,gt=0,le=1000)
+    minimum_ram_gb:int|None=Field(default=None,strict=True,gt=0,le=128)
     source_filters: SourceFilters = Field(default_factory=SourceFilters)
     reference_product_id:str|None=Field(default=None,min_length=1,max_length=120)
     exclude_shop_ids:list[Annotated[str,Field(min_length=1,max_length=120)]]=Field(default_factory=list,max_length=20)
@@ -71,6 +72,8 @@ def destinations_router(catalogue:Catalogue):
             db.create_function('arrival_rank',3,arrival_rank,deterministic=True)
             db.create_function('payment_matches',3,payment,deterministic=True)
             db.create_function('capacity_mah',2,lambda cat,raw:assess_capacity(cat,decode_list(raw)).capacity_mah,deterministic=True)
+            from apps.api.ram import recorded_ram_gb
+            db.create_function('recorded_ram_gb',2,lambda cat,raw:recorded_ram_gb(cat,decode_list(raw)),deterministic=True)
             base=(' FROM product_search JOIN products p ON p.product_id=product_search.product_id '
                   'JOIN offers o ON o.product_id=p.product_id JOIN shops s ON s.shop_id=o.shop_id '
                   'WHERE source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs,p.persian_title)=1 AND product_search MATCH ? AND product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 '
@@ -89,6 +92,8 @@ def destinations_router(catalogue:Catalogue):
                 params.append(body.reference_product_id)
             if body.minimum_battery_mah is not None:
                 base+='AND p.category_name=? AND capacity_mah(p.category_name,p.specs)>=? ';params.extend(['گوشی موبایل',body.minimum_battery_mah])
+            if body.minimum_ram_gb is not None:
+                base+='AND recorded_ram_gb(p.category_name,p.specs)>=? ';params.append(body.minimum_ram_gb)
             counts=db.execute('SELECT count(DISTINCT p.product_id),count(DISTINCT s.shop_id)'+base,params).fetchone()
             select=('SELECT p.product_id,o.offer_id,o.shop_id,o.price_toman,haversine_m(?,?,s.lat,s.lon) AS dist_m,arrival_rank(s.weekly_hours,s.lat,s.lon) AS arrival_rank,'
                     'row_number() OVER(PARTITION BY s.shop_id ORDER BY o.price_toman IS NULL,o.price_toman,o.offer_id) AS shop_row')

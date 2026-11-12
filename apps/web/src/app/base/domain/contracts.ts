@@ -12,6 +12,7 @@ export type BatteryRequirement = {
 };
 export type SourceFilters = {colour:string|null;size:string|null;connector:'usb-c'|'micro-usb'|'lightning'|null};
 export type NeedState = {
+  minimum_ram_gb?: number|null;
   minimum_capacity_kg?: number|null;
   excluded_kinds?: ('portable_fridge')[];
   comparison_queries?: string[];
@@ -53,7 +54,7 @@ export type CataloguePage = Omit<ProductPage, 'items'> & {
   provenance: Provenance;
 };
 export type CatalogueSearch = {
-  minimumCapacity?:number|null; requireAnc?:boolean; excludedKinds?:NeedState['excluded_kinds'];
+  minimumCapacity?:number|null; minimumRam?:number|null; requireAnc?:boolean; excludedKinds?:NeedState['excluded_kinds'];
   query: string; offset?: number; limit?: number; maxPrice: string | null; sourceFilters?: SourceFilters; referenceProductId?:string|null;
   categoryName?: string | null; categoryCleared?: boolean; minimumBattery?: number | null;
   sort?: 'relevance' | 'nearest'; position?: Position | null;

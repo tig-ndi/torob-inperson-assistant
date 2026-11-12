@@ -1357,18 +1357,19 @@ class EnvelopeTests(unittest.TestCase):
             with patch.dict('os.environ', {'BOXAPI_API_KEY': 'bad key'}), self.assertRaises(ValueError):
                 AgentSettings.load(root)
 
-    def test_reservation_busy_and_uncertain_calls_still_consume_allowance(self):
+    def test_two_simultaneous_reservations_are_allowed_but_bounded_and_counted(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = UsageLedger(Path(tmp) / 'usage.sqlite3')
-            ledger.reserve('first', 'synthetic', 3)
+            ledger.reserve('first', 'synthetic', 4)
+            ledger.reserve('second', 'synthetic', 4)
             with self.assertRaises(AgentError) as busy:
-                ledger.reserve('second', 'synthetic', 3)
+                ledger.reserve('third', 'synthetic', 4)
             self.assertEqual(busy.exception.code, 'busy')
             ledger.finish('first', 'cancelled', error='cancelled')
-            self.assertEqual(UsageLedger(ledger.path).remaining(3), 2)
-            ledger.reserve('second', 'synthetic', 3)
+            self.assertEqual(UsageLedger(ledger.path).remaining(4), 2)
+            ledger.reserve('third', 'synthetic', 4)
             ledger.finish('second', 'failed', {'prompt_tokens': True, 'completion_tokens': -1})
-            self.assertEqual(ledger.remaining(3), 1)
+            self.assertEqual(ledger.remaining(4), 1)
 
     def test_cancellation_counts_the_call_and_never_returns_a_result(self):
         class SlowProvider:

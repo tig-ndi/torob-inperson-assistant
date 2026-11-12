@@ -31,6 +31,19 @@ async function setup(page,request){
 }
 
 for(const [width,height] of sizes){
+ test(`recorded laptop RAM survives filter changes and reload at ${width}`,async({page,request})=>{
+  await page.setViewportSize({width,height});const f=await setup(page,request);
+  const products=await(await request.get('/api/products?q='+encodeURIComponent('لپ تاپ')+'&minimum_ram_gb=16&limit=12')).json();
+  const battery={status:'unspecified',minimum_mah:null};
+  const need={version:1,topic_query:'لپ تاپ',category_name:'لپ تاپ و نوت بوک',category_cleared:false,max_price_toman:null,budget_needs_input:false,offer_sort:'price',minimum_ram_gb:16,battery_requirement:battery,review_topics:[],pending_requirements:[]};
+  await page.route('**/api/assistant/turn',r=>r.fulfill({json:{request_id:r.request().postDataJSON().request_id,status:'results',query:'لپ تاپ',category_name:need.category_name,max_price_toman:null,question:null,question_code:null,products,offer_sort:'price',battery_requirement:battery,need_state:need,explanation:null}}));
+  await send(page,'لپ تاپ با رم حداقل ۱۶ گیگ می‌خواهم');await expect(page.locator('.product-results')).toBeVisible();
+  await page.reload();await expect.poll(async()=> (await session(page,'need'))?.minimum_ram_gb).toBe(16);
+  await page.locator('.mobile-header-menu > summary').click();await page.getByRole('button',{name:'شرایط خرید',exact:true}).click();
+  await page.getByLabel('حداکثر قیمت (تومان)',{exact:true}).fill('60000000');await page.getByRole('button',{name:'اعمال فیلترها',exact:true}).click();
+  await expect.poll(()=>f.searches.some(u=>u.searchParams.get('minimum_ram_gb')==='16'&&u.searchParams.get('max_price_toman')==='60000000')).toBe(true);
+  expect((await session(page,'need')).minimum_ram_gb).toBe(16);
+ });
  test(`restoring a purchase applies a new budget before fetching results at ${width}`,async({page,request})=>{
   await page.setViewportSize({width,height});const f=await setup(page,request);
   await send(page,'گوشی اندروید سفید با باتری حداقل ۵۰۰۰ تا بیست میلیون می‌خواهم');await expect.poll(()=>f.calls.length).toBe(1);
@@ -112,5 +125,12 @@ for(const [width,height] of sizes){
   await send(page,'لب تاب میخوام');await expect.poll(async()=> (await session(page,'need'))?.topic_query).toBe('لپ تاپ');expect((await session(page,'need')).max_price_toman).toBeNull();expect(f.calls).toHaveLength(1);
   await send(page,'گوشی اندرویدی سفید میخوام');await expect(page.getByRole('button',{name:'تلاش دوباره',exact:true})).toBeVisible();expect(f.calls).toHaveLength(1);
   await send(page,'گوشی میخوام');expect(await session(page,'query:assistantFailure')).toBe('گوشی اندرویدی سفید میخوام');expect(f.calls).toHaveLength(1);await capture(page,'typed-credit-exhausted');
+ });
+
+ test(`a fresh conversation retries the provider after an old quota failure at ${width}`,async({page,request})=>{
+  await page.setViewportSize({width,height});const f=await setup(page,request);f.setFail(true,'provider_budget');
+  await send(page,'گوشی اندرویدی سفید تا پنج میلیون می‌خواهم');await expect(page.getByRole('button',{name:'تلاش دوباره',exact:true})).toBeVisible();expect(f.calls).toHaveLength(1);
+  f.setFail(false);await page.locator('.mobile-header-menu > summary').click();await page.getByRole('button',{name:'گفت‌وگوی تازه',exact:true}).click();await page.getByRole('button',{name:'بله، گفت‌وگوی تازه',exact:true}).click();
+  await send(page,'گوشی اندرویدی سفید تا پنج میلیون می‌خواهم');await expect.poll(()=>f.calls.length).toBe(2);await expect(page.locator('.product-results')).toBeVisible();
  });
 }

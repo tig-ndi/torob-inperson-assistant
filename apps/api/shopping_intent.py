@@ -105,6 +105,7 @@ def positive_brand_query(query):
 
 def retrieval_query(query):
     text=positive_brand_query(query)
+    text=re.sub(r'(?<!\w)(?:لپ\s*تاپ|لپتاب|لب\s*تاپ|لبتاب)(?!\w)', 'لپ تاپ', text)
     if text.startswith('کابل') and re.search(r'گوشی|موبایل',text):
         text=re.sub(r'گوشی|موبایل',' ',text)
         text=' '.join(text.split())
@@ -121,6 +122,7 @@ def retrieval_query(query):
 
 def matches_product_kind(query,category,title,specs,brand=None,model=None):
     query=normalize_text(query);category=normalize_text(category or '')
+    query=re.sub(r'(?<!\w)(?:لپ\s*تاپ|لپتاب|لب\s*تاپ|لبتاب)(?!\w)', 'لپ تاپ', query)
     # A matching compatibility/specification row is not the identity being bought.
     name = normalize_text(' '.join(filter(None,(title,brand,model))))
     for aliases in brand_exclusions(query):

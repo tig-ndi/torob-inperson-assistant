@@ -153,8 +153,10 @@ for(const [width,height] of sizes.slice(0,3))test(`complete mobile journey and n
  await page.goBack();await expect(page.getByRole('heading',{name:'نتیجهٔ آخرین استعلام',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'بازگشت به استعلام‌ها',exact:true})).toHaveCount(0);await settle(page);
  await page.goBack();await expect(page.getByRole('dialog')).toHaveCount(0);
  await panel.getByRole('button',{name:'بررسی موجودی و پاسخ فروشگاه',exact:true}).click();await expect(page.getByRole('dialog')).toHaveAccessibleName('بررسی موجودی و پاسخ فروشگاه');
- await page.getByRole('button',{name:'نمایش آزمایشی؛ پاسخ و رزرو',exact:true}).click();await expect(page.getByRole('dialog')).toHaveAccessibleName('نمایش آزمایشی؛ پاسخ و رزرو');await page.goBack();
- await page.getByRole('button',{name:'نمایش آزمایشی؛ بدون ارتباط واقعی',exact:true}).click();await page.getByLabel('سناریوی پیگیری آزمایشی').selectOption('no_answer');
+ const demoGroup=page.locator('[data-followup-panel="followup"] > details');await demoGroup.locator('summary').click();
+ await demoGroup.getByRole('button',{name:'نمایش آزمایشی؛ پاسخ و رزرو',exact:true}).click();await expect(page.getByRole('dialog')).toHaveAccessibleName('نمایش آزمایشی؛ پاسخ و رزرو');await page.goBack();
+ if(await demoGroup.getAttribute('open')===null)await demoGroup.locator('summary').click();
+ await demoGroup.getByRole('button',{name:'نمایش آزمایشی؛ بدون ارتباط واقعی',exact:true}).click();await page.getByLabel('سناریوی پیگیری آزمایشی').selectOption('no_answer');
  const selected=JSON.parse((await stored(page)).selected);
  const alternative=await(await request.post('/api/followups/alternatives',{data:{product_id:id,offer_id:selected.offer_id,shop_id:selected.shop_id,outcome:'no_answer',outcome_source:'simulated',user_lat:35.7,user_lon:51.4}})).json();
  alternative.alternatives.items=source.items.filter(o=>o.shop_id!==selected.shop_id).slice(0,2);alternative.alternatives.has_more=false;

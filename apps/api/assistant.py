@@ -30,7 +30,7 @@ from apps.api.purchase_language import affirmative_purchase_text
 from apps.api.shopping_intent import platform_topic
 from apps.api.purchase_context import refines_purchase, retained_identity, cumulative_brand_topic, factual_question, restore_purchase, accessory_target
 from apps.api.models import BatteryRequirement
-from apps.api.model_comparison import comparison_queries, comparison_summary
+from apps.api.model_comparison import comparison_queries, comparison_summary, revised_comparison_queries
 
 
 ENDPOINT = "https://ai.boxapi.ir/ai/v1/chat/completions"
@@ -264,8 +264,12 @@ class AssistantService:
             latest_category = None if refinement else detect_category_intent(affirmative_purchase_text(latest_msg))
             category_names = await asyncio.to_thread(self.catalogue.category_names)
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
-            comparisons = comparison_queries(latest_msg)
+            comparison_edit = revised_comparison_queries(
+                latest_msg, request.context_need_state.comparison_queries if request.context_need_state else [])
+            comparisons = comparison_edit or comparison_queries(latest_msg)
             comparison_category = detect_category_intent(latest_msg)
+            if comparison_edit:
+                comparison_category = request.context_category
             if comparisons and comparison_category is None:
                 for candidate in ('گوشی موبایل', 'لپ تاپ و نوت بوک', 'هدفون، هدست و هندزفری'):
                     if any([await asyncio.to_thread(self.catalogue.matches_identity, query, candidate) for query in comparisons]):
@@ -666,6 +670,7 @@ class AssistantService:
                         require_anc='anc' in needs.state.preferences,
                         excluded_kinds=needs.state.excluded_kinds,
                         minimum_capacity_kg=needs.state.minimum_capacity_kg,
+                        min_ram_gb=needs.state.minimum_ram_gb,
                         reference_product_id=needs.state.reference_product_id,
                         ranking_context=ranking_need_context(needs.state),
                         min_battery_capacity_mah=requirement.minimum_mah,
@@ -687,6 +692,11 @@ class AssistantService:
                 explanation['limitations'].append(capacity_note)
                 if not page['items'] and not needs.state.comparison_queries:
                     explanation['summary'] = capacity_note + ' با این ظرفیت و بودجه، دستگاه کاملِ دارای شاهد کافی پیدا نشد؛ قطعهٔ یدکی جایگزین نمی‌شود.'
+            if explanation is not None and needs.state.minimum_ram_gb is not None:
+                ram_note = f'فقط لپ‌تاپ با رم ثبت‌شدهٔ حداقل {needs.state.minimum_ram_gb} گیگابایت نمایش داده می‌شود؛ مقدار نامعلوم کنار گذاشته شده است.'
+                explanation['limitations'].append(ram_note)
+                if not page['items'] and not needs.state.comparison_queries:
+                    explanation['summary'] = ram_note + ' با این سقف بودجه و مشخصات، مدل دارای شاهد کافی پیدا نشد.'
             if explanation is not None and 'anc' in needs.state.preferences:
                 explanation['limitations'].append('فقط شاهد ثبت‌شدهٔ حذف نویز فعال ANC پذیرفته شد؛ ENC میکروفون یا مشخصات نامعلوم کافی نیست و کیفیت واقعی تأیید نشده است.')
             if explanation is not None and page is not None and not page['items'] and any(needs.state.source_filters.model_dump().values()):

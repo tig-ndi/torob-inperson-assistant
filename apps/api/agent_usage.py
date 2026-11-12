@@ -14,6 +14,8 @@ class AgentError(Exception):
 
 
 class UsageLedger:
+    MAX_IN_FLIGHT = 2
+
     def __init__(self, path: Path):
         self.path = path
 
@@ -41,7 +43,10 @@ class UsageLedger:
                 raise AgentError("duplicate_request", 409)
             if connection.execute("SELECT count(*) FROM attempts").fetchone()[0] >= limit:
                 raise AgentError("attempt_limit", 429)
-            if connection.execute("SELECT 1 FROM attempts WHERE state='reserved' AND created>?", (now - 45,)).fetchone():
+            active = connection.execute(
+                "SELECT count(*) FROM attempts WHERE state='reserved' AND created>?", (now - 45,)
+            ).fetchone()[0]
+            if active >= self.MAX_IN_FLIGHT:
                 raise AgentError("busy", 429)
             connection.execute("INSERT INTO attempts(request_id,created,model,state) VALUES (?,?,?,'reserved')",
                                (request_id, now, model))

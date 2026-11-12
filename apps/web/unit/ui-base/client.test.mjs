@@ -27,6 +27,9 @@ test('offer and search requests preserve exact zero and apply filters on server 
     const continued=new URL(urls[2],'http://localhost').searchParams;
     assert.equal(continued.get('exclude_portable_fridge'),'true');
     assert.equal(continued.get('require_anc'),'true');assert.equal(continued.get('minimum_capacity_kg'),'7');assert.equal(continued.get('offset'),'12');
+    await searchCatalogue({query:'لپ تاپ',maxPrice:'60000000',minimumRam:16,offset:12},signal());
+    const laptop=new URL(urls[3],'http://localhost').searchParams;
+    assert.equal(laptop.get('minimum_ram_gb'),'16');assert.equal(laptop.get('max_price_toman'),'60000000');assert.equal(laptop.get('offset'),'12');
   } finally { globalThis.fetch = original; }
 });
 test('service errors never become a successful empty page and missing location is rejected locally', async () => {

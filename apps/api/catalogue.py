@@ -176,7 +176,8 @@ class Catalogue:
                category_name: str | None = None, min_battery_capacity_mah: int | None = None,
                *, user_lat: float | None = None, user_lon: float | None = None,
                sort_by: str = 'relevance', source_filters=None, ranking_context='', reference_product_id=None,
-               require_anc=False, minimum_capacity_kg=None, excluded_kinds=None) -> dict:
+               require_anc=False, minimum_capacity_kg=None, excluded_kinds=None,
+               min_ram_gb=None) -> dict:
         if sort_by not in {'relevance', 'nearest'} or (sort_by == 'nearest' and (user_lat is None or user_lon is None)):
             raise InvalidQuery('nearest ordering requires coordinates')
         expression = retrieval_expression(query)
@@ -191,6 +192,9 @@ class Catalogue:
                 return assess_capacity(category, decode_list(raw))
             connection.create_function('battery_capacity_mah', 2, lambda category, raw: capacity(category, raw).capacity_mah, deterministic=True)
             battery_clause = 'AND p.category_name=? AND battery_capacity_mah(p.category_name,p.specs)>=? ' if min_battery_capacity_mah is not None else ''
+            from apps.api.ram import recorded_ram_gb
+            connection.create_function('recorded_ram_gb', 2, lambda category, raw: recorded_ram_gb(category, decode_list(raw)), deterministic=True)
+            ram_clause = 'AND recorded_ram_gb(p.category_name,p.specs)>=? ' if min_ram_gb is not None else ''
             nearest_select = ''
             params = []
             if sort_by == 'nearest':
@@ -203,6 +207,8 @@ class Catalogue:
             from apps.api.recorded_preferences import recorded_preference_score
             connection.create_function('source_rank',2,lambda cat,raw: recorded_preference_score(cat,raw,ranking_context),deterministic=True)
             params.extend([expression,query,reference_product_id,reference_product_id,category_name,category_name,max_price,max_price])
+            if min_ram_gb is not None:
+                params.append(min_ram_gb)
             if min_battery_capacity_mah is not None:
                 params.extend(['گوشی موبایل', min_battery_capacity_mah])
             if sort_by != 'nearest':params.append(query)
@@ -215,7 +221,7 @@ class Catalogue:
                 "AND matches_product_kind(?,p.category_name,p.persian_title,p.specs,p.brand_name,p.model)=1 AND source_filter(p.specs)=1 AND purchase_requirements(p.category_name,p.specs,p.persian_title)=1 "
                 "AND (? IS NULL OR p.product_id=?) AND (? IS NULL OR p.category_name = ?) "
                 "AND (? IS NULL OR EXISTS (SELECT 1 FROM offers o WHERE o.product_id=p.product_id "
-                "AND o.price_toman<=?)) " + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",
+                "AND o.price_toman<=?)) " + ram_clause + battery_clause + nearest_clause + "ORDER BY " + ordering + " LIMIT ? OFFSET ?",
                 params).fetchall()
             items = [self.product(connection, row, capacity(row['category_name'], row['specs'])) for row in rows[:limit]]
             if sort_by == 'nearest':

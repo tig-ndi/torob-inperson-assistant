@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {restoredPurchaseEdit,budgetOnlyEdit,queuedPurchase,purchaseTopics,directPurchaseQuery,canUseSimplePurchase} from '../src/live/requestPlanning.ts';
+
+test('refused spare parts do not create a second purchase',()=>{
+ assert.deepEqual(purchaseTopics('پاوربانک تا دو میلیون تومان میخوام، نه ماژول و نه باتری یدکی'),['پاوربانک']);
+ assert.deepEqual(purchaseTopics('شارژر برای گوشی میخوام، نه خود گوشی'),['شارژر']);
+});
 import {purchaseQuestion} from '../src/live/purchaseQuestions.ts';
 import {travelLimit,hasTravelDeadline} from '../src/live/delegatedVisit.ts';
 

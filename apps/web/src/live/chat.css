@@ -273,6 +273,7 @@
  .mobile-map-sheet[data-compact-journey=true] .map-sheet-handle{height:44px;min-height:44px}
  .mobile-map-sheet[data-compact-journey=true] .mobile-journey-actions>.secondary-action{display:none}
  .mobile-map-sheet[data-compact-journey=true] .mobile-map-journey{padding:4px 8px 6px}
+ .compact-departure{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;border:1px solid var(--border);border-radius:12px;color:var(--text-2);font-size:11px}
  .mobile-map-sheet[data-compact-journey=true] .mobile-view-switch{min-height:48px;padding:2px 8px}
  .mobile-map-sheet[data-compact-journey=true] .map-sheet-address{padding-bottom:2px}
  .mobile-map-sheet .mobile-view-switch>button:first-child{color:var(--text-2);background:transparent;border-color:transparent;font-size:11px}
@@ -338,8 +339,10 @@
  .mobile-map-sheet[data-journey-list=true]:not([data-compact-journey=true]) .map-sheet-journey{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
  .map-journey-shops{display:flex;flex-shrink:0;flex-wrap:wrap;gap:6px;margin:6px 12px}
  .map-journey-shops>.secondary-action{flex:1;min-width:0;min-height:44px;padding:7px;font-size:11px;line-height:1.7}
+ .mobile-map-sheet[data-compact-journey=true] .map-journey-shops>.secondary-action{white-space:nowrap;font-size:10px}
  .map-journey-shops svg{flex-shrink:0}
- .mobile-map-sheet[data-compact-journey=true] .map-journey-shops{display:none}
+ .mobile-map-sheet[data-compact-journey=true] .map-journey-shops{display:flex;margin-block:4px}
+ .mobile-map-sheet[data-compact-journey=true] .mobile-map-journey[data-purchase-stage=ready] .journey-route-request{display:none}
 }
 
 .journey-route-request{display:flex;flex-direction:column;gap:6px;margin-block:8px}.journey-route-request>.secondary-action{min-height:44px}.journey-route-request small{font-size:11px;line-height:1.8;color:var(--text-2)}

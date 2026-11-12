@@ -28,6 +28,39 @@ def comparison_queries(text):
     return list(dict.fromkeys(queries))
 
 
+def revised_comparison_queries(text, previous):
+    """Apply an explicit one-for-one model edit without losing the other model."""
+    if not 2 <= len(previous) <= 3:
+        return []
+    text = normalize_text(text)
+    model = (r'(?:(?:redmi|samsung|xiaomi|iphone|سامسونگ|ردمی|شیائومی|آیفون)\s+)?'
+             r'[a-z]{1,8}\s*-?\s*\d{1,5}(?:\s+(?:pro|max|plus|mini|ultra|lite|fe))*')
+    old, new = rf'(?P<old>{model})', rf'(?P<new>{model})'
+    patterns = [
+        old + r'\s+(?:را|رو)\s+حذف\s+کن\s+و\s+' + new
+        + r'\s+(?:را|رو)\s+(?:جایش|جاش)\s+(?:بگذار|بذار|بذارش)',
+        r'(?:به\s+جای|بجای)\s+' + old + r'\s*[,،]?\s+' + new
+        + r'(?:\s+(?:را|رو))?\s+(?:بگذار|بذار|بذارش|جایگزین کن)',
+        old + r'\s+(?:را|رو)\s+با\s+' + new + r'\s+(?:عوض|جایگزین)\s+کن',
+    ]
+    edit = next((match for pattern in patterns
+                 if (match := re.search(pattern, text, re.I))), None)
+    if not edit:
+        return []
+    old = re.sub(r'\s+', '', edit['old']).casefold()
+    matching = [index for index, query in enumerate(previous)
+                if re.sub(r'\s+', '', normalize_text(query)).casefold().endswith(old)]
+    if len(matching) != 1:
+        return []
+    updated = list(previous)
+    updated[matching[0]] = ' '.join(edit['new'].split())
+    replacement = re.sub(r'\s+', '', updated[matching[0]]).casefold()
+    if any(re.sub(r'\s+', '', query).casefold().endswith(replacement)
+           for index, query in enumerate(previous) if index != matching[0]):
+        return []
+    return updated if len(set(updated)) == len(updated) else []
+
+
 def comparison_summary(pages):
     lines=[]
     for query,page in pages:
