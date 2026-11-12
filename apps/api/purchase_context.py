@@ -36,6 +36,10 @@ def retained_identity(latest: str, previous: str | None, proposed: str | None) -
     if not previous or not proposed:
         return proposed
     text = normalize_text(latest)
+    from apps.api.shopping_intent import brand_choice_reply
+    brand_reply = brand_choice_reply(latest, previous)
+    if brand_reply:
+        return brand_reply
     released = released_brand_topic(latest, previous)
     if released:
         return released
@@ -50,6 +54,9 @@ def refines_purchase(text: str, topic: str | None, category: str | None = None) 
     if not topic:
         return False
     text = normalize_text(text)
+    from apps.api.shopping_intent import brand_choice_reply
+    if brand_choice_reply(text, topic):
+        return True
     if released_brand_topic(text, topic):
         return True
     # A subordinate condition/property cannot introduce a new purchase. Only

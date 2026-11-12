@@ -25,9 +25,9 @@ export function sellerPreferences(text:string):Partial<Filters>{
     if(!keep&&/همه(?:ی)?فیلتر(?:ها)?(?:را|رو)?(?:بردار|حذف|پاک|لغو)|بدونهیچفیلتر/.test(input))
       Object.assign(result,{open:false,credit:false,pay:false,kala:false,fast:false,min:'',max:'',withinRadius:false});
     if(!keep&&/(?:بودجه|سقفقیمت|محدودیتقیمت).*(?:بردار|حذف|لغو|مهمنیست)|بدون(?:سقف|محدودیت)قیمت/.test(input))result.max='';
-    const wordBudget=clause.replace(/\u200c/g,' ').match(/(?:زیر|حداکثر|بودجه(?: ام)?|تا)(?:\s+(?:را|رو))?\s+([آ-ی\s]+?)\s*(?=می\s*خوا|باش|بخر|کن|است|هست|که|برای|با|$|[.،؛؟!])/);
+    const wordBudget=clause.replace(/\u200c/g,' ').match(/(?:زیر|حداکثر|سقف(?: بودجه| قیمت)?|بودجه(?: ام)?|تا)(?:\s+(?:را|رو))?\s+([آ-ی\s]+?)\s*(?=می\s*خوا|باش|بخر|کن|است|هست|که|برای|با|$|[.،؛؟!])/);
     if(wordBudget&&/هزار|میلیون|میلیارد/.test(wordBudget[1]!)){const amount=wordToman(wordBudget[1]!.replace(/\s*(?:تومان|تومن)$/,''));if(amount!==null)result.max=amount;}
-    const price=input.match(/(?:زیر|حداکثر|بودجه(?:ام)?|تا)(?:را|رو)?(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
+    const price=input.match(/(?:زیر|حداکثر|سقف(?:بودجه|قیمت)?|بودجه(?:ام)?|تا)(?:را|رو)?(\d+(?:\.\d+)?)(میلیون|میلیارد|تومان|تومن)/);
     if(price){
       const [whole,fraction='']=price[1]!.split('.');
       const multiplier=price[2]==='میلیارد'?1000000000n:price[2]==='میلیون'?1000000n:1n;
@@ -48,8 +48,9 @@ export function wordToman(text:string):string|null{
  for(const token of text.trim().split(/\s+/)){
   if(token==='و'){if(!number)return null;number=false;continue;}
   if(scales[token]!==undefined){const scale=scales[token]!;if(!number||!group||scale>=lastScale)return null;total+=group*scale;group=0n;lastScale=scale;lastRank=4;number=true;}
-  else if(values[token]!==undefined){const value=values[token]!,rank=value>=100n?3:value>=20n?2:1;if(number||rank>=lastRank)return null;group+=value;lastRank=rank;number=true;}
+  else if(token==='نیم'&&!number){group+=1n;lastRank=0;number=true;}
+  else if(values[token]!==undefined){const value=values[token]!,rank=value>=100n?3:value>=20n?2:1;if(number||rank>=lastRank)return null;group+=value*2n;lastRank=rank;number=true;}
   else return null;
  }
- const amount=total+group;return number&&amount<=9223372036854775807n?String(amount):null;
+ const amount=total+group;return number&&amount%2n===0n&&amount/2n<=9223372036854775807n?String(amount/2n):null;
 }

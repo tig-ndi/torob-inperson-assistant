@@ -35,7 +35,8 @@ def revised_comparison_queries(text, previous):
     text = normalize_text(text)
     model = (r'(?:(?:redmi|samsung|xiaomi|iphone|سامسونگ|ردمی|شیائومی|آیفون)\s+)?'
              r'[a-z]{1,8}\s*-?\s*\d{1,5}(?:\s+(?:pro|max|plus|mini|ultra|lite|fe))*')
-    old, new = rf'(?P<old>{model})', rf'(?P<new>{model})'
+    ordinal = r'(?:(?:همین|همون|همان|اون|آن|این)\s+)?(?:(?:گزینه|مدل)\s+)?(?:اولی|اول|دومی|دوم|سومی|سوم)'
+    old, new = rf'(?P<old>{model}|{ordinal})', rf'(?P<new>{model})'
     patterns = [
         old + r'\s+(?:را|رو)\s+حذف\s+کن\s+و\s+' + new
         + r'\s+(?:را|رو)\s+(?:جایش|جاش)\s+(?:بگذار|بذار|بذارش)',
@@ -48,8 +49,11 @@ def revised_comparison_queries(text, previous):
     if not edit:
         return []
     old = re.sub(r'\s+', '', edit['old']).casefold()
-    matching = [index for index, query in enumerate(previous)
-                if re.sub(r'\s+', '', normalize_text(query)).casefold().endswith(old)]
+    reference = re.search(r'(اولی|اول|دومی|دوم|سومی|سوم)$', edit['old'])
+    matching = ([0 if reference[1].startswith('اول') else 1 if reference[1].startswith('دوم') else 2]
+                if reference else [index for index, query in enumerate(previous)
+                if re.sub(r'\s+', '', normalize_text(query)).casefold().endswith(old)])
+    matching = [index for index in matching if index < len(previous)]
     if len(matching) != 1:
         return []
     updated = list(previous)

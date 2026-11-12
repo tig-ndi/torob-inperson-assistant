@@ -17,7 +17,11 @@ export function purchaseTopics(text:string):string[]{
   const active=priority&&/برای بعد|بعدا|بعداً/.test(positive)?priority[1]!:positive;
   const clauses=active.split(/[؛;،,!؟\n]|(?:^|\s)(?:اما|ولی)(?:\s|$)/);
   let rest=clauses.map(clause=>{
-    if(/^\s*نه\s+/.test(clause))return '';
+    if(/^\s*نه(?:\s|$)/.test(clause)){
+      if(/^\s*نه\s+(?:فقط|تنها)(?:\s|$)/.test(clause))clause=clause.replace(/^\s*نه\s+(?:فقط|تنها)\s*/,'');
+      else if(/(?<![\wن])می\s*(?:خواهم|خوام)(?!\w)|لازم دارم|دنبال/.test(clause))clause=clause.replace(/^\s*نه\s+(?:من\s+|منظورم\s+)?/,'');
+      else return '';
+    }
     const refused=/نمی\s*(?:خواهم|خوام)/.exec(clause);
     if(!refused)return clause;
     const before=clause.slice(0,refused.index);
@@ -107,7 +111,7 @@ export function canUseSimplePurchase(topic:string,need:NeedState|null,failedText
  return need.topic_query===topic&&!need.category_cleared&&!need.budget_needs_input&&!need.pending_requirements.length
    &&!need.review_topics.length&&!need.preferences?.length&&!need.excluded_kinds?.length&&!need.comparison_queries?.length
    &&!need.reference_product_id&&!need.minimum_capacity_kg&&!Object.values(need.source_filters??{}).some(Boolean)
-   &&!need.minimum_ram_gb
+   &&!need.minimum_ram_gb&&!need.minimum_powerbank_mah
    &&['unspecified','no_minimum'].includes(need.battery_requirement.status);
 }
 
@@ -158,9 +162,9 @@ export function budgetOnlyEdit(text:string):string|undefined{
  if(!/^\d+(?:\.\d+)?(?:\s*(?:تومان|تومن|میلیون|میلیارد))?$/.test(amount)&&wordToman(amount)===null)return undefined;
  return sellerPreferences(s).max;
 }
-export function restoredNeedSummary(need:{topic_query:string|null;max_price_toman:string|null;minimum_ram_gb?:number|null;source_filters?:{colour:string|null;size:string|null;connector:string|null};battery_requirement:{minimum_mah:number|null};pending_requirements:{source_text:string}[]}):string{
+export function restoredNeedSummary(need:{topic_query:string|null;max_price_toman:string|null;minimum_ram_gb?:number|null;minimum_powerbank_mah?:number|null;source_filters?:{colour:string|null;size:string|null;connector:string|null};battery_requirement:{minimum_mah:number|null};pending_requirements:{source_text:string}[]}):string{
  const f=need.source_filters??{colour:null,size:null,connector:null};
- return [need.topic_query,need.max_price_toman?`سقف بودجه ${need.max_price_toman} تومان`:null,need.minimum_ram_gb?`حداقل رم ثبت‌شده ${need.minimum_ram_gb} گیگابایت`:null,f.colour?`رنگ ${f.colour}`:null,f.size?`سایز ${f.size}`:null,f.connector?`درگاه ${f.connector}`:null,need.battery_requirement.minimum_mah?`حداقل باتری ${need.battery_requirement.minimum_mah} میلی‌آمپرساعت`:null,...need.pending_requirements.map(p=>`شرط هنوز بررسی‌نشده: ${p.source_text}`)].filter(Boolean).join('؛ ');
+ return [need.topic_query,need.max_price_toman?`سقف بودجه ${need.max_price_toman} تومان`:null,need.minimum_powerbank_mah?`حداقل ظرفیت پاوربانک ${need.minimum_powerbank_mah} میلی‌آمپر ساعت`:null,need.minimum_ram_gb?`حداقل رم ثبت‌شده ${need.minimum_ram_gb} گیگابایت`:null,f.colour?`رنگ ${f.colour}`:null,f.size?`سایز ${f.size}`:null,f.connector?`درگاه ${f.connector}`:null,need.battery_requirement.minimum_mah?`حداقل باتری ${need.battery_requirement.minimum_mah} میلی‌آمپرساعت`:null,...need.pending_requirements.map(p=>`شرط هنوز بررسی‌نشده: ${p.source_text}`)].filter(Boolean).join('؛ ');
 }
 
 export function rankingNeedContext(need:{preferences?:string[];review_topics:string[];category_cleared?:boolean}):string{

@@ -79,7 +79,7 @@ def facts_for(product: Product, context: str) -> tuple[int, list[str]]:
         elif product.category_name == CAT_MOBILE_PHONE:
             if re.search(r'باتری|باطری', context) and key == 'ظرفیت باتری' and product.battery_capacity and product.battery_capacity.status == 'known':
                 weight = 1
-            elif re.search(r'عکاسی|دوربین|سلفی', context) and re.search(r'دوربین اصلی|دوربین سلفی', key):
+            elif re.search(r'عکاسی|عکس گرفتن|دوربین|سلفی', context) and re.search(r'دوربین اصلی|دوربین سلفی', key):
                 weight = 1
         if weight:
             score += weight
@@ -105,7 +105,9 @@ def recommend_selection(page: ProductPage, request: AssistantRequest) -> Selecti
     first = min(page.items, key=lambda p: (-recorded_preference_score(p.category_name,[s.model_dump() for s in p.specs],context), -facts_for(p, context)[0],
         p.offer_summary.min_price_toman is None, int(p.offer_summary.min_price_toman or 0), p.product_id))
     facts = evidence[first.product_id]
-    reason = '؛ '.join(facts[:2]) if facts else 'در میان نتایج فعلی کمترین قیمت ثبت‌شده را دارد' if first.offer_summary.min_price_toman is not None else 'برای شروع بررسی مشخصات و فروشگاه‌ها'
+    priced = [int(p.offer_summary.min_price_toman) for p in page.items if p.offer_summary.min_price_toman is not None]
+    cheapest = first.offer_summary.min_price_toman is not None and int(first.offer_summary.min_price_toman) == min(priced)
+    reason = '؛ '.join(facts[:2]) if facts else 'در میان نتایج فعلی کمترین قیمت ثبت‌شده را دارد' if cheapest else 'برای شروع بررسی مشخصات ثبت‌شده انتخاب شده؛ ارزان‌ترینِ همهٔ نتایج نیست'
     price = f' با قیمت ثبت‌شدهٔ {first.offer_summary.min_price_toman} تومان' if first.offer_summary.min_price_toman is not None else ''
     parent = bool(re.search(r'پدر|مادر|سالمند|دکمه', context)) and first.category_name == CAT_MOBILE_PHONE
     if parent:

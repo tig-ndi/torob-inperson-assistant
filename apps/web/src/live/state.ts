@@ -4,7 +4,7 @@ import {advancePurchase,rewindPurchase,revisitPurchase,freshProgress,purchaseAct
 import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
-import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitDate as parseVisitDate,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
+import {needsProductInterpretation,visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitDate as parseVisitDate,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
 import {rankingNeedContext,queuedPurchase,restoredNeedSummary,restoredPurchaseEdit,budgetOnlyEdit,purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery,canUseSimplePurchase} from './requestPlanning';
 import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
@@ -161,7 +161,7 @@ export function useShopping() {
     if(!more){setProducts([]);setProductPage(null);setExplanation(null);setQuestionCode('');}
     if(!more&&!preserveContext){setAssistantResults(false);setExplanation(null);setNeed(null);setMessages(silent&&pending.current?[{role:'user',content:pending.current}]:[]);setProduct(null);setMapFocus(null);setSelected(null);setCompare([]);setOffers([]);if(!silent){say('user',q);setVisitIntent(null);setNeedsLocation(false);}}
     void run(async signal=>{
-      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
+      const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,minimumPowerbank:need.minimum_powerbank_mah,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
       if(signal.aborted)return;setProductPage(result);setProducts(old=>more?[...old,...result.items]:result.items);
       if(silent&&(localIntent||basicPurchase)){
         const sort=localIntent?'nearest' as const:'price' as const;
@@ -302,7 +302,7 @@ export function useShopping() {
     const requestedDate=parsedDate===undefined?visitIntent?.visitDate??null:parsedDate;
     const requestedTime=parseVisitClock(q)??(/الان|همین حالا|ساعت فعلی/.test(q)?null:visitIntent?.localTime??null);
     let intent=restoring?null:parseVisitIntent(q,context);
-    if(!restoring&&!intent&&context&&Object.keys(preferences).length&&!requestedTopics.length&&!queueSelection)intent={topic:context,nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime,reuseProduct:true};if(intent&&!intent.localTime&&requestedTime)intent={...intent,visitDate:requestedDate,localTime:requestedTime};
+    if(!restoring&&!intent&&context&&!needsProductInterpretation(q)&&Object.keys(preferences).length&&!requestedTopics.length&&!queueSelection)intent={topic:context,nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime,reuseProduct:true};if(intent&&!intent.localTime&&requestedTime)intent={...intent,visitDate:requestedDate,localTime:requestedTime};
     if(intent)intent={...intent,visitDate:requestedDate};
     setVisitIntent(intent??(requestedTime||requestedDate||wantsVisit||task?.status==='pending'?{topic:context??'',nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime}:!changesPurchase?visitIntent:null));
     if(intent&&intent.topic===context&&need?.pending_requirements.length)intent=null;
@@ -523,8 +523,8 @@ export function useShopping() {
     void run(async signal=>{const trip=await api.saveTrip(selected,[],[]);if(signal.aborted)return;setSaved(old=>[trip,...old]);say('assistant','برنامهٔ همین مقصد در برنامه‌های قبلی ذخیره شد.','action');});
   };
   const applyFilters=(f:Filters)=>{
-    setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:"pending",note:""}:old);setFilters(f);setOverlay(null);
-    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
+    setDelegation(old=>old?{...old,id:crypto.randomUUID(),status:"pending",note:""}:old);setFilters(f);setNeed(old=>old?{...old,max_price_toman:f.max||null,budget_needs_input:f.max!==filters.max?false:old.budget_needs_input}:old);setOverlay(null);
+    if(screen==='results'&&query){setProducts([]);void run(async signal=>{const page=assistantResults&&need?await api.searchCatalogue({query:need.topic_query??query,maxPrice:f.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,minimumPowerbank:need.minimum_powerbank_mah,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(query,f,signal);if(!signal.aborted){setProducts(page.items);setProductPage(page);}});}
     else if(product&&['contact','trip'].includes(screen))setScreen('stores');
   };
   const applySuggestedBudget=(max:string)=>{
@@ -545,7 +545,7 @@ export function useShopping() {
     if(product&&['stores','contact','trip'].includes(screen)){setScreen('stores');return;}
     setQuery(topic);setScreen('results');setProducts([]);setProductPage(null);
     void run(async signal=>{
-      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
+      const page=need?await api.searchCatalogue({query:topic,maxPrice:max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,minimumRam:need.minimum_ram_gb,minimumPowerbank:need.minimum_powerbank_mah,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:position&&need.offer_sort==='nearest'?'nearest':'relevance',position,limit:12},signal):await api.search(topic,next,signal);
       if(!signal.aborted){setProducts(page.items);setProductPage(page);}
     });
   };

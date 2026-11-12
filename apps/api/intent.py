@@ -138,7 +138,7 @@ SCALES = {"هزار": 1000, "میلیون": 10**6, "میلیارد": 10**9}
 NUMBER_WORDS = '|'.join(re.escape(w) for w in [*ONES, *TENS, *HUNDREDS, *SCALES, 'و'])
 AMOUNT_ATOM = rf'(?:[0-9]+(?:[٬,،.٫][0-9]+)*|(?:{NUMBER_WORDS}|نیم)(?!\w))'
 AMOUNT = rf'{AMOUNT_ATOM}(?:\s+{AMOUNT_ATOM})*'
-BUDGET_PREFIX = r'بودجه(?:\s+(?:ام|م))?(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
+BUDGET_PREFIX = r'(?:بودجه(?:\s+(?:ام|م))?|سقف(?:\s+(?:قیمت|بودجه))?)(?:\s+(?:من|را|رو|به|برابر|است|تا|حداکثر|همان|همون))*\s*:?\s+'
 QUERY_STOPWORDS = frozenset('بود منظورم اینبار بار انتخاب انتخابش تصمیم برنامه مسیر خودت بچین تعیین حرکت هر روز زیر حضوری نزدیک اطراف نزدیکترین نزدیکم اطرافم ترین من یک یه برای واسه جهت استفاده کار کارهای کاربرد روزمره روزانه معمولی عمومی می خواهم خوام میخوام میخواهم میخرم میگردم میشه است هست هستم دارم بخرم خرید کمک میخواستم ولی هنوز نگفتم دنبال چه کالایی کالا حداکثر سقف بودجه ام تا تومان تومن ریال با و یا از به در را رو هم لطفا لطفاً میخوامش مناسب میخواد حالا اکنون کن بکن بده بگذار بذار باشه باشد تغییر کمتر بیشتر ارزان ارزون گران گرون تر ارزانتر ارزونتر ارزانترش ارزونترش گرانتر گرونتر گرانترش گرونترش ترش آن این قبلی همان همون'.split())
 GENERIC_TOPIC_WORDS = frozenset('چیزی چیز کالا کالای کالایی محصول محصولی وسیله وسایل مورد جنسی'.split())
 MAX_TOPIC_WORDS = 4
@@ -363,7 +363,7 @@ def parse_toman(quote: str) -> int:
             group, last_scale = Fraction(0), scale
             last_rank = 4
             previous_number = True
-        elif token == 'نیم' and not previous_number and group > 0:
+        elif token == 'نیم' and not previous_number:
             group += Fraction(1, 2)
             last_rank = 0
             previous_number = True
@@ -455,6 +455,10 @@ def query_choices(request: AssistantRequest) -> list[str]:
     The model selects among them; the repository determines whether evidence exists.
     """
     latest = request.messages[-1].content
+    from apps.api.shopping_intent import brand_choice_reply
+    brand_reply = brand_choice_reply(latest, request.context_query)
+    if brand_reply:
+        return [brand_reply]
     if request.context_query and request.context_need_state:
         from apps.api.model_comparison import revised_comparison_queries
         if revised_comparison_queries(latest, request.context_need_state.comparison_queries):

@@ -266,6 +266,7 @@ class AssistantService:
             identity_words = await asyncio.to_thread(self.catalogue.identity_words)
             comparison_edit = revised_comparison_queries(
                 latest_msg, request.context_need_state.comparison_queries if request.context_need_state else [])
+            ambiguous_comparison_edit = bool(request.context_need_state and request.context_need_state.comparison_queries and not comparison_edit and re.search(r'عوض\s+کن|جایگزین\s+کن|جایش\s+بگذار|جاش\s+بذار', normalize_text(latest_msg)))
             comparisons = comparison_edit or comparison_queries(latest_msg)
             comparison_category = detect_category_intent(latest_msg)
             if comparison_edit:
@@ -523,6 +524,9 @@ class AssistantService:
                     plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_capacity')
                 elif not battery_phone and latest_has_capacity_unit:
                     plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='battery_scope')
+            from apps.api.powerbank import minimum_powerbank_mah, powerbank_topic
+            if powerbank_topic(plan.query or request.context_query) and minimum_powerbank_mah(latest_msg) is not None and plan.question == 'battery_scope':
+                plan = IntentPlan(action='search', query=plan.query or request.context_query, budget_text=None, question=None)
             offer_sort, sort_uncertain = visit_sort(latest_msg, request.context_offer_sort)
             if plan.action == 'search' and offer_sort == 'nearest' and request.user_lat is None:
                 plan = IntentPlan(action='clarify', query=plan.query, budget_text=None, question='location')
@@ -655,6 +659,19 @@ class AssistantService:
                 effective_category = None
             if comparisons and comparison_category:
                 needs = replace(needs, state=needs.state.model_copy(update={'comparison_queries': comparisons}))
+            from apps.api.shopping_intent import contradictory_brands, positive_brand_query
+            if ambiguous_comparison_edit:
+                needs = replace(needs, state=needs.state.model_copy(update={'topic_query':request.context_query,'comparison_queries':request.context_need_state.comparison_queries}))
+                plan = IntentPlan(action='clarify', query=request.context_query, budget_text=None, question='specific_model')
+            brand_conflicts = contradictory_brands(latest_msg)
+            if brand_conflicts:
+                topic = positive_brand_query(needs.state.topic_query or plan.query or '')
+                for aliases in brand_conflicts:
+                    for word in aliases:
+                        topic = re.sub(r'(?<!\w)' + re.escape(word) + r'(?!\w)', ' ', topic)
+                topic = ' '.join(topic.split()) or None
+                needs = replace(needs, state=needs.state.model_copy(update={'topic_query': topic, 'comparison_queries': []}))
+                plan = IntentPlan(action='clarify', query=topic, budget_text=None, question='specific_model')
             comparison_pages = []
             if plan.action == 'search':
                 queries = needs.state.comparison_queries or [plan.query]
@@ -671,6 +688,7 @@ class AssistantService:
                         excluded_kinds=needs.state.excluded_kinds,
                         minimum_capacity_kg=needs.state.minimum_capacity_kg,
                         min_ram_gb=needs.state.minimum_ram_gb,
+                        minimum_powerbank_mah=needs.state.minimum_powerbank_mah,
                         reference_product_id=needs.state.reference_product_id,
                         ranking_context=ranking_need_context(needs.state),
                         min_battery_capacity_mah=requirement.minimum_mah,
@@ -692,6 +710,8 @@ class AssistantService:
                 explanation['limitations'].append(capacity_note)
                 if not page['items'] and not needs.state.comparison_queries:
                     explanation['summary'] = capacity_note + ' با این ظرفیت و بودجه، دستگاه کاملِ دارای شاهد کافی پیدا نشد؛ قطعهٔ یدکی جایگزین نمی‌شود.'
+            if explanation is not None and needs.state.minimum_powerbank_mah is not None:
+                explanation['limitations'].append(f'حداقل ظرفیت ثبت‌شدهٔ پاوربانک {needs.state.minimum_powerbank_mah} میلی‌آمپر ساعت است؛ مقدار نامعلوم یا ناسازگار کنار گذاشته شده است.')
             if explanation is not None and needs.state.minimum_ram_gb is not None:
                 ram_note = f'فقط لپ‌تاپ با رم ثبت‌شدهٔ حداقل {needs.state.minimum_ram_gb} گیگابایت نمایش داده می‌شود؛ مقدار نامعلوم کنار گذاشته شده است.'
                 explanation['limitations'].append(ram_note)
@@ -719,6 +739,10 @@ class AssistantService:
                 'question_code': plan.question,
                 'explanation': explanation,
             }
+            if ambiguous_comparison_edit:
+                result['question'] = 'کدام مدلِ مقایسه را با چه مدلی عوض کنم؟ بگو اولی یا دومی و نام مدل تازه؛ انتخاب‌ها و بودجه حفظ شده‌اند.'
+            if brand_conflicts:
+                result['question'] = 'برند ذکرشده را هم خواسته‌ای و هم کنار گذاشته‌ای؛ این برند باشد یا نباشد؟ بودجه‌ات حفظ شده است.'
             if plan.question == 'unsupported_filter' and any(p.key in {'ظرفیت','طول','کاربری','پروتکل'} for p in needs.state.pending_requirements):
                 names = '، '.join(p.key for p in needs.state.pending_requirements)
                 result['question'] = (CONTACT_RESULT_LIMITATION + ' ' if contact_requested else '') + f'شرط‌های «{names}» حفظ شده‌اند، اما هنوز فیلتر قابل اتکایی برای آن‌ها اجرا نشده است. نتیجهٔ منطبق را تأیید نمی‌کنم؛ مشخصات را بررسی کنیم یا صریحاً بگو کدام شرط را کنار بگذاریم.'

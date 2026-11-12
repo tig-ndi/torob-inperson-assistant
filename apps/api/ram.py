@@ -30,13 +30,19 @@ def recorded_ram_gb(category: str, specs: list[dict]) -> int | None:
 
 
 def minimum_ram_gb(text: str, previous: int | None = None) -> int | None:
+    from apps.api.intent import NUMBER_WORDS, parse_toman
     value = normalize_text(text)
     if re.search(r'(?:رم|ram).{0,25}(?:مهم نیست|حذف کن|بردار|فیلتر نکن)', value):
         return None
-    match = re.search(r'(?<!\w)(?:رم|ram)(?:\s+(?:حداقل|بیشتر از))?\s+(\d{1,3})(?:\s*(?:gb|g\b|گیگ(?:ابایت)?))?', value)
+    amount = rf'(?:\d{{1,3}}|(?:{NUMBER_WORDS})(?:\s+(?:{NUMBER_WORDS}))*)'
+    comparison = r'(?P<strict>بیشتر از)|حداقل'
+    match = re.search(rf'(?<!\w)(?:رم|ram)(?:\s+(?:{comparison}))?\s+(?P<amount>{amount})(?:\s*(?:gb|g\b|گیگ(?:ابایت)?))?(?!\w)', value)
     if not match:
-        match = re.search(r'(?<!\w)حداقل\s+(\d{1,3})\s*(?:gb|g\b|گیگ(?:ابایت)?)\s+(?:رم|ram)(?!\w)', value)
+        match = re.search(rf'(?<!\w)(?:{comparison})\s+(?P<amount>{amount})\s*(?:gb|g\b|گیگ(?:ابایت)?)\s+(?:رم|ram)(?!\w)', value)
     if match:
-        amount = int(match[1])
-        return amount if 1 <= amount <= 128 else previous
+        try:
+            minimum = parse_toman(re.sub(r'\s+و$', '', match['amount'])) + bool(match['strict'])
+        except ValueError:
+            return None
+        return minimum if 1 <= minimum <= 128 else None
     return previous

@@ -45,13 +45,20 @@ class IntelligenceRepairTests(unittest.TestCase):
         self.assertFalse(multiple_topic_heads(text,['شارژر گوشی','کابل و مبدل']))
         self.assertTrue(refines_purchase(text,'شارژر موبایل'))
 
-    def test_capacity_stays_unresolved_when_weight_is_waived(self):
+    def test_supported_capacity_stays_applied_when_weight_is_waived(self):
+        self.add_product('powerbank','پاوربانک آزمایشی ظرفیت ۲۰۰۰۰ میلی‌آمپر ساعت','پاوربانک',[{'key':'ظرفیت اسمی','value':'20000 mAh'}])
         first=self.turn('ظرفیت حداقل ۲۰۰۰۰ میلی‌آمپرساعت و وزن کم می‌خواهم.','پاوربانک',self.state('پاوربانک',category_name=None))
-        self.assertIn('ظرفیت',[p['key'] for p in first['need_state']['pending_requirements']],first)
+        self.assertEqual(first['need_state']['minimum_powerbank_mah'],20000)
+        self.assertIn('وزن',[p['key'] for p in first['need_state']['pending_requirements']])
+        self.assertNotIn('ظرفیت',[p['key'] for p in first['need_state']['pending_requirements']])
+        self.assertIsNone(first['products'])
         second=self.turn('وزن مهم نیست ولی ظرفیت ۲۰۰۰۰ بماند.','پاوربانک',first['need_state'])
-        self.assertIn('ظرفیت',[p['key'] for p in second['need_state']['pending_requirements']],second)
-        self.assertNotIn('وزن',[p['key'] for p in second['need_state']['pending_requirements']])
-        self.assertIsNone(second['products'])
+        self.assertEqual(second['need_state']['minimum_powerbank_mah'],20000)
+        self.assertEqual(second['need_state']['pending_requirements'],[])
+        self.assertIsNotNone(second['products'])
+        from apps.api.powerbank import recorded_powerbank_mah
+        for product in second['products']['items']:
+            self.assertGreaterEqual(recorded_powerbank_mah(product['category_name'],product['specs'],product['persian_title']),20000)
 
     def test_compound_colour_edits_are_local_and_value_can_be_waived(self):
         self.assertEqual(requested_filters('مشکی نباشد، سفید می‌خواهم، اندروید باقی بماند.'),{'colour':'سفید'})

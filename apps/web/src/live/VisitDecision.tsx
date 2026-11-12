@@ -15,8 +15,9 @@ export function ArrivalFacts({a,o,controls=false,status=true}:{a:Shopping;o:Offe
   </div>;
 }
 
-export function SafetyGate({a}:{a:Shopping}){
+export function SafetyGate({a,compact=false}:{a:Shopping;compact?:boolean}){
   if(!a.selected||!a.needsSafetyReview)return null;
+  if(compact)return <p className="compact-safety" role="alert" data-visit-safety><ShieldAlert size={16}/><span>{a.sellerConcern??(a.safetyRisk==='closed'?'فروشگاه در زمان رسیدن بسته است':a.safetyRisk==='closing_soon'?'ممکن است تا رسیدن بسته شود':'پیش از رفتن بررسی لازم است')}</span></p>;
   return <section className="visit-safety" role="alert" data-visit-safety><ShieldAlert size={20}/><div><b>{a.sellerConcern?a.sellerConcern:a.safetyRisk==='closed'?'برای این زمان راه نیفت':a.safetyRisk==='closing_soon'?'ممکن است تا رسیدن بسته شود':'پیش از رفتن بررسی لازم است'}</b><p>{a.arrivalBusy?'دارم زمان رسیدن و ساعت کاری را تطبیق می‌دهم.':a.safetyRisk==='closed'?'فروشگاه طبق برنامه بسته است. فروشگاه جایگزین یا زمان دیگری را بررسی کن.':'بازبودن هنگام رسیدن یا فرصت خرید هنوز مطمئن نیست. موجودی هم تأیید نشده است.'}</p><div className="inline-actions">{!a.agentAlternatives.active&&<button className="primary-action" onClick={()=>a.setOverlay('alts')}>بررسی جایگزین‌ها</button>}<button className="secondary-action" disabled={a.arrivalBusy} onClick={a.acknowledgeSafety}>با آگاهی از هشدار ادامه می‌دهم</button></div></div></section>;
 }
 

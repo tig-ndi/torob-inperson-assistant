@@ -206,9 +206,14 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     supported_platform = semantic_category == 'گوشی موبایل' and operating_system(topic or '') and not negated_operating_system(latest) and (operating_system(latest) or not any(p.key=='سیستم عامل' and negated_operating_system(p.source_text) for p in pending))
     # Seller credit conditions are supported by the offers API; approval of
     # financing is never inferred from this preference.
-    # Phone minimum capacity is handled by its validated source predicate.
-    # Other capacities remain explicit unresolved needs, never silent matches.
-    capacity_fields = ('ظرفیت',) if semantic_category == 'گوشی موبایل' or 'ماشین لباسشویی' in (topic or '') and minimum_capacity(latest) is not None else ()
+    # Supported capacities have validated source predicates. Other capacities
+    # remain explicit unresolved needs, never silent matches.
+    from apps.api.powerbank import minimum_powerbank_mah, powerbank_topic
+    previous_state = request.context_need_state
+    powerbank_minimum = minimum_powerbank_mah(latest, previous_state.minimum_powerbank_mah if previous_state and not changed else None) if powerbank_topic(topic) else None
+    capacity_supported = (powerbank_minimum is not None or semantic_category == 'گوشی موبایل'
+                          or 'ماشین لباسشویی' in (topic or '') and minimum_capacity(latest) is not None)
+    capacity_fields = ('ظرفیت',) if capacity_supported else ()
     update = update_pending(pending, latest, supported_fields=capacity_fields + accepted_fields + ('قسطی',) + (('سیستم عامل',) if supported_platform else ())) if topic else PendingUpdate([])
     if topic and negated_operating_system(latest):
         by_key = {item.key:item for item in update.items}
@@ -217,7 +222,6 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     reference = request.reference_product_id or (request.context_need_state.reference_product_id if request.context_need_state else None)
     if changed or query and old_topic and query != old_topic and not is_constraint_followup(latest):
         reference = request.reference_product_id
-    previous_state = request.context_need_state
     from apps.api.ram import minimum_ram_gb
     ram_minimum = minimum_ram_gb(latest, previous_state.minimum_ram_gb if previous_state and not changed else None) if semantic_category == 'لپ تاپ و نوت بوک' else None
     if ram_minimum is not None:
@@ -229,6 +233,7 @@ async def resolve_need_state(catalogue: 'Catalogue', request: 'AssistantRequest'
     capacity = minimum_capacity(latest, previous_state.minimum_capacity_kg if previous_state and not changed else None) if 'ماشین لباسشویی' in (topic or '') else None
     resolved = AssistantNeedState(
         minimum_ram_gb=ram_minimum,
+        minimum_powerbank_mah=powerbank_minimum,
         minimum_capacity_kg=capacity,
         excluded_kinds=update_excluded_kinds(previous_state.excluded_kinds if previous_state else [], latest, changed),
         comparison_queries=previous_state.comparison_queries if keep_comparison else [],

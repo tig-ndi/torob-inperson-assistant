@@ -19,6 +19,15 @@ class SelectionTests(unittest.TestCase):
     def select(self,text,items):
         return recommend_selection(page(items),AssistantRequest.model_validate(body(text)))
 
+    def test_photography_reason_quotes_source_instead_of_claiming_cheapest(self):
+        for text in ['گوشی برای عکس گرفتن از بچه', 'گوشی برای عکاسی']:
+            result = self.select(text, [item('cheap', 1, []),
+                item('camera', 2, [spec('دوربین اصلی', '50 مگاپیکسل')])])
+            self.assertEqual(result.product_id, 'camera')
+            self.assertIn('طبق مشخصات منبع، دوربین اصلی: 50 مگاپیکسل', result.summary)
+            self.assertNotIn('کمترین قیمت', result.summary)
+            self.assertIn('کیفیت عکس', result.summary)
+
     def test_recorded_walk_construction_beats_cheaper_model_with_no_use_evidence(self):
         result=self.select('کفش زنانه برای پیاده‌روی روزانه',[
             item('cheap',1,[],'کفش زنانه'),item('facts',2,[spec('کفی','مموری فوم')],'کفش زنانه')])

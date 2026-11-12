@@ -75,6 +75,7 @@ class PendingRequirement(Model):
 
 
 class AssistantNeedState(Model):
+    minimum_powerbank_mah: int | None = Field(default=None, strict=True, gt=0, le=1_000_000)
     minimum_ram_gb: int | None = Field(default=None, strict=True, gt=0, le=128)
     minimum_capacity_kg: int | None = Field(default=None, strict=True, gt=0, le=1000)
     excluded_kinds: list[Literal['portable_fridge']] = Field(default_factory=list, max_length=1)

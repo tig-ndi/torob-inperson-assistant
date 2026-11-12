@@ -103,6 +103,38 @@ def positive_brand_query(query):
     return ' '.join(text.split())
 
 
+def contradictory_brands(text):
+    """An explicit positive brand and a rejection require a user decision."""
+    text = normalize_text(text)
+    conflicts = []
+    for aliases in MODEL_WORDS:
+        words = '(?:' + '|'.join(re.escape(word) for word in aliases) + ')'
+        rejection = (rf'(?<!\w)(?:(?:غیر\s*|بدون\s+|به\s*جز\s+|بجز\s+){words}'
+                     rf'|{words}(?:\s+(?:را|رو))?\s+(?:نباش(?:ه|د)|نمی\s*خوا(?:هم|م)|نمی\s*خوام))(?!\w)')
+        if re.search(rejection, text) and re.search(rf'(?<!\w){words}(?!\w)', re.sub(rejection, '', text)):
+            conflicts.append(aliases)
+    return conflicts
+
+
+def brand_choice_reply(text, context):
+    """A short brand answer edits the current item rather than naming a new item."""
+    if not context:
+        return None
+    text = normalize_text(text).strip(' .!؟')
+    for aliases in MODEL_WORDS:
+        words = '(?:' + '|'.join(re.escape(word) for word in aliases) + ')'
+        match = re.fullmatch(rf'(?P<brand>{words})\s+(?P<negative>ن)?باش(?:ه|د)', text)
+        if not match:
+            continue
+        topic = positive_brand_query(context)
+        for word in aliases:
+            topic = re.sub(r'(?<!\w)' + re.escape(word) + r'(?!\w)', ' ', topic)
+        topic = ' '.join(topic.split())
+        topic += ''.join(' غیر' + other[0] for other in brand_exclusions(context) if other != aliases)
+        return topic + ' ' + ('غیر' if match['negative'] else '') + match['brand']
+    return None
+
+
 def retrieval_query(query):
     text=positive_brand_query(query)
     text=re.sub(r'(?<!\w)(?:لپ\s*تاپ|لپتاب|لب\s*تاپ|لبتاب)(?!\w)', 'لپ تاپ', text)

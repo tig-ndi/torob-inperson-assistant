@@ -10,7 +10,7 @@ export function MobileViewSwitch({view,onChat,onMap,mapLabel='نقشه و فرو
 }
 
 export type SheetStop='collapsed'|'peek'|'half'|'full';
-type Props={stop?:SheetStop;onStop?:(stop:SheetStop)=>void;choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;compactJourney?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;busy:boolean;hasMore:boolean;
+type Props={stop?:SheetStop;onStop?:(stop:SheetStop)=>void;choosingProduct?:boolean;journey?:ReactNode;notice?:string;onLocation?:()=>void;feedback?:ReactNode;journeyActive?:boolean;compactJourney?:boolean;active?:boolean;offers:Offer[];selected:Offer|null;productName:string|null;viewportHeight:number;topInset?:number;busy:boolean;hasMore:boolean;
   productNames?:Record<string,string>;comparedIds?:ReadonlySet<string>;onShopList?:()=>void;onOtherShops?:()=>void;onNavigate:()=>void;onSelect:(o:Offer)=>void;onInspect:(o:Offer)=>void;onMore:()=>void;onChat:()=>void;onPick:()=>void;onHeight:(height:number)=>void};
 export default function MobileMapSheet(p:Props){
   const [localSnap,setLocalSnap]=useState<SheetStop>('collapsed'),[dragHeight,setDragHeight]=useState<number|null>(null);
@@ -21,8 +21,6 @@ export default function MobileMapSheet(p:Props){
   useLayoutEffect(()=>{const node=address.current;if(!node){setAddressHeight(0);return;}const measure=()=>setAddressHeight(Math.ceil(node.getBoundingClientRect().height));measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();},[p.selected?.offer_id,p.selected?.shop.address]);
   const sheet=useRef<HTMLElement>(null),cleanup=useRef<(()=>void)|null>(null),body=useRef<HTMLDivElement>(null);
   const collapsed=snap==='collapsed',compact=!!p.compactJourney&&snap!=='full';
-  const [compactHeight,setCompactHeight]=useState(220);
-  useLayoutEffect(()=>{if(!compact||!sheet.current)return;const panel=sheet.current;const children=Array.from(panel.children).filter((el):el is HTMLElement=>el instanceof HTMLElement&&!el.hidden&&el!==body.current);const measure=()=>setCompactHeight(Math.ceil(children.reduce((sum,el)=>sum+el.getBoundingClientRect().height,0))+safeInset+2);measure();const observer=new ResizeObserver(measure);children.forEach(el=>observer.observe(el));return()=>observer.disconnect();},[compact,snap,p.selected?.offer_id,safeInset,p.journey]);
   const [contentHeight,setContentHeight]=useState<number|null>(null);
   useLayoutEffect(()=>{
     const panel=sheet.current;if(!panel||p.active===false)return;
@@ -48,7 +46,9 @@ export default function MobileMapSheet(p:Props){
   const stops={collapsed:92+safeInset+addressHeight,peek:Math.max(peek,92+safeInset+addressHeight),half:Math.max(half,92+safeInset+addressHeight),full:Math.max(full,92+safeInset+addressHeight)};
   const requestedHeight=p.journeyActive&&!collapsed&&snap==='full'?Math.min(p.viewportHeight-104,Math.max(stops[snap],p.viewportHeight*.78)):stops[snap];
   const expandedLimit=Math.max(stops.collapsed,Math.min(p.journeyActive?p.viewportHeight-104:full,contentHeight??Infinity));
-  const height=compact?compactHeight:collapsed?stops.collapsed:Math.min(requestedHeight,expandedLimit);
+  const compactLimit=Math.max(180,p.viewportHeight*(p.viewportHeight>500?.6:1)-(p.topInset??104)-(p.viewportHeight>500?0:44));
+  const compactStop=Math.min(contentHeight??220,compactLimit);
+  const height=compact?compactStop:collapsed?stops.collapsed:Math.min(requestedHeight,expandedLimit);
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
     if(!panel||!list||!p.selected||collapsed)return;
@@ -74,20 +74,21 @@ export default function MobileMapSheet(p:Props){
   const start=(e:PointerEvent<HTMLButtonElement>)=>{
     if(e.button!==0)return;if(e.pointerType!=='touch')e.preventDefault();cleanup.current?.();
     const startY=e.clientY,id=e.pointerId,target=e.currentTarget;let next=height,moved=false;target.setPointerCapture(id);
-    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;if(Math.abs(event.clientY-startY)>4)moved=true;next=Math.min(expandedLimit,Math.max(p.compactJourney?compactHeight:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
+    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;if(Math.abs(event.clientY-startY)>4)moved=true;next=Math.min(expandedLimit,Math.max(p.compactJourney?compactStop:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
     const remove=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',cancel);if(target.hasPointerCapture(id))target.releasePointerCapture(id);cleanup.current=null;};
-    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactHeight],['full',expandedLimit]]:[['collapsed',stops.collapsed],['peek',Math.min(peek,expandedLimit)],['half',Math.min(half,expandedLimit)],['full',expandedLimit]];if(!moved)cycle();else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best)[0]);setDragHeight(null);};
+    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactStop],['full',expandedLimit]]:[['collapsed',stops.collapsed],['peek',Math.min(peek,expandedLimit)],['half',Math.min(half,expandedLimit)],['full',expandedLimit]];if(!moved)cycle();else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best,[snap,height] as readonly [SheetStop,number])[0]);setDragHeight(null);};
     const cancel=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();setDragHeight(null);};
     cleanup.current=remove;window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',cancel);
   };
   return <section ref={sheet} className="mobile-map-sheet" data-mobile-store-sheet data-sheet-stop={snap} data-compact-journey={compact?'true':undefined} data-journey-list={p.journeyActive?'true':undefined} style={{height:dragHeight??height,transition:dragHeight===null?'height 240ms ease':'none'}} aria-label="فروشگاه‌های روی نقشه">
-    <button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={!collapsed} aria-controls="mobile-map-offers" onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap(p.compactJourney?'full':'peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{collapsed&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
-    {!collapsed&&!compact&&!p.journeyActive&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
-    {p.selected&&<div ref={address} className="map-sheet-address"><DestinationAddress key={p.selected.offer_id} address={p.selected.shop.address}/></div>}
-    {p.journeyActive&&!collapsed&&<nav className="map-journey-shops" aria-label="فروشگاه‌های همین خرید">
+    <div className="map-sheet-top"><button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={!collapsed} aria-controls="mobile-map-offers" onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap(p.compactJourney?'full':'peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{collapsed&&!compact&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
+    {p.journeyActive&&(!collapsed||compact)&&<nav className="map-journey-shops" aria-label="فروشگاه‌های همین خرید">
      <TouchAction className="secondary-action" aria-label="برگشت به فهرست فروشگاه‌ها" action={()=>p.onShopList?.()}><ArrowRight size={18}/>فهرست فروشگاه‌ها</TouchAction>
      <TouchAction className="secondary-action" aria-label="دیدن فروشگاه‌های دیگر" action={()=>p.onOtherShops?.()}><List size={18}/>فروشگاه‌های دیگر</TouchAction>
     </nav>}
+    </div>
+    {!collapsed&&!compact&&!p.journeyActive&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
+    {p.selected&&<div ref={address} className="map-sheet-address"><DestinationAddress key={p.selected.offer_id} address={p.selected.shop.address}/></div>}
     {p.journey&&<div hidden={collapsed&&!compact} className="map-sheet-journey">{p.journey}</div>}
     {p.notice&&!collapsed&&!compact&&<p className="map-result-notice" role="status">{p.notice}</p>}
     <div hidden={collapsed||compact||p.journeyActive} ref={body} id="mobile-map-offers" className="map-sheet-content">

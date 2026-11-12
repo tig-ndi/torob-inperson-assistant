@@ -60,6 +60,7 @@ export function searchCatalogue(input: SearchInput, signal: AbortSignal): Promis
   const params = queryString({ q: input.query, offset: integer(input.offset ?? 0, 0, 1000000), limit: integer(input.limit ?? 12, 1, 50),
     max_price_toman: input.maxPrice, category_cleared: input.categoryCleared,
     minimum_capacity_kg:input.minimumCapacity==null?null:integer(input.minimumCapacity,1,1000),
+    minimum_powerbank_mah:input.minimumPowerbank==null?null:integer(input.minimumPowerbank,1,1000000),
     minimum_ram_gb:input.minimumRam==null?null:integer(input.minimumRam,1,128),
     ranking_context:input.rankingContext,require_anc:input.requireAnc,exclude_portable_fridge:input.excludedKinds?.includes('portable_fridge'),
     reference_product_id:input.referenceProductId,colour:input.sourceFilters?.colour,size:input.sourceFilters?.size,connector:input.sourceFilters?.connector,
