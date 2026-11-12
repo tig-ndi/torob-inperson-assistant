@@ -1175,6 +1175,16 @@ class AssistantApiTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(self.ledger.remaining(3), 2)
 
+    def test_provider_spending_limit_is_distinct_from_local_attempt_limit(self):
+        self.http_status = 402
+        self.response = {'error': {'code': 'budget_exceeded', 'message': 'synthetic-secret-never-log'}}
+        response = self.post()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['code'], 'provider_budget')
+        self.assertNotIn('secret', response.text)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.ledger.remaining(3), 2)
+
     def test_reported_model_mismatch_is_not_a_silent_upgrade(self):
         self.response = completion(proposal(), model='gpt-6-astra')
         response = self.post()

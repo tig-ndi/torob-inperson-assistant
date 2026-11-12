@@ -170,7 +170,8 @@ class BoxProvider:
                                          follow_redirects=False, trust_env=False) as client:
                 async with client.stream('POST', ENDPOINT, headers={"Authorization": f"Bearer {self.settings.api_key}"}, json=payload) as response:
                     if response.status_code != 200:
-                        raise AgentError('provider_auth' if response.status_code in {401, 403} else
+                        raise AgentError('provider_budget' if response.status_code == 402 else
+                                         'provider_auth' if response.status_code in {401, 403} else
                                          'provider_rate_limit' if response.status_code == 429 else 'provider_failed')
                     body = bytearray()
                     async for chunk in response.aiter_bytes():

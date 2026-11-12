@@ -5,9 +5,10 @@ import {type ArrivalCheck,recommendation} from './journey';
 import {useJourneyState,readSession,writeSession} from './session';
 import { DEFAULT_FILTERS, type Filters, type Product, type Offer, type Position, type Screen, type Overlay, type Summary, type NeedState, type PreparedFollowup, type SavedTrip, type Probable, type Place, type VisitInsights } from './data';
 import {visitIntent as parseVisitIntent,visitClock as parseVisitClock,visitDate as parseVisitDate,visitGuidance,visitPreferences,type ChatEntry,type VisitIntent} from './conversation';
-import {rankingNeedContext,queuedPurchase,restoredNeedSummary,restoredPurchaseEdit,budgetOnlyEdit,purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery} from './requestPlanning';
+import {rankingNeedContext,queuedPurchase,restoredNeedSummary,restoredPurchaseEdit,budgetOnlyEdit,purchaseTopics,exclusivePurchase,samePurchaseFamily,conversationHistory,recommendedFirst,selectedProductIndex,productReferenceIndex,accessoryDeviceReply,shortPurchaseTopic,directPurchaseQuery,canUseSimplePurchase} from './requestPlanning';
 import {answerPurchaseQuestion} from './purchaseQuestions';
 import type { AssistantMessage } from '../api';
+import {ApiError} from '../app/base/domain/errors';
 import type { CataloguePage, CatalogueProduct, Explanation } from '../app/base/domain/contracts';
 import {travelLimit,hasTravelDeadline,withinTravelLimit,visitCommand,visitGoal,phoneKind,broadPhone,selectVisit,type DelegatedVisit} from './delegatedVisit';
 import {currentMapOffers} from './mapResults';
@@ -28,6 +29,7 @@ export function useShopping() {
   const [queueBudget,setQueueBudget]=useJourneyState('query','',':queueBudget');
   const [queuedTopic,setQueuedTopic]=useJourneyState('query','',':queuedTopic');
   const [assistantFailure,setAssistantFailure]=useJourneyState('query','',':assistantFailure');
+  const [providerFailure,setProviderFailure]=useJourneyState('query','',':providerFailure');
   const [simpleSearchPending,setSimpleSearchPending]=useJourneyState('bool',false,':simpleSearchPending');
   const [travelLimitText,setTravelLimitText]=useJourneyState('duration','',':travelLimit');
   const travelLimitMinutes=travelLimitText?Number(travelLimitText):null;
@@ -152,7 +154,7 @@ export function useShopping() {
     if(['contact','trip'].includes(next)&&!selected){flash('ابتدا یک پیشنهاد فروشگاه انتخاب کنید');return;}
     controller.current?.abort();setBusy(false);setError(null);setScreen(next);setOverlay(null);
   };
-  const search=(value:string,more=false,preserveContext=false,silent=false,localIntent:VisitIntent|null=visitIntent,filterOverride?:Filters)=>{
+  const search=(value:string,more=false,preserveContext=false,silent=false,localIntent:VisitIntent|null=visitIntent,filterOverride?:Filters,basicPurchase=false)=>{
     const q=value.trim();if(!q)return;setCompletedVisit(null);const effectiveFilters=filterOverride??(silent?{...filters,...visitPreferences(pending.current)}:filters);
     if(filterOverride)setFilters(filterOverride);
     setQuery(q);setScreen('results');setOverlay(null);
@@ -161,9 +163,10 @@ export function useShopping() {
     void run(async signal=>{
       const result=(more||preserveContext)&&assistantResults&&need?await api.searchCatalogue({query:need.topic_query??q,maxPrice:effectiveFilters.max||null,categoryName:need.category_name,categoryCleared:need.category_cleared,minimumBattery:need.battery_requirement.minimum_mah,sourceFilters:need.source_filters,referenceProductId:need.reference_product_id,minimumCapacity:need.minimum_capacity_kg,rankingContext:rankingNeedContext(need),requireAnc:need.preferences?.includes('anc'),excludedKinds:need.excluded_kinds,sort:need.offer_sort==='nearest'?'nearest':'relevance',position,offset:more?products.length:0,limit:12},signal):localIntent&&position&&(silent||more||preserveContext)?await api.searchCatalogue({query:q,maxPrice:effectiveFilters.max||null,sort:'nearest',position,offset:more?products.length:0,limit:12},signal):await api.search(q,effectiveFilters,signal,more?products.length:0);
       if(signal.aborted)return;setProductPage(result);setProducts(old=>more?[...old,...result.items]:result.items);
-      if(silent&&localIntent){
+      if(silent&&(localIntent||basicPurchase)){
+        const sort=localIntent?'nearest' as const:'price' as const;
         setAssistantResults(true);
-        setNeed(old=>old?.topic_query===q?{...old,max_price_toman:effectiveFilters.max||null,offer_sort:'nearest'}:{version:1,topic_query:q,category_name:result.category_name??null,category_cleared:false,max_price_toman:effectiveFilters.max||null,budget_needs_input:false,offer_sort:'nearest',battery_requirement:{status:'unspecified',minimum_mah:null},review_topics:[],pending_requirements:[]});
+        setNeed(old=>old?.topic_query===q?{...old,max_price_toman:effectiveFilters.max||null,offer_sort:sort}:{version:1,topic_query:q,category_name:result.category_name??null,category_cleared:false,max_price_toman:effectiveFilters.max||null,budget_needs_input:false,offer_sort:sort,battery_requirement:{status:'unspecified',minimum_mah:null},review_topics:[],pending_requirements:[]});
       }
       if(!more){
         const answer=result.items.length&&!!delegation?'گزینه‌های مرتبط را پیدا کردم؛ انتخاب مقصد و خرید جاری را با شرایطت ادامه می‌دهم.':result.items.length?'این گزینه‌ها در اطلاعات ثبت‌شده پیدا شدند. مدل مناسب را انتخاب کن تا فروشگاه‌ها، ساعت کاری و مسیر رفتن را بررسی کنم.':'با این عبارت و بودجه، محصولی در مجموعه پیدا نکردم. نام کوتاه‌تر یا بودجهٔ دیگری را امتحان کن.';
@@ -172,13 +175,15 @@ export function useShopping() {
       }
     });
   };
-  const continueSimpleSearch=(text=assistantFailure)=>{
+  const continueSimpleSearch=(text=assistantFailure,automatic=false)=>{
     const simple=directPurchaseQuery(text);
     if(!simple){setSimpleSearchPending(true);setScreen('decide');setError(null);return;}
     setAssistantFailure('');setSimpleSearchPending(false);setDelegation(null);setVisitIntent(null);setNeedsLocation(false);
     pending.current=text;
-    say('assistant','جست‌وجوی ساده فقط نام کالا و سقف بودجهٔ همین پیام را اعمال می‌کند؛ موجودی تأیید نشده است.');
-    search(simple,false,false,true,null,{...DEFAULT_FILTERS,max:visitPreferences(text).max??''});
+    if(!automatic)say('assistant','جست‌وجوی ساده فقط نام کالا و سقف بودجهٔ همین پیام را اعمال می‌کند؛ موجودی تأیید نشده است.');
+    const preserve=automatic&&need?.topic_query===simple;
+    const next=preserve?{...filters,...visitPreferences(text)}:{...DEFAULT_FILTERS,max:visitPreferences(text).max??''};
+    search(simple,false,preserve,true,null,next,true);
   };
   const ask=(value:string,retrying=false,restoring=false)=>{
     const displayText=value.trim().slice(0,1000);let q=displayText;let queueSelection=false;if(!q)return;
@@ -310,6 +315,14 @@ export function useShopping() {
       if(product&&intent.reuseProduct){setScreen('stores');setMapMode(current=>current==='open'?'open':'auto');say('assistant','همین محصول را با موقعیت و ساعت انتخابی دوباره بررسی می‌کنم.','action');return;}
       search(intent.topic,false,intent.topic===context&&!!need,true,intent);return;
     }
+    if(providerFailure&&!retrying&&!restoring&&!queueSelection&&!task){
+      const simple=directPurchaseQuery(q);
+      if(simple&&canUseSimplePurchase(simple,need,assistantFailure)){continueSimpleSearch(q,true);return;}
+      const unresolved=simple&&assistantFailure&&!directPurchaseQuery(assistantFailure)&&purchaseTopics(assistantFailure).some(t=>samePurchaseFamily(t,simple));
+      if(unresolved||['provider_budget','provider_auth','attempt_limit'].includes(providerFailure)){
+        const failed=unresolved?assistantFailure:q;pending.current=failed;setAssistantFailure(failed);setError(new ApiError(503,providerFailure).message);setNeedsLocation(false);setScreen('decide');return;
+      }
+    }
     if(!status?.ready){
       setNeedsLocation(false);const simple=directPurchaseQuery(q);
       if(!simple){setScreen('decide');say('assistant',agentMessage+' فقط نام کوتاه کالا و در صورت نیاز سقف بودجه را بنویس؛ مثلاً «گوشی تا ده میلیون می‌خواهم».');return;}
@@ -321,10 +334,20 @@ export function useShopping() {
     void run(async signal=>{
       const referenceIndex=productReferenceIndex(q,products.length);
       const turn=await api.sendAssistant({messages:history,needState:need,referenceProductId:referenceIndex===null?undefined:products[referenceIndex]?.product_id,position,budgetOverride:filters.max||null,offerSortOverride:filters.sort},signal).catch(async error=>{
-        if(!signal.aborted){setAssistantFailure(q);try{setStatus(await api.assistantStatus(signal));}catch{/* Preserve the original failure if the status check also fails. */}}
+        if(!signal.aborted){
+          setAssistantFailure(q);
+          const unavailable=error instanceof ApiError&&(error.status===0||/^(?:provider_(?:failed|timeout|rate_limit|auth|budget)|attempt_limit|disabled|missing_key|invalid_config)$/.test(error.code));
+          if(unavailable){
+            setProviderFailure(error.code);
+            const simple=directPurchaseQuery(q);
+            if(simple&&!restoring&&!queueSelection&&!task&&canUseSimplePurchase(simple,need,assistantFailure)){continueSimpleSearch(q,true);return null;}
+          }
+          try{setStatus(await api.assistantStatus(signal));}catch{/* Preserve the original failure if the status check also fails. */}
+        }
         throw error;
       });
-      if(signal.aborted)return;
+      if(signal.aborted||!turn)return;
+      setProviderFailure('');setAssistantFailure('');
       const answer=turn.question??turn.explanation?.summary??'نتیجهٔ جست‌وجوی اطلاعات ثبت‌شده آماده است.';
       setMessages([...history,{role:'assistant',content:answer.slice(0,1000)}]);setNeed(turn.need_state);setQuestionCode(turn.question_code??'');if(requestedTime||requestedDate||wantsVisit||visitIntent&&!changesPurchase)setVisitIntent({topic:turn.need_state.topic_query??turn.query??'',nearbyKm:visitIntent?.nearbyKm??2,visitDate:requestedDate,localTime:requestedTime});
       say('assistant',answer);if(turn.question_code==='location'||/موقعیت|مختصات/.test(answer))setNeedsLocation(true);

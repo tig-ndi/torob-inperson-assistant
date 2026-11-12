@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {restoredPurchaseEdit,budgetOnlyEdit,queuedPurchase,purchaseTopics,directPurchaseQuery} from '../src/live/requestPlanning.ts';
+import {restoredPurchaseEdit,budgetOnlyEdit,queuedPurchase,purchaseTopics,directPurchaseQuery,canUseSimplePurchase} from '../src/live/requestPlanning.ts';
 import {purchaseQuestion} from '../src/live/purchaseQuestions.ts';
 import {travelLimit,hasTravelDeadline} from '../src/live/delegatedVisit.ts';
 
@@ -70,4 +70,19 @@ test('ambiguous or impossible deadlines ask for clarification without altering t
 test('simple recovery only accepts explicit item and validated budget, never drops other requirements',()=>{
  assert.equal(directPurchaseQuery('گوشی تا پنج میلیون می‌خواهم'),'گوشی');
  for(const text of ['گوشی اندروید سفید تا پنج میلیون می‌خواهم','گوشی و هدفون می‌خواهم','گوشی با باتری حداقل ۵۰۰۰ می‌خواهم'])assert.equal(directPurchaseQuery(text),null);
+});
+
+test('ordinary typed laptop spellings use the same conservative direct search',()=>{
+ for(const text of ['لپ تاپ میخوام','لپ‌تاپ می‌خوام','لپتاپ میخوام','لب تاب میخوام','لپ تاب تا ده میلیون میخوام'])assert.equal(directPurchaseQuery(text),'لپ تاپ',text);
+ assert.equal(directPurchaseQuery('گوشی میخوام'),'گوشی');
+ assert.equal(directPurchaseQuery('لپتاپ سبک برای برنامه نویسی میخوام'),null);
+});
+
+test('automatic recovery cannot silently relax a qualified same-family purchase',()=>{
+ const plain={topic_query:'گوشی',category_cleared:false,budget_needs_input:false,max_price_toman:'5000000',review_topics:[],pending_requirements:[],battery_requirement:{status:'unspecified',minimum_mah:null}};
+ assert.equal(canUseSimplePurchase('گوشی',plain),true);
+ for(const edit of [{topic_query:'گوشی اندروید'},{source_filters:{colour:'سفید'}},{pending_requirements:[{key:'گارانتی'}]},{battery_requirement:{status:'minimum',minimum_mah:5000}},{preferences:['camera']},{budget_needs_input:true}])assert.equal(canUseSimplePurchase('گوشی',{...plain,...edit}),false);
+ assert.equal(canUseSimplePurchase('لپ تاپ',{...plain,topic_query:'گوشی اندروید'}),true);
+ assert.equal(canUseSimplePurchase('گوشی',null,'گوشی اندرویدی سفید میخوام'),false);
+ assert.equal(canUseSimplePurchase('لپ تاپ',null,'گوشی اندرویدی سفید میخوام'),true);
 });

@@ -1,7 +1,8 @@
 import {sellerPreferences,wordToman} from './sellerPreferences.ts';
+import type {NeedState} from './data.ts';
 // Longest phrase wins within a family, but never hides a different purchase.
 const families=[['قاب برای گوشی','کاور برای گوشی','قاب گوشی','کاور گوشی','قاب','کاور'],['کیف گوشی','کیف برای گوشی','کیف'],['شارژر برای گوشی','شارژر برای موبایل','شارژر برای لپ تاپ','شارژر لپ تاپ','شارژر موبایل','شارژر گوشی','شارژر'],['کابل برای گوشی','کابل شارژ','کابل'],['هدفون','هندزفری'],['گوشی دکمه ای','گوشی','موبایل'],['کفش','کتانی'],['لپ تاپ'],['باتری','باطری'],['پاوربانک']];
-const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
+const normalized=(text:string)=>text.replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\u200c/g,' ').replace(/(^|\s)(?:لپ|لب)[\s-]*(?:تاپ|تاب)(?=$|[\s،؛.!؟])/g,'$1لپ تاپ').replace(/\s+/g,' ').trim();
 export function selectedProductIndex(text:string,count:number):number|null{
   const value=normalized(text).replace(/[.؟!،]+$/,'');
   const match=/^(?:(?:همین|همون|همان|اون|آن|این)\s+)?(?:گزینه\s+)?(اولی|اول|دومی|دوم|سومی|سوم)(?:\s+(?:را|رو))?\s+(?:می\s*(?:خواهم|خوام)|انتخاب\s*کن|خوبه|خوب\s*است|بردار|فروشگاه(?:\s*ها)?(?:ش|یش)?\s*(?:را|رو)?\s*(?:ببینیم|نشان\s*بده|نشون\s*بده))$/.exec(value);
@@ -95,6 +96,18 @@ export function directPurchaseQuery(text:string):string|null{
   .replace(/(?:می\s*(?:خواهم|خوام)|لازم دارم|نیاز دارم|لطفا|لطفاً|یک|یه|را|رو)(?=$|[\s؛;،.!؟])/g,' ')
   .replace(/[؛;،.!؟]/g,' ').replace(/\s+/g,' ').trim();
  const topic=topics[0]!;return samePurchaseFamily(rest,topic)?topic:null;
+}
+
+// Never replace an unresolved or qualified same-family purchase with a bare search.
+export function canUseSimplePurchase(topic:string,need:NeedState|null,failedText=''):boolean{
+ if(failedText&&!directPurchaseQuery(failedText)&&purchaseTopics(failedText).some(t=>samePurchaseFamily(t,topic)))return false;
+ if(!need)return true;
+ const same=purchaseTopics(need.topic_query??'').some(t=>samePurchaseFamily(t,topic));
+ if(!same)return true;
+ return need.topic_query===topic&&!need.category_cleared&&!need.budget_needs_input&&!need.pending_requirements.length
+   &&!need.review_topics.length&&!need.preferences?.length&&!need.excluded_kinds?.length&&!need.comparison_queries?.length
+   &&!need.reference_product_id&&!need.minimum_capacity_kg&&!Object.values(need.source_filters??{}).some(Boolean)
+   &&['unspecified','no_minimum'].includes(need.battery_requirement.status);
 }
 
 // Keep the chosen item's own requirements apart from the other queued items.
