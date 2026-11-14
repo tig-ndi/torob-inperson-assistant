@@ -21,7 +21,7 @@ export default function MobileMapSheet(p:Props){
   useLayoutEffect(()=>{const node=address.current;if(!node){setAddressHeight(0);return;}const measure=()=>setAddressHeight(Math.ceil(node.getBoundingClientRect().height));measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();},[p.selected?.offer_id,p.selected?.shop.address]);
   const sheet=useRef<HTMLElement>(null),cleanup=useRef<(()=>void)|null>(null),body=useRef<HTMLDivElement>(null);
   const collapsed=snap==='collapsed',compact=!!p.compactJourney&&snap!=='full';
-  const [contentHeight,setContentHeight]=useState<number|null>(null);
+  const [contentHeight,setContentHeight]=useState<number|null>(null),[chromeHeight,setChromeHeight]=useState(0);
   useLayoutEffect(()=>{
     const panel=sheet.current;if(!panel||p.active===false)return;
     const outer=(el:HTMLElement)=>{const style=getComputedStyle(el);return el.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);};
@@ -36,6 +36,7 @@ export default function MobileMapSheet(p:Props){
         return sum+outer(el);
       },edges(style));
       setContentHeight(Math.ceil(natural));
+      setChromeHeight(Math.ceil(children.filter(el=>!el.classList.contains('map-sheet-journey')).reduce((sum,el)=>sum+outer(el),edges(style))));
     };
     measure();const observer=new ResizeObserver(measure);
     children.forEach(el=>{observer.observe(el);if(el===body.current||el.classList.contains('map-sheet-journey'))Array.from(el.children).forEach(child=>observer.observe(child));});
@@ -47,7 +48,7 @@ export default function MobileMapSheet(p:Props){
   const requestedHeight=p.journeyActive&&!collapsed&&snap==='full'?Math.min(p.viewportHeight-104,Math.max(stops[snap],p.viewportHeight*.78)):stops[snap];
   const expandedLimit=Math.max(stops.collapsed,Math.min(p.journeyActive?p.viewportHeight-104:full,contentHeight??Infinity));
   const compactLimit=Math.max(180,p.viewportHeight*(p.viewportHeight>500?.6:1)-(p.topInset??104)-(p.viewportHeight>500?0:44));
-  const compactStop=Math.min(contentHeight??220,compactLimit);
+  const compactStop=Math.min(contentHeight??220,Math.max(compactLimit,chromeHeight+68));
   const height=compact?compactStop:collapsed?stops.collapsed:Math.min(requestedHeight,expandedLimit);
   useLayoutEffect(()=>{
     const panel=sheet.current,list=body.current;
@@ -74,14 +75,14 @@ export default function MobileMapSheet(p:Props){
   const start=(e:PointerEvent<HTMLButtonElement>)=>{
     if(e.button!==0)return;if(e.pointerType!=='touch')e.preventDefault();cleanup.current?.();
     const startY=e.clientY,id=e.pointerId,target=e.currentTarget;let next=height,moved=false;target.setPointerCapture(id);
-    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;if(Math.abs(event.clientY-startY)>4)moved=true;next=Math.min(expandedLimit,Math.max(p.compactJourney?compactStop:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
+    const move=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;if(Math.abs(event.clientY-startY)>4)moved=true;next=Math.min(p.journeyActive?Math.max(expandedLimit,p.viewportHeight-(p.topInset??104)-12):expandedLimit,Math.max(p.compactJourney?compactStop:stops.collapsed,height+startY-event.clientY));setDragHeight(next);};
     const remove=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',cancel);if(target.hasPointerCapture(id))target.releasePointerCapture(id);cleanup.current=null;};
-    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactStop],['full',expandedLimit]]:[['collapsed',stops.collapsed],['peek',Math.min(peek,expandedLimit)],['half',Math.min(half,expandedLimit)],['full',expandedLimit]];if(!moved)cycle();else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best,[snap,height] as readonly [SheetStop,number])[0]);setDragHeight(null);};
+    const up=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();const choices:ReadonlyArray<readonly [SheetStop,number]>=p.compactJourney?[['collapsed',compactStop],['full',expandedLimit]]:[['collapsed',stops.collapsed],['peek',Math.min(peek,expandedLimit)],['half',Math.min(half,expandedLimit)],['full',expandedLimit]];if(!moved)cycle();else if(p.journeyActive&&Math.abs(startY-event.clientY)>=24)setSnap(startY>event.clientY?'full':'collapsed');else setSnap(choices.reduce((best,item)=>Math.abs(item[1]-next)<Math.abs(best[1]-next)?item:best,[snap,height] as readonly [SheetStop,number])[0]);setDragHeight(null);};
     const cancel=(event:globalThis.PointerEvent)=>{if(event.pointerId!==id)return;remove();setDragHeight(null);};
     cleanup.current=remove;window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',cancel);
   };
   return <section ref={sheet} className="mobile-map-sheet" data-mobile-store-sheet data-sheet-stop={snap} data-compact-journey={compact?'true':undefined} data-journey-list={p.journeyActive?'true':undefined} style={{height:dragHeight??height,transition:dragHeight===null?'height 240ms ease':'none'}} aria-label="فروشگاه‌های روی نقشه">
-    <div className="map-sheet-top"><button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={!collapsed} aria-controls="mobile-map-offers" onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap(p.compactJourney?'full':'peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{collapsed&&!compact&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
+    <div className="map-sheet-top"><button className="map-sheet-handle" title="فهرست فروشگاه‌ها را بالا بکش؛ با زدن هم ارتفاع آن تغییر می‌کند" aria-label="تغییر ارتفاع فهرست فروشگاه‌ها" aria-expanded={p.journeyActive?snap==='full':!collapsed} aria-controls={p.journeyActive?'mobile-map-journey':'mobile-map-offers'} onPointerDown={start} onClick={e=>{if(e.detail===0)cycle();}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='End'){e.preventDefault();setSnap('collapsed');return;}if(e.key==='ArrowUp'||e.key==='Home'){e.preventDefault();setSnap(p.compactJourney?'full':'peek');return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();cycle();}}}><span/>{p.journeyActive&&<><b className="map-sheet-journey-label">{snap==='full'?'جمع کردن مراحل خرید':'مراحل خرید'}</b>{snap==='full'?<ChevronDown size={16}/>:<ChevronUp size={16}/>}</>}{!p.journeyActive&&collapsed&&!compact&&<><b>فروشگاه‌ها{pool.length?` · ${fa(pool.length)} پیشنهاد`:''}</b><ChevronUp size={16}/></>}</button>
     {p.journeyActive&&(!collapsed||compact)&&<nav className="map-journey-shops" aria-label="فروشگاه‌های همین خرید">
      <TouchAction className="secondary-action" aria-label="برگشت به فهرست فروشگاه‌ها" action={()=>p.onShopList?.()}><ArrowRight size={18}/>فهرست فروشگاه‌ها</TouchAction>
      <TouchAction className="secondary-action" aria-label="دیدن فروشگاه‌های دیگر" action={()=>p.onOtherShops?.()}><List size={18}/>فروشگاه‌های دیگر</TouchAction>
@@ -89,7 +90,7 @@ export default function MobileMapSheet(p:Props){
     </div>
     {!collapsed&&!compact&&!p.journeyActive&&<header className="map-sheet-heading"><Store size={18}/><div><b>{p.selected?.shop.name??'فروشگاه‌ها روی همین نقشه'}</b><p>{p.productName??'گفت‌وگو و انتخاب‌هایت سر جایشان هستند'}</p></div><TouchAction className="icon-button map-sheet-location" action={p.onLocation??p.onPick} aria-label="موقعیت جست‌وجو" title="انتخاب یا تغییر موقعیت جست‌وجو"><MapPin size={17}/></TouchAction><TouchAction action={()=>setSnap('collapsed')} aria-label="جمع کردن فهرست برای دیدن کامل نقشه" title="جمع کردن فهرست برای دیدن کامل نقشه"><span>{p.offers.length?`${fa(p.offers.length)} پیشنهاد`:'فهرست'}</span><ChevronDown size={16}/></TouchAction></header>}
     {p.selected&&<div ref={address} className="map-sheet-address"><DestinationAddress key={p.selected.offer_id} address={p.selected.shop.address}/></div>}
-    {p.journey&&<div hidden={collapsed&&!compact} className="map-sheet-journey">{p.journey}</div>}
+    {p.journey&&<div hidden={collapsed&&!compact} id="mobile-map-journey" className="map-sheet-journey">{p.journey}</div>}
     {p.notice&&!collapsed&&!compact&&<p className="map-result-notice" role="status">{p.notice}</p>}
     <div hidden={collapsed||compact||p.journeyActive} ref={body} id="mobile-map-offers" className="map-sheet-content">
       {p.feedback}
