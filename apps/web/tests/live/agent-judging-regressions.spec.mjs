@@ -14,6 +14,15 @@ async function isolated(page){
  await page.route('**/api/assistant/turn',r=>r.abort('blockedbyclient'));
 }
 const session=(page,name)=>page.evaluate(name=>JSON.parse(sessionStorage.getItem('inperson-journey:v2:'+name)),name);
+async function reloadCompletedPurchase(page,expectedNeed){
+ // A mocked request being received does not mean React has applied its reply.
+ // Wait for the saved purchase and the completed turn before interrupting it.
+ await expect.poll(()=>session(page,'need')).toMatchObject(expectedNeed);
+ await expect(page.getByRole('button',{name:'ارسال پیام',exact:true})).toBeVisible();
+ await page.reload();
+ await expect.poll(()=>session(page,'need')).toMatchObject(expectedNeed);
+ await expect(page.getByRole('button',{name:'ارسال پیام',exact:true})).toBeVisible();
+}
 for(const [width,height] of sizes){
  test(`simple fallback, readable warranty and purchase navigation at ${width}`,async({page})=>{
   await page.setViewportSize({width,height});await isolated(page);
@@ -50,7 +59,7 @@ for(const [width,height] of sizes){
   await send(page,'فقط ترب‌پی');await expect.poll(async()=> (await session(page,'filters')).pay).toBe(true);
   await send(page,'قسطی لازم نیست؛ همه فروشگاه‌ها را با همان بودجه بررسی کن.');await expect.poll(async()=> (await session(page,'filters')).pay).toBe(false);
   expect(await session(page,'filters')).toMatchObject({credit:false,pay:false,max:'15000000'});
-  await page.route('**/api/assistant/status',r=>r.fulfill({json:{ready:false,reason:'disabled',remaining_calls:0}}));await page.reload();
+  await page.route('**/api/assistant/status',r=>r.fulfill({json:{ready:false,reason:'disabled',remaining_calls:0}}));await reloadCompletedPurchase(page,{max_price_toman:'15000000'});
   const count=calls.length;await send(page,'گوشی با دوربین خوب می‌خواهم');await expect(page.locator('.chat-pane')).toContainText('فقط نام کوتاه کالا');expect(calls).toHaveLength(count);await layout(page);
  });
 }
@@ -59,23 +68,32 @@ for(const [width,height] of sizes){
  test(`purchase memory, source reasoning and status answers at ${width}`,async({page,request})=>{
   await page.setViewportSize({width,height});await isolated(page);const calls=[];
   const phone=await mockAssistant(page,request,calls);
-  await page.route('**/api/assistant/turn',r=>{
+  let releaseShoe;const shoeReply=new Promise(resolve=>{releaseShoe=resolve;});
+  await page.route('**/api/assistant/turn',async r=>{
    const input=r.request().postDataJSON();calls.push(input);
    const shoe=/کفش/.test(input.messages.at(-1).content),pending=/گارانتی/.test(input.messages.at(-1).content);
+   if(shoe&&calls.length===2)await shoeReply;
    const battery={status:shoe?'unspecified':'minimum',minimum_mah:shoe?null:5000};
    const need={version:1,topic_query:shoe?'کفش زنانه':'گوشی اندروید',category_name:shoe?null:'گوشی موبایل',category_cleared:false,max_price_toman:shoe?'3000000':'20000000',budget_needs_input:false,offer_sort:'price',battery_requirement:battery,source_filters:{colour:shoe?null:'سفید',size:shoe?'38':null,connector:null},review_topics:[],pending_requirements:pending?[{key:'گارانتی',source_text:'گارانتی معتبر می‌خواهم',status:'unsupported'}]:[]};
    return r.fulfill({json:{request_id:input.request_id,status:pending?'needs_input':'results',query:need.topic_query,category_name:need.category_name,max_price_toman:need.max_price_toman,question:pending?'گارانتی حفظ شده اما تأیید نشده است.':null,question_code:pending?'unsupported_filter':null,products:pending?null:phone,offer_sort:'price',battery_requirement:battery,need_state:need,explanation:null}});
   });
   await page.goto('/');await send(page,'گوشی اندروید سفید با باتری حداقل ۵۰۰۰ تا بیست میلیون می‌خواهم');await expect.poll(()=>calls.length).toBe(1);
   await send(page,'به جای گوشی کفش زنانه سایز ۳۸ تا سه میلیون می‌خواهم');await expect.poll(()=>calls.length).toBe(2);
-  await page.reload();await send(page,'حالا برگردیم به همان گوشی؛ چه شرط‌هایی داشتم؟');
+  // Keep the second reply in flight: reload must wait for its saved result,
+  // not merely for calls.length to change on a fast mocked endpoint.
+  const reloading=reloadCompletedPurchase(page,{topic_query:'کفش زنانه',max_price_toman:'3000000',source_filters:{size:'38'}});
+  try{
+   await expect(page.getByRole('button',{name:'توقف بررسی',exact:true})).toBeVisible();
+   expect((await session(page,'need')).topic_query).toBe('گوشی اندروید');
+  }finally{releaseShoe();}
+  await reloading;await send(page,'حالا برگردیم به همان گوشی؛ چه شرط‌هایی داشتم؟');
   await expect.poll(async()=> (await session(page,'need')).max_price_toman).toBe('20000000');
   expect((await session(page,'need')).source_filters.colour).toBe('سفید');expect((await session(page,'need')).battery_requirement.minimum_mah).toBe(5000);
   await expect(page.locator('.chat-pane')).toContainText('شرایط همان خرید را برگرداندم');expect(calls).toHaveLength(2);
   await send(page,'پس رزرو قطعی شد یا نه؟');await expect(page.locator('.chat-pane')).toContainText('رزرو قطعی یا تماس واقعی انجام نشده');expect(calls).toHaveLength(2);await layout(page);
   await send(page,'گارانتی معتبر می‌خواهم');await expect.poll(async()=> (await session(page,'need')).pending_requirements.length).toBe(1);
   await send(page,'به جای گوشی کفش زنانه می‌خواهم');await expect.poll(async()=> (await session(page,'need')).topic_query).toBe('کفش زنانه');
-  await page.reload();await send(page,'برگردیم به همان گوشی');
+  await reloadCompletedPurchase(page,{topic_query:'کفش زنانه',max_price_toman:'3000000',pending_requirements:[]});await send(page,'برگردیم به همان گوشی');
   await expect.poll(async()=> (await session(page,'need')).pending_requirements.length).toBe(1);await expect(page.locator('[data-active-tool]')).toHaveAttribute('data-screen','decide');await expect(page.locator('.chat-pane').getByRole('button',{name:'دیدن فروشگاه‌ها',exact:true})).toHaveCount(0);expect(calls).toHaveLength(4);
   const dir=join(tmpdir(),'torob-intelligence-repairs-20261111');await mkdir(dir,{recursive:true});await page.screenshot({path:join(dir,`memory-${width}.png`)});
  });
