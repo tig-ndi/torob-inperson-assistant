@@ -40,6 +40,15 @@ A Persian shopping assistant built for the **Starcoach challenge**, connecting c
 
 </details>
 
+<details>
+<summary>Also available in light mode · mobile</summary>
+
+<p align="center">
+  <img src="docs/images/mobile-light.png" width="260" alt="Mobile welcome screen in light mode">
+</p>
+
+</details>
+
 Screenshots were captured from the current local build on **15 November 2026**, at 1600 × 1000 on desktop and 390 × 844 on mobile. They use actual Starcoach catalogue records and restored demo states, with no live model calls or seller contact. The interface is Persian and right-to-left in both README versions.
 
 ## Run locally
